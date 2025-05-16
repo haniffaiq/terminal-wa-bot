@@ -1,0 +1,6 @@
+/auth_*
+/node_*
+/bots/proxyConfig.js
+/logs
+admintest.js
+opertationtest.js
