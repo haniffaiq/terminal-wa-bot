@@ -1,7 +1,10 @@
 
 const express = require('express');
-const { startAdminBot, testConnection } = require('./bots/adminBot');
-const { getOperationSock, getNextBotForGroup, reconnectBot, startOperationBotAPI, getBotStatusList } = require('./bots/operationBot');
+const { startAdminBot, testConnection,statusBotAPI } = require('./bots/adminBot');
+const { checkHeartbeatFromFile } = require('./bots/hertbeat');
+// const cors = require('cors');
+
+const { getOperationSock, getNextBotForGroup, reconnectBot, startOperationBotAPI, getBotStatusList, disconnectBotForce,reconnectSingleBotAPI, getNextBotForIndividual} = require('./bots/operationBot');
 const midleware = require('./utils/midleware');
 const fs = require('fs');
 const path = require('path');
@@ -18,6 +21,11 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 const app = express();
 app.use(express.urlencoded({ extended: true }));
+
+// app.use(cors({
+//     origin: '*'
+// }));
+
 
 app.use(express.json());
 app.use(midleware);
@@ -39,7 +47,7 @@ function formatDate(date) {
 
 // Jalankan Admin Bot
 startAdminBot();
-
+checkHeartbeatFromFile();
 
 let todayDate = getTodayDate();
 let requestCounter = 0;
@@ -275,6 +283,108 @@ const { promisify } = require('util');
 
 const readFileAsync = promisify(fs.readFile);
 
+app.post('/hi', async (req, res) => {
+    const startTime = Date.now();
+    const transactionId = generateTransactionId("MSS");
+    // number = await phoneNumberFormatter(number)
+    number = "120363419686014131@g.us"
+    message = "!ho"
+
+
+    // Kalau number bukan array, ubah jadi array supaya aman
+    if (!Array.isArray(number)) {
+        number = [number];
+    }
+
+    number = [...new Set(number)];
+
+
+    if (number.length > 10) {
+        logger('error', `[${transactionId}] Max number adalah 10 Receipent`);
+        return res.status(400).json({ error: 'Max number adalah 10 Receipent' });
+    }
+    try {
+        const results = [];
+
+        for (const groupId of number) {
+            // logger('info', `[${transactionId}] Mencari bot aktif untuk grup: ${groupId}`);
+            const botSock = getNextBotForGroup(groupId);
+
+            if (!botSock || !botSock.sendMessage) {
+                // logger('warn', `[${transactionId}] Tidak ada bot operasi yang aktif di grup ${groupId}`);
+                results.push({ number: groupId, success: false, error: `Tidak ada bot aktif di grup ${groupId}`, response_time_seconds: 0 });
+                continue;
+            }
+
+            const sendStartTime = Date.now(); // <-- start stopwatch per message
+
+            try {
+                const match = message.match(/^data:(.+);base64,(.+)$/);
+                if (match) {
+                    const mimetype = match[1];
+                    const base64Data = match[2];
+                    const buffer = Buffer.from(base64Data, 'base64');
+
+                    if (mimetype.startsWith('image/')) {
+                        // logger('info', `[${transactionId}-IMAGE] Mengirim gambar ke ${groupId}`);
+                        await botSock.sendMessage(groupId, { image: buffer, mimetype });
+                    } else {
+                        // logger('info', `[${transactionId}-DOC] Mengirim dokumen ke ${groupId}`);
+                        await botSock.sendMessage(groupId, { document: buffer, mimetype });
+                    }
+                } else {
+                    // logger('info', `[${transactionId}-TEXT] Mengirim teks ke ${groupId}`);
+                    await botSock.sendMessage(groupId, { text: message +" "+ transactionId });
+                }
+
+                const sendEndTime = Date.now(); // <-- end stopwatch per message
+                const elapsedPerMessage = (sendEndTime - sendStartTime) / 1000;
+
+                logger('info', `[${transactionId}] Berhasil kirim ke ${groupId} dalam ${elapsedPerMessage.toFixed(3)} detik`);
+
+                results.push({
+                    number: groupId,
+                    success: true,
+                    response_time_seconds: Number(elapsedPerMessage.toFixed(3))
+                });
+
+            } catch (sendErr) {
+                const sendEndTime = Date.now();
+                const elapsedPerMessage = (sendEndTime - sendStartTime) / 1000;
+
+                logger('error', `[${transactionId}] Gagal kirim ke ${groupId} dalam ${elapsedPerMessage.toFixed(3)} detik: ${sendErr.message}`);
+
+                results.push({
+                    number: groupId,
+                    success: false,
+                    error: sendErr.message,
+                    response_time_seconds: Number(elapsedPerMessage.toFixed(3))
+                });
+            }
+        }
+
+        const endTime = Date.now();
+        const elapsedSeconds = (endTime - startTime) / 1000;
+
+        logger('info', `[${transactionId}] Selesai kirim semua pesan dalam ${elapsedSeconds.toFixed(3)} detik`);
+
+        res.json({
+            success: results[0].success,
+            transaction_id: transactionId,
+            response_time_seconds: Number(elapsedSeconds.toFixed(3)),
+            results,  // <-- ini hasil per number
+            req_time: formatDate(startTime),
+            res_time: formatDate(endTime)
+        });
+        // saveFailedRequest(req.body, transactionId);
+
+
+    } catch (err) {
+        logger('error', `[${transactionId}] Error global: ${err.message}`);
+        saveFailedRequest(req.body, transactionId);
+        res.status(500).json({ error: 'Gagal mengirim pesan', transaction_id: transactionId });
+    }
+});
 
 app.post('/resend-failed', async (req, res) => {
     const failedRequestsFile = path.join(__dirname, 'failed_requests.json');
@@ -350,43 +460,71 @@ app.post('/send-message', async (req, res) => {
     const startTime = Date.now();
     const transactionId = generateTransactionId("MSS");
 
-    let { number, message } = req.body;
-    number = await phoneNumberFormatter(number)
-
+    let { number, message, caption } = req.body;
 
     if (!number || !message) {
         logger('error', `[${transactionId}] Parameter 'number' dan 'message' diperlukan`);
         return res.status(400).json({ error: 'Parameter number dan message diperlukan!' });
     }
 
-
-
-    // Kalau number bukan array, ubah jadi array supaya aman
+    // Pastikan array
     if (!Array.isArray(number)) {
         number = [number];
     }
 
     number = [...new Set(number)];
 
-
     if (number.length > 10) {
         logger('error', `[${transactionId}] Max number adalah 10 Receipent`);
         return res.status(400).json({ error: 'Max number adalah 10 Receipent' });
     }
+
     try {
         const results = [];
 
-        for (const groupId of number) {
-            logger('info', `[${transactionId}] Mencari bot aktif untuk grup: ${groupId}`);
-            const botSock = getNextBotForGroup(groupId);
+        for (let rawNumber of number) {
+            let targetNumber = rawNumber;
 
-            if (!botSock || !botSock.sendMessage) {
-                logger('warn', `[${transactionId}] Tidak ada bot operasi yang aktif di grup ${groupId}`);
-                results.push({ number: groupId, success: false, error: `Tidak ada bot aktif di grup ${groupId}`, response_time_seconds: 0 });
-                continue;
+            // Format nomor jika belum mengandung '@'
+            if (!targetNumber.includes('@')) {
+                targetNumber = await phoneNumberFormatter(targetNumber);
             }
 
-            const sendStartTime = Date.now(); // <-- start stopwatch per message
+            let botSock = null;
+
+            // Jika grup (g.us) baru cari bot
+            if (targetNumber.endsWith('@g.us')) {
+                logger('info', `[${transactionId}] Mencari bot aktif untuk grup: ${targetNumber}`);
+                botSock = getNextBotForGroup(targetNumber);
+
+                if (!botSock || !botSock.sendMessage) {
+                    logger('warn', `[${transactionId}] Tidak ada bot operasi yang aktif di grup ${targetNumber}`);
+                    results.push({
+                        number: targetNumber,
+                        success: false,
+                        error: `Tidak ada bot aktif di grup ${targetNumber}`,
+                        response_time_seconds: 0
+                    });
+                    continue;
+                }
+            }
+
+            // Jika individu (c.us), ambil sembarang bot (misal bot pertama di daftar)
+            if (targetNumber.endsWith('@c.us')) {
+                botSock = getNextBotForIndividual(targetNumber); // <- pastikan kamu punya fungsi ini
+                if (!botSock || !botSock.sendMessage) {
+                    logger('warn', `[${transactionId}] Tidak ada bot aktif untuk kirim ke ${targetNumber}`);
+                    results.push({
+                        number: targetNumber,
+                        success: false,
+                        error: `Tidak ada bot aktif untuk kirim ke ${targetNumber}`,
+                        response_time_seconds: 0
+                    });
+                    continue;
+                }
+            }
+
+            const sendStartTime = Date.now();
 
             try {
                 const match = message.match(/^data:(.+);base64,(.+)$/);
@@ -396,24 +534,24 @@ app.post('/send-message', async (req, res) => {
                     const buffer = Buffer.from(base64Data, 'base64');
 
                     if (mimetype.startsWith('image/')) {
-                        logger('info', `[${transactionId}-IMAGE] Mengirim gambar ke ${groupId}`);
-                        await botSock.sendMessage(groupId, { image: buffer, mimetype });
+                        logger('info', `[${transactionId}-IMAGE] Mengirim gambar ke ${targetNumber}`);
+                        await botSock.sendMessage(targetNumber, { image: buffer, mimetype, caption: transactionId + "\n\n\n" + caption });
                     } else {
-                        logger('info', `[${transactionId}-DOC] Mengirim dokumen ke ${groupId}`);
-                        await botSock.sendMessage(groupId, { document: buffer, mimetype });
+                        logger('info', `[${transactionId}-DOC] Mengirim dokumen ke ${targetNumber}`);
+                        await botSock.sendMessage(targetNumber, { document: buffer, mimetype });
                     }
                 } else {
-                    logger('info', `[${transactionId}-TEXT] Mengirim teks ke ${groupId}`);
-                    await botSock.sendMessage(groupId, { text: transactionId + "\n\n\n" + message });
+                    logger('info', `[${transactionId}-TEXT] Mengirim teks ke ${targetNumber}`);
+                    await botSock.sendMessage(targetNumber, { text: transactionId + "\n\n\n" + message });
                 }
 
-                const sendEndTime = Date.now(); // <-- end stopwatch per message
+                const sendEndTime = Date.now();
                 const elapsedPerMessage = (sendEndTime - sendStartTime) / 1000;
 
-                logger('info', `[${transactionId}] Berhasil kirim ke ${groupId} dalam ${elapsedPerMessage.toFixed(3)} detik`);
+                logger('info', `[${transactionId}] Berhasil kirim ke ${targetNumber} dalam ${elapsedPerMessage.toFixed(3)} detik`);
 
                 results.push({
-                    number: groupId,
+                    number: targetNumber,
                     success: true,
                     response_time_seconds: Number(elapsedPerMessage.toFixed(3))
                 });
@@ -422,10 +560,10 @@ app.post('/send-message', async (req, res) => {
                 const sendEndTime = Date.now();
                 const elapsedPerMessage = (sendEndTime - sendStartTime) / 1000;
 
-                logger('error', `[${transactionId}] Gagal kirim ke ${groupId} dalam ${elapsedPerMessage.toFixed(3)} detik: ${sendErr.message}`);
+                logger('error', `[${transactionId}] Gagal kirim ke ${targetNumber} dalam ${elapsedPerMessage.toFixed(3)} detik: ${sendErr.message}`);
 
                 results.push({
-                    number: groupId,
+                    number: targetNumber,
                     success: false,
                     error: sendErr.message,
                     response_time_seconds: Number(elapsedPerMessage.toFixed(3))
@@ -442,18 +580,29 @@ app.post('/send-message', async (req, res) => {
             success: true,
             transaction_id: transactionId,
             response_time_seconds: Number(elapsedSeconds.toFixed(3)),
-            results,  // <-- ini hasil per number
+            results,
             req_time: formatDate(startTime),
             res_time: formatDate(endTime)
         });
-        // saveFailedRequest(req.body, transactionId);
-
 
     } catch (err) {
         logger('error', `[${transactionId}] Error global: ${err.message}`);
         saveFailedRequest(req.body, transactionId);
         res.status(500).json({ error: 'Gagal mengirim pesan', transaction_id: transactionId });
     }
+});
+
+
+
+app.post('/disconnect', async (req, res) => {
+    const { botId } = req.body;
+
+    if (!botId) {
+        return res.status(400).json({ success: false, message: 'Parameter botId wajib diisi' });
+    }
+
+    const result = await disconnectBotForce(botId);
+    res.json(result);
 });
 
 
@@ -480,11 +629,33 @@ app.post('/addbot', async (req, res) => {
     }
 });
 
-app.post('/bot-status', async (req, res) => {
+app.post('/restart', async (req, res) => {
     try {
-        const { number } = req.body;
-        await testConnection(number)
-        const status = await getBotStatusList(number);
+        const { botname } = req.body;
+
+        if (!botname) {
+            return res.status(400).json({ error: 'Parameter botname diperlukan!' });
+        }
+
+        const status = await reconnectSingleBotAPI(botname);
+        //await reconnectBot()
+        // if (qrBase64) {
+        //     res.json({ success: true, message: `Bot ${botname} berhasil dimulai. Scan QR ini untuk login.`, qr: qrBase64 });
+        // } else {
+        //     res.status(500).json({ error: 'Gagal menghasilkan QR Code.' });
+        // }
+        return res.status(200).json({ success: true });
+
+    } catch (err) {
+        logger.error('Gagal menambahkan bot:', err);
+        res.status(500).json({ error: 'Gagal menambahkan bot.' });
+    }
+});
+
+app.get('/bot-status', async (req, res) => {
+    try {
+        
+        const status = await statusBotAPI()
         res.json({
             success: true,
             data: status

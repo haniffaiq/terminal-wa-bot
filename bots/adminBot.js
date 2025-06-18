@@ -4,9 +4,13 @@ const qrcode = require('qrcode');
 const qrcodeTerminal = require('qrcode-terminal');
 const path = require('path');
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('baileys');
-const { startOperationBot, stopOperationBot, reconnectBot, getOperationSock, getBotStatusList } = require('./operationBot');
+const { startOperationBot, stopOperationBot, reconnectBot, getOperationSock, getBotStatusList, reconnectSingleBotCommand } = require('./operationBot');
 const { globalAgent } = require('./proxyConfig');
-const { createSock } = require('../utils/createSock');
+const { createSock, updateBotStatus } = require('../utils/createSock');
+const { connected, disconnect } = require('process');
+
+
+const STATUS_FILE = path.join(__dirname, '../data/bot_status.json');
 
 let adminGlobalSock = null
 // --- Logger setup ---
@@ -34,9 +38,9 @@ async function startAdminBot() {
     logger.info('Memulai bot admin...');
     try {
 
-        const { sock,saveCreds } = await createSock(BOT_ID);
+        const { sock, saveCreds } = await createSock(BOT_ID);
         adminGlobalSock = sock
-        
+
         sock.ev.on('creds.update', saveCreds);
 
         sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
@@ -56,6 +60,8 @@ async function startAdminBot() {
 
             if (connection === 'open') {
                 logger.info('Terhubung ke WhatsApp!');
+                updateBotStatus(BOT_ID, "open")
+
             }
 
             if (connection === 'close') {
@@ -66,8 +72,11 @@ async function startAdminBot() {
                     logger.info('Reconnecting dalam 5 detik...');
                     clearTimeout(reconnectTimeout);
                     reconnectTimeout = setTimeout(startAdminBot, 5000);
+                    updateBotStatus(BOT_ID, "close")
+
                 } else {
                     logger.error('Bot logout. Scan ulang diperlukan.');
+                    updateBotStatus(BOT_ID, "close")
                 }
             }
         });
@@ -115,7 +124,7 @@ async function getGroupInfo(sock, groupId) {
         const adminList = metadata.participants
             .filter(p => p.admin)
             .map(p => p.id.split('@')[0]); // Ambil nomor saja
-        
+
         const description = metadata.desc || 'Tidak ada deskripsi.';
         const createdAt = new Date(metadata.creation * 1000).toLocaleString('id-ID');
         const createdBy = metadata.creator ? metadata.creator.split('@')[0] : 'Unknown';
@@ -164,6 +173,17 @@ function setupAdminCommands(sock) {
             sock.sendMessage(chatId, { text: `Bot *${botName}* berhasil ditambahkan!` });
         }
 
+        if (text.startsWith('!rst')) {
+            const [, botName] = text.split(' ');
+            if (!botName) {
+                return sock.sendMessage(chatId, { text: 'Gunakan format: *!rst <nama_bot>*' });
+            }
+
+            logger.info(`Menambahkan bot: ${botName}`);
+            reconnectSingleBotCommand(botName, chatId);
+            sock.sendMessage(chatId, { text: `Bot *${botName}* Sedang direstart!` });
+        }
+
         if (text.startsWith('!rmbot')) {
             const [, botNumber] = text.split(' ');
             if (!botNumber) {
@@ -173,6 +193,11 @@ function setupAdminCommands(sock) {
             await stopOperationBot(botNumber);
             sock.sendMessage(chatId, { text: `Bot ${botNumber} dihapus.` });
             logger.info(`Bot ${botNumber} dihapus.`);
+        }
+
+        if (text.startsWith('!botstatus')) {
+            let status = await checkBotStatus();
+            sock.sendMessage(chatId, { text: status });
         }
 
         if (text.startsWith('!restart')) {
@@ -194,8 +219,26 @@ function setupAdminCommands(sock) {
 
                 await testConnection(chatId)
                 await getBotStatusList(chatId);
-                
+
                 // sock.sendMessage(chatId, { text: `*Data* ${data}` });
+            } catch (err) {
+                logger.error({ err }, 'Gagal Info Operation Bot.');
+            }
+        }
+        if (text.startsWith('!ho')) {
+            try {
+                const [command] = text.split(' ');
+                if (command === '!ho') {
+                    logger.info('Check Connection All Bot');
+
+                    const data = getOperationSock();
+
+                    await testConnection(chatId);
+                    await getBotStatusList(chatId);
+
+                    // Kirim data jika perlu
+                    // await sock.sendMessage(chatId, { text: `*Data:* ${JSON.stringify(data)}` });
+                }
             } catch (err) {
                 logger.error({ err }, 'Gagal Info Operation Bot.');
             }
@@ -213,16 +256,95 @@ function setupAdminCommands(sock) {
 }
 
 
+function checkBotStatus() {
+    let status = ""
+    let message = `?? *Status Bot:*\n`;
 
+    if (!fs.existsSync(STATUS_FILE)) {
+        console.log('[Heartbeat] Tidak ada file status.');
+        return;
+    }
+
+    try {
+        const raw = fs.readFileSync(STATUS_FILE, 'utf-8');
+        const statusData = JSON.parse(raw || '{}');
+
+        const connectedBot = [];
+        const disconnectedBot = [];
+
+        for (const [botId, status] of Object.entries(statusData)) {
+            if (status === 'open') {
+                connectedBot.push(botId);
+            } else {
+                disconnectedBot.push(botId);
+            }
+        }
+
+
+        if (connectedBot.length > 0) {
+            message += `\n*Terhubung (${connectedBot.length}):*\n${connectedBot.join('\n')}`;
+        } else {
+            message += `\n*Tidak ada bot yang terhubung.*`;
+        }
+
+        if (disconnectedBot.length > 0) {
+            message += `\n\n*Tidak Terhubung (${disconnectedBot.length}):*\n${disconnectedBot.join('\n')}`;
+        }
+
+
+    } catch (err) {
+        message = '[Heartbeat] Gagal membaca status file:', err;
+    }
+    return message
+}
 // ======================== DEVELOPMEN FEATURE ============================
 
+function statusBotAPI() {
+    let status = ""
+    let message = `?? *Status Bot:*\n`;
+
+    if (!fs.existsSync(STATUS_FILE)) {
+        console.log('[Heartbeat] Tidak ada file status.');
+        return;
+    }
+
+    const connectedBot = [];
+    const disconnectedBot = [];
+    try {
+        const raw = fs.readFileSync(STATUS_FILE, 'utf-8');
+        const statusData = JSON.parse(raw || '{}');
+
+
+        for (const [botId, status] of Object.entries(statusData)) {
+            if (status === 'open') {
+                connectedBot.push(botId);
+            } else {
+                disconnectedBot.push(botId);
+            }
+        }
+
+
+        if (connectedBot.length > 0) {
+            message += `\n*Terhubung (${connectedBot.length}):*\n${connectedBot.join('\n')}`;
+        } else {
+            message += `\n*Tidak ada bot yang terhubung.*`;
+        }
+
+        if (disconnectedBot.length > 0) {
+            message += `\n\n*Tidak Terhubung (${disconnectedBot.length}):*\n${disconnectedBot.join('\n')}`;
+        }
+
+
+    } catch (err) {
+        message = '[Heartbeat] Gagal membaca status file:', err;
+    }
+    return { "active": connectedBot, "inactive": disconnectedBot}
+}
 
 
 
-
-function testConnection(target){
+function testConnection(target) {
     adminGlobalSock.sendMessage(target, { text: `Bot ADMIN sudah CONNECTED!` });
 }
 
-module.exports = { startAdminBot,testConnection };
-	
+module.exports = { startAdminBot, testConnection, checkBotStatus, statusBotAPI };
