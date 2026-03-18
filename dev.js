@@ -3,8 +3,6 @@ const express = require('express');
 const { startAdminBot, testConnection, statusBotAPI } = require('./bots/adminBot');
 const { checkHeartbeatFromFile } = require('./bots/hertbeat');
 // const cors = require('cors');
-const stats = require("./utils/statmanager");
-const util = require('util')
 
 const { getOperationSock, getNextBotForGroup, reconnectBot, startOperationBotAPI, getBotStatusList, disconnectBotForce, reconnectSingleBotAPI, getNextBotForIndividual } = require('./bots/operationBot');
 const midleware = require('./utils/midleware');
@@ -582,19 +580,6 @@ async function handleSingleTarget(rawNumber, message, caption, transactionId) {
 
 
 // Logic retry pengiriman
-
-function getBotInfo(sock) {
-    return {
-        number: sock.user.id.split(':')[0],
-        connected: sock.ws.socket._readyState === 1,
-        platform: sock.authState.creds.platform,
-        registered: sock.authState.creds.registered,
-        syncTime: sock.authState.creds.lastAccountSyncTimestamp
-            ? new Date(sock.authState.creds.lastAccountSyncTimestamp * 1000)
-            : null,
-        wsUrl: sock.ws.url.hostname
-    }
-}
 async function sendMessageWithRetry(botSock, targetNumber, message, caption, transactionId, maxRetry = 10) {
     const sendStartTime = Date.now();
     let attempt = 0;
@@ -604,12 +589,6 @@ async function sendMessageWithRetry(botSock, targetNumber, message, caption, tra
             await sendMessage(botSock, targetNumber, message, caption, transactionId, attempt);
             const elapsed = (Date.now() - sendStartTime) / 1000;
             logger('info', `[${transactionId}]--[${botSock}] Berhasil kirim ke ${targetNumber} dalam ${elapsed.toFixed(3)} detik`);
-            // logger('info', util.inspect(botSock, { depth: 2 }))
-            let botHealth = getBotInfo(botSock)
-            // logger('info', util.inspect(botSock.user, { depth: 2 }))
-
-            // logger('info', JSON.stringify(botHealth))
-            stats.increment(botHealth.number);
             return {
                 number: targetNumber,
                 success: true,
@@ -1048,22 +1027,4 @@ app.get('/list-my-groups', async (req, res) => {
 const PORT = 8008;
 app.listen(PORT, () => {
     logger('info', `API berjalan di port ${PORT}`);
-});
-
-// Flush stats tiap 5 menit
-setInterval(() => {
-    stats.flush();
-}, 5 * 60 * 1000);
-
-// Flush saat server mati
-process.on("SIGINT", () => {
-    logger("info", "Flushing stats sebelum shutdown (SIGINT)...");
-    stats.flush();
-    process.exit();
-});
-
-process.on("SIGTERM", () => {
-    logger("info", "Flushing stats sebelum shutdown (SIGTERM)...");
-    stats.flush();
-    process.exit();
 });

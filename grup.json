@@ -1,0 +1,4872 @@
+{
+    "success": true,
+    "transaction_id": "GRP-FETCH-20260123-172534-1769163934",
+    "group_count": 486,
+    "response_time_seconds": 1.427,
+    "bot": {
+        "jid": "6283879886781:66@s.whatsapp.net",
+        "number": "6283879886781"
+    },
+    "groups": [
+        {
+            "id": "120363424317895278@g.us",
+            "name": "CSR Auto Alert",
+            "member_count": 1,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "174955610247394@lid"
+        },
+        {
+            "id": "120363409220972193@g.us",
+            "name": "DWDM Auto Alert",
+            "member_count": 1,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "174955610247394@lid"
+        },
+        {
+            "id": "120363408383931070@g.us",
+            "name": "TSS",
+            "member_count": 1,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "187050691162165@lid"
+        },
+        {
+            "id": "120363405163266251@g.us",
+            "name": "OP OWS - PMT-CMT Developer",
+            "member_count": 3,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "88459783999618@lid"
+        },
+        {
+            "id": "120363163849571648@g.us",
+            "name": "NOC and Region",
+            "member_count": 2,
+            "admin_count": 2,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "151608184823875@lid"
+        },
+        {
+            "id": "120363292906461361@g.us",
+            "name": "Notif-01",
+            "member_count": 1,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "92011520647361@lid"
+        },
+        {
+            "id": "120363197698867260@g.us",
+            "name": "ALERT_P2_KALSEL_KALTENG",
+            "member_count": 2,
+            "admin_count": 2,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "62796834332716@lid"
+        },
+        {
+            "id": "120363030333530113@g.us",
+            "name": "ALERT_ALARM_PADANG_INNER",
+            "member_count": 3,
+            "admin_count": 2,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "62796834332716@lid"
+        },
+        {
+            "id": "120363216007480430@g.us",
+            "name": "ALERT_P3_KAL_PLGKARAYA",
+            "member_count": 3,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "62796834332716@lid"
+        },
+        {
+            "id": "120363323868180167@g.us",
+            "name": "CCH Modern Channel Alert",
+            "member_count": 3,
+            "admin_count": 2,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "41773036511391@lid"
+        },
+        {
+            "id": "120363047132316087@g.us",
+            "name": "ALERT_ALARM_MUARA_BUNGO",
+            "member_count": 3,
+            "admin_count": 2,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "62796834332716@lid"
+        },
+        {
+            "id": "120363308010231793@g.us",
+            "name": "VIP Proactive Experience Alert",
+            "member_count": 3,
+            "admin_count": 2,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "41773036511391@lid"
+        },
+        {
+            "id": "120363214098051559@g.us",
+            "name": "ALERT_P3_KAL_BJM_OUTER",
+            "member_count": 3,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "62796834332716@lid"
+        },
+        {
+            "id": "120363197960518724@g.us",
+            "name": "ALERT_P3_KALTIM_UTARA",
+            "member_count": 4,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "62796834332716@lid"
+        },
+        {
+            "id": "120363044910576950@g.us",
+            "name": "ALERT_ALARM_SOLOK",
+            "member_count": 4,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "62796834332716@lid"
+        },
+        {
+            "id": "120363162785750243@g.us",
+            "name": "P2_RM_JAM_SUMBAR",
+            "member_count": 4,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363163875990244@g.us",
+            "name": "P3_RTS_SOLO",
+            "member_count": 4,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363197388392496@g.us",
+            "name": "ALERT_P3_KAL_BJM_INNER",
+            "member_count": 4,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "62796834332716@lid"
+        },
+        {
+            "id": "120363145307138246@g.us",
+            "name": "P2_RM_PLB_SS_OTR_BKL",
+            "member_count": 4,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "6287889523323-1507659338@g.us",
+            "name": "My Notes",
+            "member_count": 4,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "174955610247394@lid"
+        },
+        {
+            "id": "120363197514054556@g.us",
+            "name": "ALERT_P3_KALBAR",
+            "member_count": 4,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "62796834332716@lid"
+        },
+        {
+            "id": "120363143582884260@g.us",
+            "name": "P2_RM_MLG_JBR",
+            "member_count": 4,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363370100397495@g.us",
+            "name": "Alert Info",
+            "member_count": 4,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "26877938954338@lid"
+        },
+        {
+            "id": "120363163145276518@g.us",
+            "name": "P3_RTS_BALI_OUT_GYR",
+            "member_count": 4,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363161439152978@g.us",
+            "name": "P2_RM_JAKU_JAKT",
+            "member_count": 4,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363163273511487@g.us",
+            "name": "P2_RM_DPS_SBW",
+            "member_count": 4,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363144231600820@g.us",
+            "name": "P2_RM_KEPRI_RIDAR",
+            "member_count": 4,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363405801340901@g.us",
+            "name": "Daily Dashboard Report",
+            "member_count": 4,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "36163809202177@lid"
+        },
+        {
+            "id": "120363146777018167@g.us",
+            "name": "P3_RTS_SEMARANG",
+            "member_count": 4,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363321974918834@g.us",
+            "name": "CCH Ticket Increment Alert",
+            "member_count": 4,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "41773036511391@lid"
+        },
+        {
+            "id": "120363161714329159@g.us",
+            "name": "P3_RTS_SIDOARJO",
+            "member_count": 4,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363162495746862@g.us",
+            "name": "P3_RTS_KUDUS",
+            "member_count": 4,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363415290882243@g.us",
+            "name": "Lebaran Fesitve - 2025",
+            "member_count": 4,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "41773036511391@lid"
+        },
+        {
+            "id": "120363162468372641@g.us",
+            "name": "P3_RTS_DENPASAR",
+            "member_count": 4,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363163580955112@g.us",
+            "name": "P3_RTS_KEDIRI",
+            "member_count": 4,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363147654935858@g.us",
+            "name": "P3_RTS_SUMBAWA",
+            "member_count": 4,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363164676991952@g.us",
+            "name": "P3_RTS_MADIUN",
+            "member_count": 4,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363161782181501@g.us",
+            "name": "P2_RM_JAKB_KBTG",
+            "member_count": 5,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363145409105731@g.us",
+            "name": "ALERT_RTS_CIKARANG",
+            "member_count": 5,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363161987115219@g.us",
+            "name": "P2_RM_SULSEL_SULTRA",
+            "member_count": 5,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363161784971076@g.us",
+            "name": "P2_RM_PDLB_SRCL",
+            "member_count": 5,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363161124994066@g.us",
+            "name": "P2_RM_MTRM_LOMTIM",
+            "member_count": 5,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363144389069486@g.us",
+            "name": "P2_RM_SULUT",
+            "member_count": 5,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363298604615288@g.us",
+            "name": "PE Upstream BUSOL",
+            "member_count": 5,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "174955610247394@lid"
+        },
+        {
+            "id": "120363163104735751@g.us",
+            "name": "P2_RM_GRT_MDN",
+            "member_count": 5,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363144885217281@g.us",
+            "name": "P3_RTS_MJLKA_SMD",
+            "member_count": 5,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363164672887657@g.us",
+            "name": "P2_RM_BSKB",
+            "member_count": 5,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363403832169887@g.us",
+            "name": "Low Fuel Alert",
+            "member_count": 6,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "227771175420146@lid"
+        },
+        {
+            "id": "120363145441622501@g.us",
+            "name": "ALERT_RTS_KARAWANG",
+            "member_count": 6,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363195489908042@g.us",
+            "name": "ALERT_P2_KALBAR_TIMUR",
+            "member_count": 6,
+            "admin_count": 2,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "62796834332716@lid"
+        },
+        {
+            "id": "120363402821164536@g.us",
+            "name": "DownDetektor Test",
+            "member_count": 6,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "173443664326721@lid"
+        },
+        {
+            "id": "120363146412569855@g.us",
+            "name": "ALERT_RTS_JAKARTA_UTARA",
+            "member_count": 6,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "6287889523323-1622644467@g.us",
+            "name": "TEST WA",
+            "member_count": 6,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "174955610247394@lid"
+        },
+        {
+            "id": "120363143437878130@g.us",
+            "name": "ALERT_RTS_JAKARTA_TIMUR",
+            "member_count": 6,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363162533330344@g.us",
+            "name": "ALERT_RTS_BEKASI",
+            "member_count": 6,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363167337266724@g.us",
+            "name": "ALERT RIAU INNER_2",
+            "member_count": 6,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "60425978818700@lid"
+        },
+        {
+            "id": "120363144789021850@g.us",
+            "name": "ALERT_RTS_JAKARTA_BARAT",
+            "member_count": 6,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363161891226382@g.us",
+            "name": "ALERT_RTS_DENPASAR",
+            "member_count": 6,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363417213771624@g.us",
+            "name": "Tester Notification iPaem",
+            "member_count": 6,
+            "admin_count": 2,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "227771175420146@lid"
+        },
+        {
+            "id": "120363058695502823@g.us",
+            "name": "CSR Auto Alert_North",
+            "member_count": 6,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "174955610247394@lid"
+        },
+        {
+            "id": "120363143371109855@g.us",
+            "name": "ALERT_RTS_SOLO",
+            "member_count": 6,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363163274710626@g.us",
+            "name": "P2_RM_BKS_CKRW",
+            "member_count": 6,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363030366078115@g.us",
+            "name": "Power Alarm KAL",
+            "member_count": 6,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "75780503638025@lid"
+        },
+        {
+            "id": "120363403542967717@g.us",
+            "name": "Testing",
+            "member_count": 6,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "173443664326721@lid"
+        },
+        {
+            "id": "120363400371706299@g.us",
+            "name": "TOA HIGHRISK",
+            "member_count": 6,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "188218385391747@lid"
+        },
+        {
+            "id": "120363159427056195@g.us",
+            "name": "ALERT_RTS_SUMBAWA",
+            "member_count": 7,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363144290320335@g.us",
+            "name": "P3_RTS_TEGAL",
+            "member_count": 7,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363258972437738@g.us",
+            "name": "PRPO Test Group",
+            "member_count": 7,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "51668523720920@lid"
+        },
+        {
+            "id": "120363161014118372@g.us",
+            "name": "ALERT_RTS-INDRAMAYU BINONG",
+            "member_count": 7,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363231946640928@g.us",
+            "name": "Monitoring PAMA SUM",
+            "member_count": 7,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "174955610247394@lid"
+        },
+        {
+            "id": "120363021849570579@g.us",
+            "name": "FTTH Power Alert",
+            "member_count": 7,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "132164783980603@lid"
+        },
+        {
+            "id": "120363144055903617@g.us",
+            "name": "ALERT_RTS_SEMARANG",
+            "member_count": 7,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "6287870060004-1623899559@g.us",
+            "name": "Automation - TEML",
+            "member_count": 7,
+            "admin_count": 2,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363162405995463@g.us",
+            "name": "ALERT_RTS_SURABAYA",
+            "member_count": 7,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363163216010196@g.us",
+            "name": "P3_RTS_PURWOKERTO",
+            "member_count": 7,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363144205773229@g.us",
+            "name": "ALERT_RTS-PURWAKARTA_SUBANG",
+            "member_count": 7,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363159677664049@g.us",
+            "name": "P3_RTS_BANDUNG_1",
+            "member_count": 7,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363341483000641@g.us",
+            "name": "CCH Complaint Alert",
+            "member_count": 7,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "36163809202177@lid"
+        },
+        {
+            "id": "120363143285553825@g.us",
+            "name": "P3_RTS_BANDUNG_2",
+            "member_count": 7,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363375200959400@g.us",
+            "name": "SF AUTIN WhatsApp (HW)",
+            "member_count": 7,
+            "admin_count": 2,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "50105189200009@lid"
+        },
+        {
+            "id": "120363162420784713@g.us",
+            "name": "P2_Central Java 1",
+            "member_count": 7,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363144410950086@g.us",
+            "name": "P3_RTS_PKLNG_KBMN",
+            "member_count": 7,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363384457548824@g.us",
+            "name": "PT MITRACOMM EKASARANA (Mitracomm)",
+            "member_count": 7,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "187342312726550@lid"
+        },
+        {
+            "id": "120363164238534364@g.us",
+            "name": "P2_RM_DPK_KTTS",
+            "member_count": 7,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363418540383698@g.us",
+            "name": "New Monitoring WA",
+            "member_count": 7,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "176192611209410@lid"
+        },
+        {
+            "id": "120363306485714469@g.us",
+            "name": "West Daily Tools Check",
+            "member_count": 8,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "281213185056937@lid"
+        },
+        {
+            "id": "120363421076234506@g.us",
+            "name": "SF SmartCare_KQI Alert",
+            "member_count": 8,
+            "admin_count": 2,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "174955610247394@lid"
+        },
+        {
+            "id": "120363162904827272@g.us",
+            "name": "P3_RTS_INDMY_SUBANG",
+            "member_count": 8,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363162517299853@g.us",
+            "name": "P3_RTS_MAGELANG",
+            "member_count": 8,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363147437791853@g.us",
+            "name": "P2_West Java 1",
+            "member_count": 8,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363384179686623@g.us",
+            "name": "Direktorat Pengelolaan Informasi (Dukcapil)",
+            "member_count": 8,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "187342312726550@lid"
+        },
+        {
+            "id": "120363403324598122@g.us",
+            "name": "INDOSAT – DBS (DBS)",
+            "member_count": 8,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "187342312726550@lid"
+        },
+        {
+            "id": "120363143192970701@g.us",
+            "name": "ALERT_RTS_BOGOR_2",
+            "member_count": 8,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363403219997613@g.us",
+            "name": "PT Pamapersada Nusantara (Pamapersada)",
+            "member_count": 8,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "187342312726550@lid"
+        },
+        {
+            "id": "120363147860872800@g.us",
+            "name": "P3_RTS_WONOGIRI",
+            "member_count": 8,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363143713734540@g.us",
+            "name": "Alert_ RTS CIANJUR PLERED",
+            "member_count": 8,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363302288483183@g.us",
+            "name": "West Daily Material Check",
+            "member_count": 8,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "281213185056937@lid"
+        },
+        {
+            "id": "120363400482239520@g.us",
+            "name": "INDOSAT - AXA (AXA)",
+            "member_count": 8,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "187342312726550@lid"
+        },
+        {
+            "id": "120363214445525458@g.us",
+            "name": "Monitoring PAMA KAL",
+            "member_count": 8,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "174955610247394@lid"
+        },
+        {
+            "id": "120363364154699549@g.us",
+            "name": "Bank Mandiri Taspen, PT (Bank Mantap)",
+            "member_count": 8,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "187342312726550@lid"
+        },
+        {
+            "id": "120363147448430954@g.us",
+            "name": "P3_RTS_BANDUNG_3",
+            "member_count": 8,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363383747826986@g.us",
+            "name": "PT Lancar Jaya Network (Lancar Jaya)",
+            "member_count": 8,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "187342312726550@lid"
+        },
+        {
+            "id": "120363163725549659@g.us",
+            "name": "P3_RTS_CJR_PWK",
+            "member_count": 8,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363161795173699@g.us",
+            "name": "P2_Central Java 3",
+            "member_count": 8,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363044906933119@g.us",
+            "name": "ALERT RTS SUMSEL INNER1",
+            "member_count": 8,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "218339091677285@lid"
+        },
+        {
+            "id": "120363162495905638@g.us",
+            "name": "P3_RTS_YOGYA",
+            "member_count": 8,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363162239454951@g.us",
+            "name": "P2_RM_GNYR_BAL_OTR",
+            "member_count": 8,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363309010807321@g.us",
+            "name": "IPN Alert",
+            "member_count": 8,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "142060422193174@lid"
+        },
+        {
+            "id": "120363367076131669@g.us",
+            "name": "PT DCI Indonesia (DCI)",
+            "member_count": 8,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "187342312726550@lid"
+        },
+        {
+            "id": "120363372210391884@g.us",
+            "name": "PT Parsaoran Global Datatrans",
+            "member_count": 8,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "250959284453586@lid"
+        },
+        {
+            "id": "120363159068874382@g.us",
+            "name": "ALERT_RTS_KUDUS",
+            "member_count": 8,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363371929430253@g.us",
+            "name": "BTS Hotel Massive NE Down",
+            "member_count": 9,
+            "admin_count": 7,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "174955610247394@lid"
+        },
+        {
+            "id": "120363160063535677@g.us",
+            "name": "ALERT_RTS_MADURA",
+            "member_count": 9,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363161668807397@g.us",
+            "name": "ALERT_RTS_BOGOR_1",
+            "member_count": 9,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363370835833939@g.us",
+            "name": "PT.JARINGANKU SARANA NUSANTARA (JSN)",
+            "member_count": 9,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "250959284453586@lid"
+        },
+        {
+            "id": "120363379621043696@g.us",
+            "name": "Power & Hightemp Core Routers",
+            "member_count": 9,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "174955610247394@lid"
+        },
+        {
+            "id": "120363351568850016@g.us",
+            "name": "PT SUMBER UTAMA FIBER INDONESIA",
+            "member_count": 9,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "250959284453586@lid"
+        },
+        {
+            "id": "8613428911950-1593312523@g.us",
+            "name": "TSS - OSS Escalation",
+            "member_count": 9,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363370906718740@g.us",
+            "name": "PT Giga Digital Nusantara",
+            "member_count": 9,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "250959284453586@lid"
+        },
+        {
+            "id": "120363141656860446@g.us",
+            "name": "ALERT_RTS_SUKABUMI",
+            "member_count": 9,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363370806917798@g.us",
+            "name": "PT Andira Infomedia",
+            "member_count": 9,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "250959284453586@lid"
+        },
+        {
+            "id": "120363371797722053@g.us",
+            "name": "PT Bank Mandiri PERSERO (Mandiri)",
+            "member_count": 9,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "250959284453586@lid"
+        },
+        {
+            "id": "120363142974844922@g.us",
+            "name": "ALERT_RTS_SUMUT_IN2",
+            "member_count": 9,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363302905093264@g.us",
+            "name": "Jabo Daily Material Check",
+            "member_count": 9,
+            "admin_count": 7,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "281213185056937@lid"
+        },
+        {
+            "id": "120363162962660693@g.us",
+            "name": "ALERT_RTS_PARE2",
+            "member_count": 9,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363370662307351@g.us",
+            "name": "PT Gayatri Lintas Nusantara",
+            "member_count": 9,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "250959284453586@lid"
+        },
+        {
+            "id": "120363369168967604@g.us",
+            "name": "PT Hipernet Indodata",
+            "member_count": 9,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "250959284453586@lid"
+        },
+        {
+            "id": "8613428911950-1593326508@g.us",
+            "name": "TSS - ProxyLite EMS Escalation",
+            "member_count": 9,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363162641954915@g.us",
+            "name": "P2_RM_MDRA_SBY",
+            "member_count": 9,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363352138991115@g.us",
+            "name": "PT Adeaksa Indo Jayatama",
+            "member_count": 9,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "250959284453586@lid"
+        },
+        {
+            "id": "120363369049347376@g.us",
+            "name": "PT Mitra Transaksi Indonesia",
+            "member_count": 9,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "250959284453586@lid"
+        },
+        {
+            "id": "6285977300189-1606898242@g.us",
+            "name": "RO Notification [CENTRAL]",
+            "member_count": 9,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "80912888914036@lid"
+        },
+        {
+            "id": "120363405851206171@g.us",
+            "name": "OWS Router Potential Impact Power",
+            "member_count": 9,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "173443664326721@lid"
+        },
+        {
+            "id": "120363144444232558@g.us",
+            "name": "ALERT_RTS_PANDEGLANG",
+            "member_count": 9,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363142768602980@g.us",
+            "name": "ALERT_RTS_MKS_UTR_PAPUA",
+            "member_count": 9,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363322671523322@g.us",
+            "name": "Jabo Daily Tools Check",
+            "member_count": 9,
+            "admin_count": 7,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "199093292912787@lid"
+        },
+        {
+            "id": "120363352803178894@g.us",
+            "name": "PT Bestcamp Prima Data",
+            "member_count": 9,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "250959284453586@lid"
+        },
+        {
+            "id": "120363162083085042@g.us",
+            "name": "P2_Central Java 2",
+            "member_count": 10,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363044578433322@g.us",
+            "name": "ALERT RTS RIAU 3",
+            "member_count": 10,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "218339091677285@lid"
+        },
+        {
+            "id": "120363163170642867@g.us",
+            "name": "P2_West Java 2",
+            "member_count": 10,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363085484038164@g.us",
+            "name": "CyberArk-License-Monitoring",
+            "member_count": 10,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "6287887116330-1622689467@g.us",
+            "name": "TSS OWS",
+            "member_count": 10,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "102752831172730@lid"
+        },
+        {
+            "id": "120363162712560054@g.us",
+            "name": "P2_West Java 3",
+            "member_count": 10,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "6287887116330-1633391224@g.us",
+            "name": "TSS - Autohealing Escalation",
+            "member_count": 10,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "102752831172730@lid"
+        },
+        {
+            "id": "120363025185236833@g.us",
+            "name": "ALERT RTS RIAU 1",
+            "member_count": 10,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "218339091677285@lid"
+        },
+        {
+            "id": "120363421276769243@g.us",
+            "name": "Alert TT Customer Enterprise Summary",
+            "member_count": 10,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "187342312726550@lid"
+        },
+        {
+            "id": "6281995196980-1589359564@g.us",
+            "name": "Site Enterprise",
+            "member_count": 10,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "182785285328980@lid"
+        },
+        {
+            "id": "120363163189714143@g.us",
+            "name": "P2_RM_JAKP_JAKS",
+            "member_count": 10,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363146392924929@g.us",
+            "name": "ALERT_RTS_PDGLNG_LEBAK",
+            "member_count": 10,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363419626326084@g.us",
+            "name": "Alert Site",
+            "member_count": 10,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "105682669945085@lid"
+        },
+        {
+            "id": "6285977300189-1606898316@g.us",
+            "name": "RO Notification [WEST]",
+            "member_count": 10,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "80912888914036@lid"
+        },
+        {
+            "id": "6285977300189-1606898285@g.us",
+            "name": "RO Notification [EAST]",
+            "member_count": 10,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "80912888914036@lid"
+        },
+        {
+            "id": "120363145705816274@g.us",
+            "name": "P2_RM_GRT_SDJ_MDN",
+            "member_count": 10,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363368973241886@g.us",
+            "name": "PT Bank Central Asia Tbk (Bank Central Asia / BCA)",
+            "member_count": 10,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "250959284453586@lid"
+        },
+        {
+            "id": "120363145766997560@g.us",
+            "name": "P3_RTS_CIAMIS_TSKMLY",
+            "member_count": 10,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "8613428911950-1593326190@g.us",
+            "name": "TSS NIMS EMS",
+            "member_count": 10,
+            "admin_count": 7,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363362777179185@g.us",
+            "name": "Monitoring PMTCMT Dashboard (aiops) Data Missing",
+            "member_count": 10,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "187398130507968@lid"
+        },
+        {
+            "id": "120363145812227409@g.us",
+            "name": "ALERT_RTS_TANGERANG_KAB",
+            "member_count": 10,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363027976445121@g.us",
+            "name": "ALERT RTS SUMSEL INNER2",
+            "member_count": 11,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "218339091677285@lid"
+        },
+        {
+            "id": "120363404232190241@g.us",
+            "name": "Alert PT. TITAN JAYA SOLUSI (POLRI)",
+            "member_count": 11,
+            "admin_count": 2,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "187342312726550@lid"
+        },
+        {
+            "id": "120363322392193266@g.us",
+            "name": "North Daily Material Check",
+            "member_count": 11,
+            "admin_count": 7,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "281213185056937@lid"
+        },
+        {
+            "id": "120363046711530527@g.us",
+            "name": "ALERT RTS BELITUNG",
+            "member_count": 11,
+            "admin_count": 8,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "62796834332716@lid"
+        },
+        {
+            "id": "120363401356604093@g.us",
+            "name": "Alert FTTH Enterprise",
+            "member_count": 11,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "167435088990340@lid"
+        },
+        {
+            "id": "120363160774963805@g.us",
+            "name": "ALERT_RTS_DEPOK",
+            "member_count": 11,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363161533648627@g.us",
+            "name": "ALERT_RTS_SUMUT_IN1",
+            "member_count": 11,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363161498713682@g.us",
+            "name": "ALERT_RTS_MKS_SEL_AMBON",
+            "member_count": 11,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363291297626926@g.us",
+            "name": "Enterprise Link Degradation",
+            "member_count": 11,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "75780503638025@lid"
+        },
+        {
+            "id": "120363025479545002@g.us",
+            "name": "ALERT RTS RIAU 2",
+            "member_count": 11,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "218339091677285@lid"
+        },
+        {
+            "id": "120363356631343903@g.us",
+            "name": "PT Bank HSBC Indonesia (HSBC)",
+            "member_count": 11,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "250959284453586@lid"
+        },
+        {
+            "id": "8613428911950-1593326551@g.us",
+            "name": "TSS - SmartCare EMS Escalation",
+            "member_count": 11,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363163863853256@g.us",
+            "name": "P2_RM_SMT_OTR_NAD",
+            "member_count": 11,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363027324285044@g.us",
+            "name": "ALERT RTS RIAU OUTER_2",
+            "member_count": 11,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "218339091677285@lid"
+        },
+        {
+            "id": "120363369857941724@g.us",
+            "name": "PT Bank BTPN Tbk (BTPN / SMBC)",
+            "member_count": 11,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "250959284453586@lid"
+        },
+        {
+            "id": "6287887116330-1630515366@g.us",
+            "name": "TSS S3",
+            "member_count": 11,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "102752831172730@lid"
+        },
+        {
+            "id": "120363142681495457@g.us",
+            "name": "ALERT_RTS_LEBAK",
+            "member_count": 11,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363285396195949@g.us",
+            "name": "ALERT_RTS_GRT_LIMBNGAN",
+            "member_count": 11,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "62796834332716@lid"
+        },
+        {
+            "id": "120363322457578779@g.us",
+            "name": "North Daily Tools Check",
+            "member_count": 11,
+            "admin_count": 9,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "281213185056937@lid"
+        },
+        {
+            "id": "120363353163254102@g.us",
+            "name": "PT Bank BTPN Syariah Tbk",
+            "member_count": 11,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "250959284453586@lid"
+        },
+        {
+            "id": "120363145940070008@g.us",
+            "name": "ALERT_RTS_SERANG_CILEGON",
+            "member_count": 12,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363369826694798@g.us",
+            "name": "PT Bank Permata Tbk (Permata)",
+            "member_count": 12,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "250959284453586@lid"
+        },
+        {
+            "id": "120363047898439272@g.us",
+            "name": "ALERT RTS BANGKA",
+            "member_count": 12,
+            "admin_count": 8,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "62796834332716@lid"
+        },
+        {
+            "id": "120363142606869392@g.us",
+            "name": "ALERT_RTS_TANGKOT",
+            "member_count": 12,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363423169116085@g.us",
+            "name": "CGNAT Alert",
+            "member_count": 12,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "151608184823875@lid"
+        },
+        {
+            "id": "120363404887237427@g.us",
+            "name": "Multitech Infomedia, PT (Multitech)",
+            "member_count": 12,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "187342312726550@lid"
+        },
+        {
+            "id": "8613428911950-1600675508@g.us",
+            "name": "TSS - PMT Escalation",
+            "member_count": 12,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "6281932174607-1600823637@g.us",
+            "name": "RO Notification [JABO]",
+            "member_count": 12,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "127105396424879@lid"
+        },
+        {
+            "id": "120363323285720027@g.us",
+            "name": "Central Daily Material Check",
+            "member_count": 12,
+            "admin_count": 7,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "281213185056937@lid"
+        },
+        {
+            "id": "120363142221275684@g.us",
+            "name": "ALERT_RTS_BANDUNG_2",
+            "member_count": 13,
+            "admin_count": 2,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363029148538840@g.us",
+            "name": "ALERT_CSR_KBMN_PWKT_TGAL",
+            "member_count": 13,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "62796834332716@lid"
+        },
+        {
+            "id": "120363044157253839@g.us",
+            "name": "ALERT RTS BENGKULU",
+            "member_count": 13,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "218339091677285@lid"
+        },
+        {
+            "id": "120363161405125018@g.us",
+            "name": "ALERT_RTS_SULUT_MALUT",
+            "member_count": 13,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363046104451142@g.us",
+            "name": "ALERT RIAU OUTER 1",
+            "member_count": 13,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "218339091677285@lid"
+        },
+        {
+            "id": "120363022910680852@g.us",
+            "name": "TSS ONMSi&Fecylium",
+            "member_count": 13,
+            "admin_count": 7,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "102752831172730@lid"
+        },
+        {
+            "id": "120363382908705390@g.us",
+            "name": "MEGA ACCESS PERSADA, PT. (Fiberstar)",
+            "member_count": 13,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "187342312726550@lid"
+        },
+        {
+            "id": "8613428911950-1593326462@g.us",
+            "name": "TSS - In-House Server Escalation",
+            "member_count": 13,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363421297975839@g.us",
+            "name": "Alert PT. Jalin ATM M2M",
+            "member_count": 13,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "187342312726550@lid"
+        },
+        {
+            "id": "6287887116330-1622683845@g.us",
+            "name": "TSS FSO",
+            "member_count": 13,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "102752831172730@lid"
+        },
+        {
+            "id": "120363151496681126@g.us",
+            "name": "RTS_ALERT_GARUT_LIMBANGAN",
+            "member_count": 13,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363142041988202@g.us",
+            "name": "XLSmart MS Dev-Ops Team",
+            "member_count": 13,
+            "admin_count": 7,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "174955610247394@lid"
+        },
+        {
+            "id": "120363424122829240@g.us",
+            "name": "RAN OUTAGE ALERT",
+            "member_count": 13,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "173443664326721@lid"
+        },
+        {
+            "id": "120363419913288241@g.us",
+            "name": "Potential Incident SF >40",
+            "member_count": 13,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "75780503638025@lid"
+        },
+        {
+            "id": "120363161037450890@g.us",
+            "name": "ALERT_RTS_SUMUT_IN3",
+            "member_count": 13,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363049291838082@g.us",
+            "name": "Alert Complaint Ticket Hourly",
+            "member_count": 13,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "174955610247394@lid"
+        },
+        {
+            "id": "6287887116330-1606205393@g.us",
+            "name": "TSS - FMT Collector Escalation",
+            "member_count": 13,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "102752831172730@lid"
+        },
+        {
+            "id": "120363215696252842@g.us",
+            "name": "ALERT_RTS_KAL_PLGKARAYA",
+            "member_count": 13,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "62796834332716@lid"
+        },
+        {
+            "id": "120363401382076802@g.us",
+            "name": "Potential Incident SF <40",
+            "member_count": 13,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "75780503638025@lid"
+        },
+        {
+            "id": "120363321690035373@g.us",
+            "name": "Central Daily Tools Check",
+            "member_count": 13,
+            "admin_count": 7,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "281213185056937@lid"
+        },
+        {
+            "id": "120363161957153378@g.us",
+            "name": "ALERT_RTS_SUMUT_IN4",
+            "member_count": 13,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363353404415800@g.us",
+            "name": "PT Bank Sinarmas (Sinarmas)",
+            "member_count": 14,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "250959284453586@lid"
+        },
+        {
+            "id": "120363047167356847@g.us",
+            "name": "ALERT RTS SUMSEL INNER3",
+            "member_count": 14,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "218339091677285@lid"
+        },
+        {
+            "id": "120363144754717159@g.us",
+            "name": "ALERT_RTS_ACEH_2",
+            "member_count": 14,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363141544527550@g.us",
+            "name": "ALERT_RTS_TANGSEL",
+            "member_count": 14,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "8613428911950-1593326245@g.us",
+            "name": "TSS - Infinera EMS Escalation",
+            "member_count": 14,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363161552497797@g.us",
+            "name": "ALERT_RTS_SUMUT_OUT3",
+            "member_count": 14,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363145808366812@g.us",
+            "name": "ALERT_RTS_SUL_TANGRA",
+            "member_count": 14,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363384108305638@g.us",
+            "name": "PT Starlink Services Indonesia (Space-X)",
+            "member_count": 14,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "187342312726550@lid"
+        },
+        {
+            "id": "8613428911950-1593326049@g.us",
+            "name": "TSS - Power EMS Escalation",
+            "member_count": 14,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363045401845088@g.us",
+            "name": "NPM Automation",
+            "member_count": 14,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "271575211343935@lid"
+        },
+        {
+            "id": "120363203464932138@g.us",
+            "name": "Alert Stolen GRT MDN & SMT OTR NAD",
+            "member_count": 14,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "174955610247394@lid"
+        },
+        {
+            "id": "6592975187-1632110800@g.us",
+            "name": "DWDM Fiber Optics Auto-TT Rule",
+            "member_count": 14,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "80131322339430@lid"
+        },
+        {
+            "id": "120363028228863807@g.us",
+            "name": "ALERT CCSI KEPRI INNER",
+            "member_count": 14,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "218339091677285@lid"
+        },
+        {
+            "id": "120363312402924907@g.us",
+            "name": "TSS - Onmicom Escalation",
+            "member_count": 14,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "102752831172730@lid"
+        },
+        {
+            "id": "120363143683756525@g.us",
+            "name": "ALERT_RTS_JAKARTA_PUSAT",
+            "member_count": 14,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363161244553522@g.us",
+            "name": "P3_RTS_CRBN_KGN",
+            "member_count": 14,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363163937850232@g.us",
+            "name": "P2_RM_NTT",
+            "member_count": 15,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363413102688983@g.us",
+            "name": "Southern Sumatera_PLM Patrol Alert",
+            "member_count": 15,
+            "admin_count": 8,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "63346674032672@lid"
+        },
+        {
+            "id": "120363143614502491@g.us",
+            "name": "ALERT_RTS_BANDUNG_1",
+            "member_count": 15,
+            "admin_count": 2,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363317687656642@g.us",
+            "name": "Automated ECCS",
+            "member_count": 15,
+            "admin_count": 9,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "281423588130991@lid"
+        },
+        {
+            "id": "6281315055517-1630295799@g.us",
+            "name": "TSS - Landing Server Escalation",
+            "member_count": 15,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "6281219000443-1616767950@g.us",
+            "name": "SDMT TT Testing Group",
+            "member_count": 15,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363401256481616@g.us",
+            "name": "Packet-Loss C/AG <> PAG",
+            "member_count": 15,
+            "admin_count": 8,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "57591233294493@lid"
+        },
+        {
+            "id": "120363143326546234@g.us",
+            "name": "C5-ALERT_RTS_CIAMIS_TSKMLY",
+            "member_count": 15,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363214731525706@g.us",
+            "name": "ALERT_RTS_KALTIM_UTARA",
+            "member_count": 15,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "62796834332716@lid"
+        },
+        {
+            "id": "120363424089337751@g.us",
+            "name": "VIP ALERT REALTIME",
+            "member_count": 15,
+            "admin_count": 2,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "173443664326721@lid"
+        },
+        {
+            "id": "120363370330128970@g.us",
+            "name": "PT Bank CIMB Niaga Tbk (CIMB Niaga)",
+            "member_count": 15,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "250959284453586@lid"
+        },
+        {
+            "id": "120363027777018541@g.us",
+            "name": "ALERT KEPRI OUTER",
+            "member_count": 15,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "218339091677285@lid"
+        },
+        {
+            "id": "8613428911950-1593325886@g.us",
+            "name": "TSS - NCE DWDM Escalation",
+            "member_count": 15,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "6287887116330-1609226925@g.us",
+            "name": "TSS - UMBOSS EMS Escalation",
+            "member_count": 15,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "102752831172730@lid"
+        },
+        {
+            "id": "120363142960941048@g.us",
+            "name": "C5-ALERT_RTS_CRBN_KGN",
+            "member_count": 15,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363159828911473@g.us",
+            "name": "ALERT_RTS_SUMUT_OUT1",
+            "member_count": 15,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "8613428911950-1593326403@g.us",
+            "name": "TSS  - NCE IP Escalation",
+            "member_count": 15,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363367171782661@g.us",
+            "name": "Power Critical NE JABO",
+            "member_count": 15,
+            "admin_count": 10,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "216393454735400@lid"
+        },
+        {
+            "id": "120363021382281461@g.us",
+            "name": "Developer Kata NYA",
+            "member_count": 15,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "213386893783050@lid"
+        },
+        {
+            "id": "120363143855199048@g.us",
+            "name": "ALERT_RTS_SUMUT_OUT2",
+            "member_count": 15,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "6281315055517-1622651068@g.us",
+            "name": "TSS - EPNM Escalation",
+            "member_count": 15,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363161951360452@g.us",
+            "name": "ALERT_RTS_TEGAL",
+            "member_count": 15,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363370679255423@g.us",
+            "name": "PT Bank Negara Indonesia (Persero) Tbk (BNI)",
+            "member_count": 15,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "250959284453586@lid"
+        },
+        {
+            "id": "120363143626408693@g.us",
+            "name": "ALERT_RTS_PURWOKERTO",
+            "member_count": 15,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363394558922370@g.us",
+            "name": "East Java_PLM Patrol Alert",
+            "member_count": 15,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "63346674032672@lid"
+        },
+        {
+            "id": "120363142623884801@g.us",
+            "name": "ALERT_RTS_LOMBOK_TIMUR",
+            "member_count": 16,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363412347153672@g.us",
+            "name": "West Java_PLM Patrol Alert",
+            "member_count": 16,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "63346674032672@lid"
+        },
+        {
+            "id": "6287887116330-1627437243@g.us",
+            "name": "TSS - NCE MW Escalation",
+            "member_count": 16,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "102752831172730@lid"
+        },
+        {
+            "id": "120363411888487957@g.us",
+            "name": "South Central Kalimantan_PLM Patrol Alert",
+            "member_count": 16,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "63346674032672@lid"
+        },
+        {
+            "id": "6287884005040-1602499188@g.us",
+            "name": "BO TRM WA Auto Alerts",
+            "member_count": 16,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363143433127669@g.us",
+            "name": "C5-ALERT_RTS_MJLKA_SMD",
+            "member_count": 16,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363195965196302@g.us",
+            "name": "ALERT_RTS_KALBAR",
+            "member_count": 16,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "62796834332716@lid"
+        },
+        {
+            "id": "120363412255813976@g.us",
+            "name": "Northern Sumatera_PLM Patrol Alert",
+            "member_count": 16,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "63346674032672@lid"
+        },
+        {
+            "id": "8613428911950-1593312753@g.us",
+            "name": "TSS -  Huawei EMS Escalation",
+            "member_count": 16,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363030217822784@g.us",
+            "name": "ALERT RTS JAMBI MUARA BUNGO",
+            "member_count": 16,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "62796834332716@lid"
+        },
+        {
+            "id": "6287887116330-1609226838@g.us",
+            "name": "TSS File Missing & Data Stop",
+            "member_count": 16,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "102752831172730@lid"
+        },
+        {
+            "id": "6281219000443-1615974376@g.us",
+            "name": "WA SERVICE MONITORING",
+            "member_count": 16,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "6287887116330-1610423003@g.us",
+            "name": "TSS - FTTH Escalation",
+            "member_count": 16,
+            "admin_count": 9,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "102752831172730@lid"
+        },
+        {
+            "id": "120363402714582942@g.us",
+            "name": "CRC Dashboard Verification",
+            "member_count": 16,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "30928227291363@lid"
+        },
+        {
+            "id": "120363337311651572@g.us",
+            "name": "TR Delay Escalation",
+            "member_count": 16,
+            "admin_count": 2,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "174955610247394@lid"
+        },
+        {
+            "id": "120363142801083611@g.us",
+            "name": "ALERT_RTS_MALANG",
+            "member_count": 16,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363043509571421@g.us",
+            "name": "TSS - ZTE EMS Escalation",
+            "member_count": 16,
+            "admin_count": 7,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "102752831172730@lid"
+        },
+        {
+            "id": "120363400049027196@g.us",
+            "name": "Group Testing Notif WA",
+            "member_count": 16,
+            "admin_count": 7,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "173443664326721@lid"
+        },
+        {
+            "id": "120363405012293884@g.us",
+            "name": "OP OWS - PMT-CMT Developer",
+            "member_count": 16,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "88459783999618@lid"
+        },
+        {
+            "id": "120363398364497821@g.us",
+            "name": "Bali Nusra_PLM Patrol Alert",
+            "member_count": 17,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "63346674032672@lid"
+        },
+        {
+            "id": "8613428911950-1593325990@g.us",
+            "name": "TSS - Ericsson EMS Escalation",
+            "member_count": 17,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363393836771278@g.us",
+            "name": "Sulawesi_PLM Patrol Alert",
+            "member_count": 17,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "63346674032672@lid"
+        },
+        {
+            "id": "120363164170077663@g.us",
+            "name": "P2_RM_LAM_BABEL",
+            "member_count": 17,
+            "admin_count": 7,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "120363418433868763@g.us",
+            "name": "Power & Genset Alarm Increasing Alert",
+            "member_count": 17,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "228170288607366@lid"
+        },
+        {
+            "id": "8613428911950-1593326351@g.us",
+            "name": "TSS - NOKIA EMS Escalation",
+            "member_count": 17,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363403328465045@g.us",
+            "name": "LinkNet (LinkNet)",
+            "member_count": 17,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "187342312726550@lid"
+        },
+        {
+            "id": "120363325100204507@g.us",
+            "name": "VIP Roaming Alert",
+            "member_count": 17,
+            "admin_count": 2,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "41773036511391@lid"
+        },
+        {
+            "id": "120363027588307768@g.us",
+            "name": "ALERT RTS LAMPUNG INNER",
+            "member_count": 17,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "62796834332716@lid"
+        },
+        {
+            "id": "120363212026956491@g.us",
+            "name": "TSS - NetAct Escalation",
+            "member_count": 17,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "102752831172730@lid"
+        },
+        {
+            "id": "120363419996246707@g.us",
+            "name": "NOTIF BOD Visit/VIP Sitelist",
+            "member_count": 18,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "151608184823875@lid"
+        },
+        {
+            "id": "120363144779197820@g.us",
+            "name": "ALERT_RTS_MATARAM",
+            "member_count": 18,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363313241536548@g.us",
+            "name": "Public OWS Dev Team",
+            "member_count": 18,
+            "admin_count": 7,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "199093292912787@lid"
+        },
+        {
+            "id": "120363029453374812@g.us",
+            "name": "ALERT RTS LAMPUNG OUT2",
+            "member_count": 18,
+            "admin_count": 7,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "62796834332716@lid"
+        },
+        {
+            "id": "120363324708516269@g.us",
+            "name": "East Daily Material Check",
+            "member_count": 18,
+            "admin_count": 7,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "281213185056937@lid"
+        },
+        {
+            "id": "120363369822905409@g.us",
+            "name": "Power Critical NE WEST",
+            "member_count": 18,
+            "admin_count": 9,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "216393454735400@lid"
+        },
+        {
+            "id": "62817737969-1575340217@g.us",
+            "name": "XL Network Security Ops",
+            "member_count": 18,
+            "admin_count": 8,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "235884033106131@lid"
+        },
+        {
+            "id": "6287884005040-1602499439@g.us",
+            "name": "BO RAN WA Auto Alerts",
+            "member_count": 18,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363160930108825@g.us",
+            "name": "ALERT_RTS_BALI_OUT_GYR",
+            "member_count": 18,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363296635441775@g.us",
+            "name": "CNAP LATENCY TEST",
+            "member_count": 18,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "174955610247394@lid"
+        },
+        {
+            "id": "120363323706044066@g.us",
+            "name": "East Daily Tools Check",
+            "member_count": 18,
+            "admin_count": 7,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "281213185056937@lid"
+        },
+        {
+            "id": "120363144672142184@g.us",
+            "name": "ALERT_RTS_ACEH_1",
+            "member_count": 18,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363026475442378@g.us",
+            "name": "Auto Metric/Takeout Trunk",
+            "member_count": 18,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "108405041668224@lid"
+        },
+        {
+            "id": "120363159899125966@g.us",
+            "name": "ALERT_RTS_WONOGIRI",
+            "member_count": 18,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363158790287803@g.us",
+            "name": "ALERT_RTS_SULTENGGO",
+            "member_count": 18,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "6281315055517-1622651022@g.us",
+            "name": "TSS - VAS EMS Escalation",
+            "member_count": 19,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363163459075798@g.us",
+            "name": "ALERT_RTS_SIDOARJO",
+            "member_count": 19,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363412621527266@g.us",
+            "name": "Central Java_PLM Patrol Alert",
+            "member_count": 19,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "63346674032672@lid"
+        },
+        {
+            "id": "120363163051523388@g.us",
+            "name": "ALERT_RTS_MADIUN",
+            "member_count": 19,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363301906330424@g.us",
+            "name": "Monitoring DWDM ISAT AXA",
+            "member_count": 19,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "174955610247394@lid"
+        },
+        {
+            "id": "120363223806066530@g.us",
+            "name": "FTTH Ticket Complaint Alert (Lama)",
+            "member_count": 19,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363402097662432@g.us",
+            "name": "Data Alert Partner FTTH",
+            "member_count": 19,
+            "admin_count": 2,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "105682669945085@lid"
+        },
+        {
+            "id": "120363144679659110@g.us",
+            "name": "ALERT_RTS_BANDUNG_3",
+            "member_count": 19,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363385617138301@g.us",
+            "name": "Bank Rakyat Indonesia (BRI)",
+            "member_count": 19,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "187342312726550@lid"
+        },
+        {
+            "id": "120363368707629169@g.us",
+            "name": "Power Critical NE CENTRAL",
+            "member_count": 19,
+            "admin_count": 9,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "216393454735400@lid"
+        },
+        {
+            "id": "120363366862802727@g.us",
+            "name": "Power Critical NE NORTH",
+            "member_count": 19,
+            "admin_count": 9,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "216393454735400@lid"
+        },
+        {
+            "id": "62817890654-1606199421@g.us",
+            "name": "🕵️‍♂️PMT Alarm Batt STOLEN🕵️‍♂️",
+            "member_count": 19,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "188639359291562@lid"
+        },
+        {
+            "id": "8613428911950-1593326292@g.us",
+            "name": "TSS - NEC EMS Escalation",
+            "member_count": 19,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363315666904465@g.us",
+            "name": "IMIP Service Degradation Ticket",
+            "member_count": 19,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363402290275610@g.us",
+            "name": "Alert Fibercut Notes Update",
+            "member_count": 20,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "187342312726550@lid"
+        },
+        {
+            "id": "120363402669055458@g.us",
+            "name": "Downdetector Alert",
+            "member_count": 20,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "27294735323195@lid"
+        },
+        {
+            "id": "120363401362036490@g.us",
+            "name": "WPL & TWAMP Alerting",
+            "member_count": 20,
+            "admin_count": 2,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "152703317581855@lid"
+        },
+        {
+            "id": "120363403053544570@g.us",
+            "name": "Auto Correl WA Bad Call Experience",
+            "member_count": 20,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "79611648045139@lid"
+        },
+        {
+            "id": "120363420318994284@g.us",
+            "name": "ALERT Last TTI VIP SITE",
+            "member_count": 20,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "79611648045139@lid"
+        },
+        {
+            "id": "8613428911950-1593324864@g.us",
+            "name": "TSS - MPLS Escalation",
+            "member_count": 20,
+            "admin_count": 7,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363419686014131@g.us",
+            "name": "Checking WA Bot",
+            "member_count": 20,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "173443664326721@lid"
+        },
+        {
+            "id": "6287888000800-1585188398@g.us",
+            "name": "Tools Operation Team & FMT Team👍🏻",
+            "member_count": 21,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "146656053964832@lid"
+        },
+        {
+            "id": "120363392088338423@g.us",
+            "name": "Auto TT XLSMART Test",
+            "member_count": 21,
+            "admin_count": 11,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "124064442118368@lid"
+        },
+        {
+            "id": "120363423892867187@g.us",
+            "name": "ALERT_RTS_MAGELANG",
+            "member_count": 21,
+            "admin_count": 2,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "251015253233818@lid"
+        },
+        {
+            "id": "62817712519-1602293850@g.us",
+            "name": "BO IN-VAS WA Auto Alerts",
+            "member_count": 21,
+            "admin_count": 9,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "182630632943740@lid"
+        },
+        {
+            "id": "120363026689942198@g.us",
+            "name": "Unbalance alarm auto",
+            "member_count": 22,
+            "admin_count": 8,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "6287888990059-1617792905@g.us",
+            "name": "Verification New OLA EJBN",
+            "member_count": 22,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "58613569687681@lid"
+        },
+        {
+            "id": "120363160286997661@g.us",
+            "name": "ALERT_RTS_GROBOGAN",
+            "member_count": 22,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363317470153492@g.us",
+            "name": "IKN HUTRI Cross Domain",
+            "member_count": 22,
+            "admin_count": 12,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "62796834332716@lid"
+        },
+        {
+            "id": "120363309809698995@g.us",
+            "name": "Alert PAMA  Cross-Domain",
+            "member_count": 22,
+            "admin_count": 9,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "62796834332716@lid"
+        },
+        {
+            "id": "120363398217706866@g.us",
+            "name": "OWS SF Power & High Temp",
+            "member_count": 22,
+            "admin_count": 8,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "27294735323195@lid"
+        },
+        {
+            "id": "120363396010030105@g.us",
+            "name": "Jabo Outer_PLM Patrol Alert",
+            "member_count": 22,
+            "admin_count": 7,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "63346674032672@lid"
+        },
+        {
+            "id": "120363403108450034@g.us",
+            "name": "XLSMART Tools Operation",
+            "member_count": 23,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "151608184823875@lid"
+        },
+        {
+            "id": "120363068987802935@g.us",
+            "name": "Monitoring PAMA",
+            "member_count": 23,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363411223030493@g.us",
+            "name": "Jabo Inner_PLM Patrol Alert",
+            "member_count": 23,
+            "admin_count": 7,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "63346674032672@lid"
+        },
+        {
+            "id": "120363212649122032@g.us",
+            "name": "ALERT_RTS_KAL_BJM_OUTER",
+            "member_count": 23,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "62796834332716@lid"
+        },
+        {
+            "id": "120363274410436871@g.us",
+            "name": "NE Down Increasing Alert",
+            "member_count": 23,
+            "admin_count": 10,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "36163809202177@lid"
+        },
+        {
+            "id": "120363204746286317@g.us",
+            "name": "CRC and Packet Loss FTTH",
+            "member_count": 23,
+            "admin_count": 10,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "75780503638025@lid"
+        },
+        {
+            "id": "120363421925829858@g.us",
+            "name": "RHOMA - ALERT GOLDEN ROUTE VISION",
+            "member_count": 24,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "79611648045139@lid"
+        },
+        {
+            "id": "120363417213770057@g.us",
+            "name": "MOCN Cell n Site Down >12 Hours",
+            "member_count": 24,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "75780503638025@lid"
+        },
+        {
+            "id": "120363142351759445@g.us",
+            "name": "ALERT_RTS_NTT",
+            "member_count": 24,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363407556155798@g.us",
+            "name": "FLP Escalation",
+            "member_count": 24,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "229810982920376@lid"
+        },
+        {
+            "id": "120363400874452971@g.us",
+            "name": "NE Down vs Power Alarm",
+            "member_count": 24,
+            "admin_count": 8,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "75780503638025@lid"
+        },
+        {
+            "id": "120363140840854226@g.us",
+            "name": "ALERT_RTS_JAKSEL",
+            "member_count": 24,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363422700269381@g.us",
+            "name": "ANI - Automatic Network Intellegent",
+            "member_count": 24,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "79611648045139@lid"
+        },
+        {
+            "id": "120363345681459217@g.us",
+            "name": "100GE Link Flap",
+            "member_count": 24,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "174955610247394@lid"
+        },
+        {
+            "id": "628197867777-1613801979@g.us",
+            "name": "XL.HS Leader BKSI CKRW",
+            "member_count": 25,
+            "admin_count": 7,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "6281226480192-1617612246@g.us",
+            "name": "Verification New OLA NS and SS",
+            "member_count": 25,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "72168486481950@lid"
+        },
+        {
+            "id": "120363421394109557@g.us",
+            "name": "VIP CELL DOWN ALERT",
+            "member_count": 25,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "55375097286696@lid"
+        },
+        {
+            "id": "62817712519-1614322632@g.us",
+            "name": "FTTH Auto Alert",
+            "member_count": 25,
+            "admin_count": 11,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "182630632943740@lid"
+        },
+        {
+            "id": "120363163792993062@g.us",
+            "name": "ALERT_RTS_JEMBER",
+            "member_count": 25,
+            "admin_count": 7,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363371962962368@g.us",
+            "name": "Alert SFP Removed",
+            "member_count": 26,
+            "admin_count": 16,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "62796834332716@lid"
+        },
+        {
+            "id": "62818753428-1627526766@g.us",
+            "name": "RSL & IPAM Discussion",
+            "member_count": 26,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "75780503638025@lid"
+        },
+        {
+            "id": "120363406021179493@g.us",
+            "name": "Alert Site Enterprise",
+            "member_count": 26,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "79611648045139@lid"
+        },
+        {
+            "id": "120363418047871893@g.us",
+            "name": "⚠️ Tools Data Alert",
+            "member_count": 26,
+            "admin_count": 11,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "161233223323880@lid"
+        },
+        {
+            "id": "120363219767676207@g.us",
+            "name": "Vlan enterprise alert dev",
+            "member_count": 26,
+            "admin_count": 8,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "265867233337534@lid"
+        },
+        {
+            "id": "120363142764501343@g.us",
+            "name": "ALERT_RTS_KEDIRI",
+            "member_count": 26,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363049966858564@g.us",
+            "name": "VVIP Proactive - ALERT P1",
+            "member_count": 27,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "79611648045139@lid"
+        },
+        {
+            "id": "120363216425458855@g.us",
+            "name": "XL TEHNIS ft. HELIUM (NEW)",
+            "member_count": 27,
+            "admin_count": 10,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "1967329955840@lid"
+        },
+        {
+            "id": "120363414118349731@g.us",
+            "name": "100G Port No Traffic",
+            "member_count": 27,
+            "admin_count": 8,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "75780503638025@lid"
+        },
+        {
+            "id": "120363419042780501@g.us",
+            "name": "POI XL-SF Latency alert",
+            "member_count": 27,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "224270542233777@lid"
+        },
+        {
+            "id": "6287778483057-1573218628@g.us",
+            "name": "MLM - XL Busol",
+            "member_count": 27,
+            "admin_count": 7,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363367811617812@g.us",
+            "name": "Power Critical NE EAST",
+            "member_count": 27,
+            "admin_count": 11,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "216393454735400@lid"
+        },
+        {
+            "id": "120363424073259054@g.us",
+            "name": "Wallet Garden 1.0",
+            "member_count": 28,
+            "admin_count": 2,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "79611648045139@lid"
+        },
+        {
+            "id": "120363029005099640@g.us",
+            "name": "ALERT RTS LAMPUNG OUT1",
+            "member_count": 28,
+            "admin_count": 8,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "62796834332716@lid"
+        },
+        {
+            "id": "120363333264944392@g.us",
+            "name": "XL OWS Drive and Home",
+            "member_count": 28,
+            "admin_count": 12,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363407857116165@g.us",
+            "name": "VVIP COVERAGE SURVEILANCE",
+            "member_count": 28,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "79611648045139@lid"
+        },
+        {
+            "id": "120363193568697099@g.us",
+            "name": "FTTH Potential Alert",
+            "member_count": 28,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "75780503638025@lid"
+        },
+        {
+            "id": "120363405497908836@g.us",
+            "name": "MOCN Anomaly",
+            "member_count": 28,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "173443664326721@lid"
+        },
+        {
+            "id": "120363039719025134@g.us",
+            "name": "Core Degradation Alert",
+            "member_count": 29,
+            "admin_count": 11,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "16346729439343@lid"
+        },
+        {
+            "id": "120363046883730934@g.us",
+            "name": "ALERT RTS SUMBAR",
+            "member_count": 29,
+            "admin_count": 7,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "62796834332716@lid"
+        },
+        {
+            "id": "120363307659090303@g.us",
+            "name": "Operational Service KAF Samarinda - XL",
+            "member_count": 29,
+            "admin_count": 10,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "75780503638025@lid"
+        },
+        {
+            "id": "120363195687328184@g.us",
+            "name": "ALERT_RTS_KAL_BJM_INNER",
+            "member_count": 29,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "62796834332716@lid"
+        },
+        {
+            "id": "120363072434066921@g.us",
+            "name": "Key-WA Auto Alert North",
+            "member_count": 29,
+            "admin_count": 11,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "174955610247394@lid"
+        },
+        {
+            "id": "120363027135092348@g.us",
+            "name": "CSR Auto Alert_Jabo",
+            "member_count": 29,
+            "admin_count": 13,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "63346674032672@lid"
+        },
+        {
+            "id": "120363161192665861@g.us",
+            "name": "ALERT_RTS_YOGYA",
+            "member_count": 29,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363044958448132@g.us",
+            "name": "Alert Potential Incident",
+            "member_count": 29,
+            "admin_count": 9,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "75780503638025@lid"
+        },
+        {
+            "id": "120363402837964243@g.us",
+            "name": "Alerting TT  Incident Command Center",
+            "member_count": 29,
+            "admin_count": 7,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "187342312726550@lid"
+        },
+        {
+            "id": "120363407624078274@g.us",
+            "name": "Garuda Eyes OSP Escalation",
+            "member_count": 29,
+            "admin_count": 16,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "281213185056937@lid"
+        },
+        {
+            "id": "120363386040981934@g.us",
+            "name": "VOCUS (VOCUS)",
+            "member_count": 29,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "187342312726550@lid"
+        },
+        {
+            "id": "120363042930574686@g.us",
+            "name": "AMS BCM Group Discussion",
+            "member_count": 30,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "166232498135167@lid"
+        },
+        {
+            "id": "120363041420009643@g.us",
+            "name": "⛑️ Catastrophe Call",
+            "member_count": 30,
+            "admin_count": 8,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "17824282075323@lid"
+        },
+        {
+            "id": "120363163320120603@g.us",
+            "name": "ALERT_RTS_KEBUMEN",
+            "member_count": 30,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363404405856969@g.us",
+            "name": "Alert LN2A",
+            "member_count": 30,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "105682669945085@lid"
+        },
+        {
+            "id": "120363043292231915@g.us",
+            "name": "Lease Capacity Alert",
+            "member_count": 31,
+            "admin_count": 8,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "75780503638025@lid"
+        },
+        {
+            "id": "120363299088914622@g.us",
+            "name": "STARLINK <> XL OPERATION ISSUE",
+            "member_count": 31,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "19739854270654@lid"
+        },
+        {
+            "id": "120363079099203267@g.us",
+            "name": "XLSMART - PT Gayatri Project & Aftersales Only",
+            "member_count": 31,
+            "admin_count": 9,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "249438832480409@lid"
+        },
+        {
+            "id": "6287791081691-1617796322@g.us",
+            "name": "Verification New OLA CJ and WJ",
+            "member_count": 31,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "165442207367414@lid"
+        },
+        {
+            "id": "120363166400256921@g.us",
+            "name": "OLT Alert Internal (Critical Only)",
+            "member_count": 32,
+            "admin_count": 10,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "174955610247394@lid"
+        },
+        {
+            "id": "120363044547241414@g.us",
+            "name": "ALERT_CSR_JAM_SUMBAR",
+            "member_count": 32,
+            "admin_count": 7,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "62796834332716@lid"
+        },
+        {
+            "id": "120363390044894204@g.us",
+            "name": "Bengkel FTTH Alert",
+            "member_count": 32,
+            "admin_count": 7,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "167435088990340@lid"
+        },
+        {
+            "id": "120363297291756890@g.us",
+            "name": "Network - Jakarta Southern",
+            "member_count": 32,
+            "admin_count": 10,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "83734699188296@lid"
+        },
+        {
+            "id": "120363423093944950@g.us",
+            "name": "Albatros GOLF Surveillance",
+            "member_count": 32,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": true,
+            "owner": "201013227184330@lid"
+        },
+        {
+            "id": "6287875588807-1541403984@g.us",
+            "name": "C - CIPURBAYU",
+            "member_count": 33,
+            "admin_count": 8,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "9960180183169@lid"
+        },
+        {
+            "id": "120363371334490472@g.us",
+            "name": "VIP FTTH Down",
+            "member_count": 33,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "132164783980603@lid"
+        },
+        {
+            "id": "120363404751731188@g.us",
+            "name": "[INT] G.R Alert Handling",
+            "member_count": 34,
+            "admin_count": 7,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "230274721923092@lid"
+        },
+        {
+            "id": "120363299664734622@g.us",
+            "name": "Monitoring DWDM Cust Link Faulty",
+            "member_count": 34,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "174955610247394@lid"
+        },
+        {
+            "id": "120363143428666336@g.us",
+            "name": "Alarm System Integration Iforte-XL",
+            "member_count": 35,
+            "admin_count": 10,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "188510443159656@lid"
+        },
+        {
+            "id": "120363347016826852@g.us",
+            "name": "FLP Rangers Central",
+            "member_count": 35,
+            "admin_count": 11,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "196254403457094@lid"
+        },
+        {
+            "id": "120363403339095830@g.us",
+            "name": "Link UP but ISIS Down",
+            "member_count": 35,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "75780503638025@lid"
+        },
+        {
+            "id": "120363024327642181@g.us",
+            "name": "BAROKAHNET | XLSMART",
+            "member_count": 36,
+            "admin_count": 10,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "280186503348457@lid"
+        },
+        {
+            "id": "120363395444857051@g.us",
+            "name": "Central Sumatera_PLM Patrol Alert",
+            "member_count": 36,
+            "admin_count": 8,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "63346674032672@lid"
+        },
+        {
+            "id": "120363420630590043@g.us",
+            "name": "KEA JKT Banjarmasin",
+            "member_count": 36,
+            "admin_count": 11,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "147214517170212@lid"
+        },
+        {
+            "id": "120363422112326010@g.us",
+            "name": "Critical Alert - MPLS Router Juniper",
+            "member_count": 37,
+            "admin_count": 9,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "41240359874706@lid"
+        },
+        {
+            "id": "120363044750918988@g.us",
+            "name": "IM & PM",
+            "member_count": 37,
+            "admin_count": 9,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "275066935873693@lid"
+        },
+        {
+            "id": "120363025294677716@g.us",
+            "name": "CSR Auto Alert_Central",
+            "member_count": 38,
+            "admin_count": 14,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "63346674032672@lid"
+        },
+        {
+            "id": "120363412073473599@g.us",
+            "name": "West East Kalimantan_PLM Patrol Alert",
+            "member_count": 38,
+            "admin_count": 9,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "63346674032672@lid"
+        },
+        {
+            "id": "120363298607222076@g.us",
+            "name": "CNAP Performance and Utilization",
+            "member_count": 38,
+            "admin_count": 11,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "75780503638025@lid"
+        },
+        {
+            "id": "120363249812500338@g.us",
+            "name": "Load Balance per Packet",
+            "member_count": 38,
+            "admin_count": 10,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "75780503638025@lid"
+        },
+        {
+            "id": "6287870000665-1577349723@g.us",
+            "name": "VVIP Proactive - ALERT",
+            "member_count": 38,
+            "admin_count": 9,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363401652141291@g.us",
+            "name": "🚨LICENSE ‼️",
+            "member_count": 38,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "161233223323880@lid"
+        },
+        {
+            "id": "120363422613880426@g.us",
+            "name": "Iron Duck Project",
+            "member_count": 40,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": true,
+            "owner": "201013227184330@lid"
+        },
+        {
+            "id": "120363039903876060@g.us",
+            "name": "DWDM Auto Alert_Jabo",
+            "member_count": 40,
+            "admin_count": 13,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "63346674032672@lid"
+        },
+        {
+            "id": "120363043960730676@g.us",
+            "name": "CSR Auto Alert_East",
+            "member_count": 40,
+            "admin_count": 8,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "63346674032672@lid"
+        },
+        {
+            "id": "120363317988311573@g.us",
+            "name": "DWDM Auto Alert_North",
+            "member_count": 41,
+            "admin_count": 13,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "174955610247394@lid"
+        },
+        {
+            "id": "120363296237117630@g.us",
+            "name": "Network - Jakarta Banten",
+            "member_count": 41,
+            "admin_count": 12,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "83734699188296@lid"
+        },
+        {
+            "id": "120363424548832575@g.us",
+            "name": "MARCONI-XL# Bad WA Call Experience",
+            "member_count": 42,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "79611648045139@lid"
+        },
+        {
+            "id": "120363399576321834@g.us",
+            "name": "POI XL-SF Link CRC Error",
+            "member_count": 42,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "224270542233777@lid"
+        },
+        {
+            "id": "120363028185818938@g.us",
+            "name": "Potential Incident 80",
+            "member_count": 43,
+            "admin_count": 17,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "75780503638025@lid"
+        },
+        {
+            "id": "120363169484436635@g.us",
+            "name": "Incident Notification for CEH",
+            "member_count": 43,
+            "admin_count": 5,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "248335126499555@lid"
+        },
+        {
+            "id": "6287820729342-1622630581@g.us",
+            "name": "Verification New OLA JABO",
+            "member_count": 43,
+            "admin_count": 10,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "16437007650834@lid"
+        },
+        {
+            "id": "120363040780461473@g.us",
+            "name": "DWDM Auto Alert_East",
+            "member_count": 43,
+            "admin_count": 8,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "63346674032672@lid"
+        },
+        {
+            "id": "6287870060004-1631848057@g.us",
+            "name": "BSC/RNC Down - Internal",
+            "member_count": 44,
+            "admin_count": 8,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363070685923329@g.us",
+            "name": "SALES - NETWORK : KALTIMTARA",
+            "member_count": 44,
+            "admin_count": 9,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "29880137842757@lid"
+        },
+        {
+            "id": "120363042746855459@g.us",
+            "name": "DWDM Auto Alert_Central",
+            "member_count": 44,
+            "admin_count": 9,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "63346674032672@lid"
+        },
+        {
+            "id": "120363070522482469@g.us",
+            "name": "NETWORK QUALITY • KALSEL",
+            "member_count": 45,
+            "admin_count": 12,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "29880137842757@lid"
+        },
+        {
+            "id": "6287889523323-1589085782@g.us",
+            "name": "Key-WA Auto Alert Central",
+            "member_count": 45,
+            "admin_count": 10,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "174955610247394@lid"
+        },
+        {
+            "id": "120363346337547807@g.us",
+            "name": "Morowali Issue Internal",
+            "member_count": 45,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "159537030017067@lid"
+        },
+        {
+            "id": "120363308257522183@g.us",
+            "name": "FTTH Ticket Complaint Alert",
+            "member_count": 45,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "36163809202177@lid"
+        },
+        {
+            "id": "6281807946649-1604547191@g.us",
+            "name": "VIP FTTH",
+            "member_count": 45,
+            "admin_count": 7,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "217368345182453@lid"
+        },
+        {
+            "id": "6285960245518-1595214619@g.us",
+            "name": "FTTH Automation",
+            "member_count": 45,
+            "admin_count": 11,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "168925409095776@lid"
+        },
+        {
+            "id": "120363420200773799@g.us",
+            "name": "FTTH-Network XLS [FM-XLSATU]",
+            "member_count": 45,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "56831275733168@lid"
+        },
+        {
+            "id": "6287889523323-1589085976@g.us",
+            "name": "Key-WA Auto Alert East",
+            "member_count": 46,
+            "admin_count": 10,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "174955610247394@lid"
+        },
+        {
+            "id": "120363402802856921@g.us",
+            "name": "Marconi SF#-WA Bad Call Experience Alert",
+            "member_count": 46,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "79611648045139@lid"
+        },
+        {
+            "id": "6281911290791-1594370003@g.us",
+            "name": "Auto Heal COREVAS",
+            "member_count": 46,
+            "admin_count": 10,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "94300402655302@lid"
+        },
+        {
+            "id": "120363419814575271@g.us",
+            "name": "Monitoring SmartCare_KQI Alert",
+            "member_count": 47,
+            "admin_count": 8,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "174955610247394@lid"
+        },
+        {
+            "id": "120363227884797973@g.us",
+            "name": "Alert Enterprise Port No Traffic",
+            "member_count": 47,
+            "admin_count": 10,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "75780503638025@lid"
+        },
+        {
+            "id": "120363393550804370@g.us",
+            "name": "Trial P3 TT INCM - NOC",
+            "member_count": 48,
+            "admin_count": 8,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "97259752575211@lid"
+        },
+        {
+            "id": "120363419632044051@g.us",
+            "name": "Power and Site Down Area Berau (SF)",
+            "member_count": 48,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "106682826907782@lid"
+        },
+        {
+            "id": "120363260006246808@g.us",
+            "name": "East Stolen Alert",
+            "member_count": 48,
+            "admin_count": 2,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "174955610247394@lid"
+        },
+        {
+            "id": "120363021756773591@g.us",
+            "name": "DWDM Auto Alert_West",
+            "member_count": 50,
+            "admin_count": 10,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "63346674032672@lid"
+        },
+        {
+            "id": "120363068942846484@g.us",
+            "name": "NETWORK QUALITY • KALBAR",
+            "member_count": 50,
+            "admin_count": 11,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "29880137842757@lid"
+        },
+        {
+            "id": "120363026681490358@g.us",
+            "name": "CSR Auto Alert_West",
+            "member_count": 51,
+            "admin_count": 11,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "63346674032672@lid"
+        },
+        {
+            "id": "120363046519746983@g.us",
+            "name": "RTS AREA BATURAJA-OKI",
+            "member_count": 51,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "218339091677285@lid"
+        },
+        {
+            "id": "62818753428-1632398972@g.us",
+            "name": "Internal Ops Coordination",
+            "member_count": 51,
+            "admin_count": 10,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "75780503638025@lid"
+        },
+        {
+            "id": "120363402557720994@g.us",
+            "name": "XLSMART-MS Huawei Reg SS",
+            "member_count": 52,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "256104672022689@lid"
+        },
+        {
+            "id": "120363208479627259@g.us",
+            "name": "IMIP + MS MOROWALI XL Axiata",
+            "member_count": 53,
+            "admin_count": 6,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "150590210470019@lid"
+        },
+        {
+            "id": "120363044076424313@g.us",
+            "name": "RTS AREA BENGKULU LUBUK LINGGAU",
+            "member_count": 53,
+            "admin_count": 10,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "218339091677285@lid"
+        },
+        {
+            "id": "120363279552791385@g.us",
+            "name": "NETWORK - DKI JAKARTA",
+            "member_count": 53,
+            "admin_count": 17,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "83734699188296@lid"
+        },
+        {
+            "id": "6287875588807-1541398159@g.us",
+            "name": "WJ2 - Sales dan Network",
+            "member_count": 54,
+            "admin_count": 13,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "9960180183169@lid"
+        },
+        {
+            "id": "120363198806367425@g.us",
+            "name": "Preventive Complaint VVIP",
+            "member_count": 56,
+            "admin_count": 10,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "79611648045139@lid"
+        },
+        {
+            "id": "120363135565481609@g.us",
+            "name": "OLT Alert Monitoring",
+            "member_count": 58,
+            "admin_count": 12,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "75780503638025@lid"
+        },
+        {
+            "id": "120363025200688771@g.us",
+            "name": "West DWDM-Genset alert",
+            "member_count": 59,
+            "admin_count": 8,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "182630632943740@lid"
+        },
+        {
+            "id": "120363401736802413@g.us",
+            "name": "P2/P3 Multi Site CENTRAL",
+            "member_count": 59,
+            "admin_count": 13,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "75780503638025@lid"
+        },
+        {
+            "id": "120363052866528932@g.us",
+            "name": "NETWORK QUALITY • KALTENG AREA",
+            "member_count": 59,
+            "admin_count": 13,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "29880137842757@lid"
+        },
+        {
+            "id": "120363418424970167@g.us",
+            "name": "XLSMART-MS Huawei Reg NS",
+            "member_count": 59,
+            "admin_count": 10,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "69685861179505@lid"
+        },
+        {
+            "id": "120363221741692081@g.us",
+            "name": "Verification New OLA KALIMANTAN and SULAMPAPUA",
+            "member_count": 61,
+            "admin_count": 4,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "58613569687681@lid"
+        },
+        {
+            "id": "120363422279791799@g.us",
+            "name": "Core-DC Alert",
+            "member_count": 64,
+            "admin_count": 3,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "58630732796032@lid"
+        },
+        {
+            "id": "6287771788078-1586687335@g.us",
+            "name": "Key-WA Auto Alert Jabo",
+            "member_count": 65,
+            "admin_count": 17,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "168053480378619@lid"
+        },
+        {
+            "id": "6287777110888-1580736474@g.us",
+            "name": "Key-WA Auto Alert West",
+            "member_count": 66,
+            "admin_count": 10,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "112090106855626@lid"
+        },
+        {
+            "id": "120363329423445606@g.us",
+            "name": "SCTP Packet Loss Alert",
+            "member_count": 66,
+            "admin_count": 15,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "75780503638025@lid"
+        },
+        {
+            "id": "6281930369928-1525929290@g.us",
+            "name": "TS SME CEM Club",
+            "member_count": 70,
+            "admin_count": 8,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363183805754739@g.us",
+            "name": "XLSMART-MS Huawei Reg SUMAPA",
+            "member_count": 76,
+            "admin_count": 12,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "151608184823875@lid"
+        },
+        {
+            "id": "628882051418-1519895348@g.us",
+            "name": "XLSMART-MS Huawei Reg WJ",
+            "member_count": 79,
+            "admin_count": 10,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "121345794920675@lid"
+        },
+        {
+            "id": "120363404096284850@g.us",
+            "name": "GRV 2.0 (Golden Route VIP)",
+            "member_count": 79,
+            "admin_count": 7,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": true,
+            "owner": "161233223323880@lid"
+        },
+        {
+            "id": "62817844808-1606798376@g.us",
+            "name": "West Battery Stolen Alert",
+            "member_count": 81,
+            "admin_count": 19,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "122827541872814@lid"
+        },
+        {
+            "id": "62817886091-1420286914@g.us",
+            "name": "J6-Greater Bogor -XL&HS",
+            "member_count": 81,
+            "admin_count": 16,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363334421144634@g.us",
+            "name": "High Utilization Alert",
+            "member_count": 82,
+            "admin_count": 12,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "224270542233777@lid"
+        },
+        {
+            "id": "120363424300943570@g.us",
+            "name": "SL Monitoring MSXLS",
+            "member_count": 85,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "213567383060731@lid"
+        },
+        {
+            "id": "6287885783337-1490760763@g.us",
+            "name": "PERFORMANCE",
+            "member_count": 86,
+            "admin_count": 12,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363297880606112@g.us",
+            "name": "META Operation Service IMIP-XL",
+            "member_count": 86,
+            "admin_count": 12,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "246179103244479@lid"
+        },
+        {
+            "id": "62817712519-1602041734@g.us",
+            "name": "Core CS/PS WA Alerts",
+            "member_count": 88,
+            "admin_count": 14,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "182630632943740@lid"
+        },
+        {
+            "id": "120363405229855629@g.us",
+            "name": "TSS",
+            "member_count": 88,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "187050691162165@lid"
+        },
+        {
+            "id": "6287880247352-1470703445@g.us",
+            "name": "NOC OPERATIONS#JUST DO IT",
+            "member_count": 91,
+            "admin_count": 7,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363374410836862@g.us",
+            "name": "XLSMART Incident Management",
+            "member_count": 97,
+            "admin_count": 10,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "248335126499555@lid"
+        },
+        {
+            "id": "120363163983663301@g.us",
+            "name": "XLSMART-MS Huawei Reg EJ",
+            "member_count": 103,
+            "admin_count": 22,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "151608184823875@lid"
+        },
+        {
+            "id": "120363022225803079@g.us",
+            "name": "PMT/CMT Data Assurance",
+            "member_count": 104,
+            "admin_count": 19,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363393703791891@g.us",
+            "name": "LEBARAN ASSURANCE 2025",
+            "member_count": 104,
+            "admin_count": 20,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "161233223323880@lid"
+        },
+        {
+            "id": "120363419212002320@g.us",
+            "name": "XLSMART-MS Huawei Reg Kalimantan",
+            "member_count": 105,
+            "admin_count": 12,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "107649127465024@lid"
+        },
+        {
+            "id": "120363178944330286@g.us",
+            "name": "XLSMART-MS Huawei Reg CJ",
+            "member_count": 108,
+            "admin_count": 13,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "151608184823875@lid"
+        },
+        {
+            "id": "62818232500-1541403686@g.us",
+            "name": "C-Network Sales West Java 1",
+            "member_count": 110,
+            "admin_count": 29,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": true,
+            "owner": null
+        },
+        {
+            "id": "120363423375924445@g.us",
+            "name": "VIP Alert Monitor",
+            "member_count": 123,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "173443664326721@lid"
+        },
+        {
+            "id": "6287777110888-1595469028@g.us",
+            "name": "🚨JABO P1 Handling",
+            "member_count": 134,
+            "admin_count": 19,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "112090106855626@lid"
+        },
+        {
+            "id": "120363424738892287@g.us",
+            "name": "CSR Auto Alert",
+            "member_count": 136,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "174955610247394@lid"
+        },
+        {
+            "id": "120363404339022963@g.us",
+            "name": "Delivery Material Lists OWS 30cw",
+            "member_count": 140,
+            "admin_count": 14,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "137765421330509@lid"
+        },
+        {
+            "id": "6287822185375-1486372039@g.us",
+            "name": "SF - Balitower Escalation",
+            "member_count": 149,
+            "admin_count": 22,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "120363401058411207@g.us",
+            "name": "XLSMART-MS Huawei Reg Jabo",
+            "member_count": 151,
+            "admin_count": 17,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "113090834215069@lid"
+        },
+        {
+            "id": "120363424733195713@g.us",
+            "name": "DWDM Auto Alert",
+            "member_count": 169,
+            "admin_count": 1,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "174955610247394@lid"
+        },
+        {
+            "id": "6287885444555-1507784291@g.us",
+            "name": "XL - Network",
+            "member_count": 230,
+            "admin_count": 34,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "201455457824925@lid"
+        },
+        {
+            "id": "6281215887370-1349318410@g.us",
+            "name": "XL MS Ops (internal)",
+            "member_count": 241,
+            "admin_count": 24,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": null
+        },
+        {
+            "id": "62818122297-1584930188@g.us",
+            "name": "Incident E2E",
+            "member_count": 284,
+            "admin_count": 28,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": true,
+            "owner": "115796697210919@lid"
+        },
+        {
+            "id": "628170710011-1441635545@g.us",
+            "name": "NOC FO-BO",
+            "member_count": 294,
+            "admin_count": 30,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": true,
+            "owner": "142043242356737@lid"
+        },
+        {
+            "id": "120363161339568204@g.us",
+            "name": "NOC and Region",
+            "member_count": 730,
+            "admin_count": 2,
+            "bot_role": "member",
+            "is_bot_admin": false,
+            "restrict": false,
+            "owner": "151608184823875@lid"
+        }
+    ]
+}

@@ -8,6 +8,8 @@ const { startOperationBot, stopOperationBot, reconnectBot, getOperationSock, get
 const { globalAgent } = require('./proxyConfig');
 const { createSock, updateBotStatus } = require('../utils/createSock');
 const { connected, disconnect } = require('process');
+const http = require("http");
+const https = require("https");
 
 
 const STATUS_FILE = path.join(__dirname, '../data/bot_status.json');
@@ -150,6 +152,83 @@ async function getGroupInfo(sock, groupId) {
     }
 }
 
+async function callApi(keyword, type) {
+    return new Promise((resolve, reject) => {
+        const baseUrl = "http://10.17.7.147:9098/autohealing/api/network_intelligent_api.php";
+        const params = new URLSearchParams({ keyword, type }).toString();
+        const url = `${baseUrl}?${params}`;
+
+        http.get(url, (res) => {
+            let data = "";
+            res.on("data", (chunk) => data += chunk);
+            res.on("end", () => {
+                try {
+                    const parsed = JSON.parse(data);
+                    resolve(parsed);
+                } catch (e) {
+                    resolve({ raw: data });
+                }
+            });
+        }).on("error", (err) => reject(err));
+    });
+}
+
+
+
+function callBotApiPMTCMT(params) {
+    return new Promise((resolve, reject) => {
+        const postData = JSON.stringify({
+            param1: params.param1 || "-",
+            param2: params.param2 || "-",
+            param3: params.param3 || "-",
+            param4: params.param4 || "-",
+            param5: params.param5 || "-",
+            param6: params.param6 || "-"
+        });
+
+        // Proxy info
+        const proxyHost = "10.17.6.215";
+        const proxyPort = 8080;
+        const proxyUser = "WAserver";
+        const proxyPass = "Bandar12#$";
+
+        // Target API info
+        const targetHost = "10.17.7.14";
+        const targetPort = 8088;
+        const targetPath = "/v1/bot";
+
+        const options = {
+            host: proxyHost,
+            port: proxyPort,
+            method: 'POST',
+            path: `http://${targetHost}:${targetPort}${targetPath}`, // full URL required for HTTP proxy
+            headers: {
+                "Content-Type": "application/json",
+                "Content-Length": Buffer.byteLength(postData),
+                "Authorization": "Basic " + Buffer.from("whatsapp_bot1:wabot123").toString("base64"),
+                "Proxy-Authorization": "Basic " + Buffer.from(`${proxyUser}:${proxyPass}`).toString("base64")
+            }
+        };
+
+        const req = http.request(options, (res) => {
+            let data = "";
+            res.on("data", (chunk) => data += chunk);
+            res.on("end", () => {
+                try {
+                    const parsed = JSON.parse(data);
+                    resolve(parsed);
+                } catch (e) {
+                    resolve({ raw: data });
+                }
+            });
+        });
+
+        req.on("error", (err) => reject(err));
+        req.write(postData);
+        req.end();
+    });
+}
+
 
 function setupAdminCommands(sock) {
     logger.info('Siap menerima pesan command.');
@@ -162,7 +241,7 @@ function setupAdminCommands(sock) {
 
         if (!text) return;
 
-        if (text.startsWith('!addbot')) {
+        if (text.startsWith('&addbot')) {
             const [, botName] = text.split(' ');
             if (!botName) {
                 return sock.sendMessage(chatId, { text: 'Gunakan format: *!addbot <nama_bot>*' });
@@ -170,10 +249,10 @@ function setupAdminCommands(sock) {
 
             logger.info(`Menambahkan bot: ${botName}`);
             startOperationBot(botName, sock, chatId);
-            sock.sendMessage(chatId, { text: `Bot *${botName}* berhasil ditambahkan!` });
+            sock.sendMessage(chatId, { text: `[XL]--Bot *${botName}* berhasil ditambahkan!` });
         }
 
-        if (text.startsWith('!rst')) {
+        if (text.startsWith('&rst')) {
             const [, botName] = text.split(' ');
             if (!botName) {
                 return sock.sendMessage(chatId, { text: 'Gunakan format: *!rst <nama_bot>*' });
@@ -181,37 +260,118 @@ function setupAdminCommands(sock) {
 
             logger.info(`Menambahkan bot: ${botName}`);
             reconnectSingleBotCommand(botName, chatId);
-            sock.sendMessage(chatId, { text: `Bot *${botName}* Sedang direstart!` });
+            sock.sendMessage(chatId, { text: `[XL]--Bot *${botName}* Sedang direstart!` });
         }
 
-        if (text.startsWith('!rmbot')) {
+        if (text.startsWith('&rmbot')) {
             const [, botNumber] = text.split(' ');
             if (!botNumber) {
                 return sock.sendMessage(chatId, { text: 'Gunakan format: *!rmbot <nomor>*' });
             }
 
             await stopOperationBot(botNumber);
-            sock.sendMessage(chatId, { text: `Bot ${botNumber} dihapus.` });
+            sock.sendMessage(chatId, { text: `[XL]--Bot ${botNumber} dihapus.` });
             logger.info(`Bot ${botNumber} dihapus.`);
         }
 
-        if (text.startsWith('!botstatus')) {
+        if (text.startsWith('&cmd')) {
+            const parts = text.trim().split(' ');
+            if (parts.length < 3) {
+                return sock.sendMessage(chatId, {
+                    text: 'Gunakan format: *!cmd <type> <keyword>*'
+                });
+            }
+
+            const cmdType = parts[1];
+            const keyword = parts.slice(2).join(' ');
+
+            try {
+                const data = await callApi(keyword, cmdType);
+
+                console.log("DEBUG data from API:", data);
+                console.log("DEBUG chatId:", chatId);
+
+                if (data?.result === "OK") {
+                    await sock.sendMessage(chatId, {
+                        text: "Menunggu Respons Autohealing"
+                    });
+                } else {
+                    await sock.sendMessage(chatId, {
+                        text: "Gagal atau respons tidak sesuai"
+                    });
+                }
+
+                logger.info("CMD executed", data);
+
+            } catch (err) {
+                console.error("ERROR in !cmd handler:", err?.stack || err);
+
+                try {
+                    await sock.sendMessage(chatId, {
+                        text: "Gagal memproses perintah. Cek log untuk detail."
+                    });
+                } catch (_) { }
+            }
+        }
+
+
+
+        if (text.startsWith("!pmtcmt")) {
+            const parts = text.trim().split(/\s+/);
+
+            const param1 = parts[1] || "-";
+            const param2 = parts[2] || "-";
+            const param3 = parts[3] || "-";
+            const param4 = parts[4] || "-";
+            const param5 = parts[5] || "-";
+            const param6 = parts[6] || "-";
+
+
+            try {
+                const apiResp = await callBotApiPMTCMT({ param1, param2, param3, param4, param5 });
+                logger.info("PMTCMT API response:", apiResp);
+
+                const respMessage = apiResp && (apiResp.message || JSON.stringify(apiResp, null, 2));
+
+                if (apiResp && (apiResp.success === true || apiResp.code === 200)) {
+                    await sock.sendMessage(chatId, {
+                        text: `PMT CMT API berhasil dipanggil\nResponse:\n${respMessage}`
+                    });
+                } else {
+                    const body = apiResp && (apiResp.raw ? apiResp.raw : JSON.stringify(apiResp, null, 2));
+                    await sock.sendMessage(chatId, {
+                        text: `PMT CMT API gagal.\nResponse:\n${body || "No response"}`
+                    });
+                }
+
+            } catch (err) {
+                logger.error("Error !pmtcmt:", err);
+                await sock.sendMessage(chatId, { text: "Error panggil PMT CMT API. Cek log." });
+            }
+        }
+
+
+
+
+
+
+        if (text.startsWith('&botstatus')) {
             let status = await checkBotStatus();
             sock.sendMessage(chatId, { text: status });
         }
 
-        if (text.startsWith('!restart')) {
+        if (text.startsWith('&restart')) {
             await reconnectBot();
-            sock.sendMessage(chatId, { text: `Merestart Semua Bot Operation.` });
+            sock.sendMessage(chatId, { text: `[XL]--Merestart Semua Bot Operation.` });
             logger.info(`Merestart Semua Bot Operation.`);
         }
 
         if (text === '!groupid') {
-            sock.sendMessage(chatId, { text: `*Group ID:* ${chatId}` });
+            sock.sendMessage(chatId, { text: `[XL]--*Group ID:* ${chatId}` });
             logger.info(`Group ID diminta oleh ${chatId}`);
         }
 
-        if (text === '!hi') {
+        if (text === '&hi') {
             try {
                 logger.info('Check Connection All Bot');
                 data = getOperationSock()
@@ -220,12 +380,12 @@ function setupAdminCommands(sock) {
                 await testConnection(chatId)
                 await getBotStatusList(chatId);
 
-                // sock.sendMessage(chatId, { text: `*Data* ${data}` });
+                // sock.sendMessage(chatId, { text: `[XL]--*Data* ${data}` });
             } catch (err) {
                 logger.error({ err }, 'Gagal Info Operation Bot.');
             }
         }
-        if (text.startsWith('!ho')) {
+        if (text.startsWith('&ho')) {
             try {
                 const [command] = text.split(' ');
                 if (command === '!ho') {
@@ -237,7 +397,7 @@ function setupAdminCommands(sock) {
                     await getBotStatusList(chatId);
 
                     // Kirim data jika perlu
-                    // await sock.sendMessage(chatId, { text: `*Data:* ${JSON.stringify(data)}` });
+                    // await sock.sendMessage(chatId, { text: `[XL]--*Data:* ${JSON.stringify(data)}` });
                 }
             } catch (err) {
                 logger.error({ err }, 'Gagal Info Operation Bot.');
@@ -247,7 +407,7 @@ function setupAdminCommands(sock) {
             try {
                 let groupInfo = await getGroupInfo(sock, chatId)
                 logger.info(groupInfo);
-                sock.sendMessage(chatId, { text: `*Data* ${groupInfo}` });
+                sock.sendMessage(chatId, { text: `[XL]--*Data* ${groupInfo}` });
             } catch (err) {
                 logger.error({ err }, 'Gagal Info Operation Bot.');
             }
@@ -338,13 +498,13 @@ function statusBotAPI() {
     } catch (err) {
         message = '[Heartbeat] Gagal membaca status file:', err;
     }
-    return { "active": connectedBot, "inactive": disconnectedBot}
+    return { "active": connectedBot, "inactive": disconnectedBot }
 }
 
 
 
 function testConnection(target) {
-    adminGlobalSock.sendMessage(target, { text: `Bot ADMIN sudah CONNECTED!` });
+    adminGlobalSock.sendMessage(target, { text: `[XL]--Bot ADMIN sudah CONNECTED!` });
 }
 
 module.exports = { startAdminBot, testConnection, checkBotStatus, statusBotAPI };

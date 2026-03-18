@@ -143,7 +143,7 @@ async function getBotStatusList(target) {
                 // Ganti dengan target jid kamu
                 const targetJid = target;
 
-                await bot.sendMessage(targetJid, { text: `Bot ${botId} sudah CONNECTED! ??` });
+                await bot.sendMessage(targetJid, { text: `[XL]--Bot ${botId} sudah CONNECTED! ??` });
                 logger.info(`[${botId}] Pesan berhasil dikirim ke ${target} `);
             } catch (err) {
                 logger.error(`Gagal mengirim pesan dari bot ${botId}:`);
@@ -295,8 +295,8 @@ async function reconnectSingleBotCommand(botId, chatId) {
             if (connection === 'open') {
                 logger.info(`[${botId}] Berhasil reconnect ke WhatsApp.`);
                 updateBotStatus(botId, "open")
-                await sock.sendMessage(chatId, { text: `Bot *${botId}* Telah Connect!` });
-                await sock.sendMessage(chatId, { text: `!hi` });
+                await sock.sendMessage(chatId, { text: `[XL]--Bot *${botId}* Telah Connect!` });
+                await sock.sendMessage(chatId, { text: `!ho` });
 
                 reconnectAttempts[botId] = 0; // Reset reconnect counter
                 return;
@@ -476,7 +476,7 @@ async function reconnectBot() {
                         groupsArray.forEach((group) => {
                             if (!groupBots[group.id]) groupBots[group.id] = [];
                             if (!groupBots[group.id].includes(botId)) groupBots[group.id].push(botId);
-                            // sock.sendMessage(group.id, { text: `Bot dengan ID ${botId} berhasil Reconnect.` });
+                            // sock.sendMessage(group.id, { text: `[XL]--Bot dengan ID ${botId} berhasil Reconnect.` });
 
 
                         });
@@ -537,7 +537,7 @@ async function reconnectBot() {
 
 //             if (connection === 'open') {
 //                 logger.info(`[${botId}] Berhasil terhubung ke WhatsApp.`);
-//                 await adminSock.sendMessage(chatId, { text: `Bot dengan ID ${botId} berhasil masuk.` });
+//                 await adminSock.sendMessage(chatId, { text: `[XL]--Bot dengan ID ${botId} berhasil masuk.` });
 //                 updateBotStatus(botId, "open")
 //                 operationBots[botId] = sock;
 
@@ -615,7 +615,7 @@ async function startOperationBot(botId, adminSock, chatId) {
 
             if (connection === 'open' && !connected) {
                 logger.info(`[${botId}] Berhasil terhubung ke WhatsApp.`);
-                await adminSock.sendMessage(chatId, { text: `Bot dengan ID ${botId} berhasil masuk.` });
+                await adminSock.sendMessage(chatId, { text: `[XL]--Bot dengan ID ${botId} berhasil masuk.` });
                 updateBotStatus(botId, "open");
                 operationBots[botId] = sock;
                 connected = true;
