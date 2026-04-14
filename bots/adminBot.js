@@ -28,7 +28,26 @@ const logger = pino({
     level: 'info'
 }).child({ service: 'ADMIN' }); // <<<<< setiap log akan ada [service: AdminBot]
 
+const BLOCK_FILE = './blocked.json';
 
+function readBlockedList() {
+    try {
+        if (!fs.existsSync(BLOCK_FILE)) return [];
+        const data = fs.readFileSync(BLOCK_FILE, 'utf8');
+        return JSON.parse(data || '[]');
+    } catch (err) {
+        logger.error("Error baca block list:", err);
+        return [];
+    }
+}
+
+function saveBlockedList(list) {
+    try {
+        fs.writeFileSync(BLOCK_FILE, JSON.stringify(list, null, 2));
+    } catch (err) {
+        logger.error("Error simpan block list:", err);
+    }
+}
 const BOT_ID = 'admin_bot';
 const AUTH_FOLDER = `./auth_sessions/${BOT_ID}`;
 const QR_IMAGE_PATH = './auth_sessions/admin_bot.png';
@@ -241,7 +260,7 @@ function setupAdminCommands(sock) {
 
         if (!text) return;
 
-        if (text.startsWith('&addbot')) {
+        if (text.startsWith('!addbot')) {
             const [, botName] = text.split(' ');
             if (!botName) {
                 return sock.sendMessage(chatId, { text: 'Gunakan format: *!addbot <nama_bot>*' });
@@ -252,7 +271,7 @@ function setupAdminCommands(sock) {
             sock.sendMessage(chatId, { text: `[XL]--Bot *${botName}* berhasil ditambahkan!` });
         }
 
-        if (text.startsWith('&rst')) {
+        if (text.startsWith('!rst')) {
             const [, botName] = text.split(' ');
             if (!botName) {
                 return sock.sendMessage(chatId, { text: 'Gunakan format: *!rst <nama_bot>*' });
@@ -263,7 +282,7 @@ function setupAdminCommands(sock) {
             sock.sendMessage(chatId, { text: `[XL]--Bot *${botName}* Sedang direstart!` });
         }
 
-        if (text.startsWith('&rmbot')) {
+        if (text.startsWith('!rmbot')) {
             const [, botNumber] = text.split(' ');
             if (!botNumber) {
                 return sock.sendMessage(chatId, { text: 'Gunakan format: *!rmbot <nomor>*' });
@@ -274,7 +293,7 @@ function setupAdminCommands(sock) {
             logger.info(`Bot ${botNumber} dihapus.`);
         }
 
-        if (text.startsWith('&cmd')) {
+        if (text.startsWith('!cmd')) {
             const parts = text.trim().split(' ');
             if (parts.length < 3) {
                 return sock.sendMessage(chatId, {
@@ -312,6 +331,74 @@ function setupAdminCommands(sock) {
                     });
                 } catch (_) { }
             }
+        }
+
+        if (text.startsWith('!block')) {
+            const [, groupId] = text.split(' ');
+
+            if (!groupId) {
+                return sock.sendMessage(chatId, {
+                    text: 'Gunakan format: *!block <group_id>*'
+                });
+            }
+
+            let blockedList = readBlockedList();
+
+            if (blockedList.includes(groupId)) {
+                return sock.sendMessage(chatId, {
+                    text: `Group sudah di-block: ${groupId}`
+                });
+            }
+
+            blockedList.push(groupId);
+            saveBlockedList(blockedList);
+
+            logger.info(`Group di-block: ${groupId}`);
+
+            sock.sendMessage(chatId, {
+                text: `Group berhasil di-block:\n${groupId}`
+            });
+        }
+
+        if (text.startsWith('!open')) {
+            const [, groupId] = text.split(' ');
+
+            if (!groupId) {
+                return sock.sendMessage(chatId, {
+                    text: 'Gunakan format: *!open <group_id>*'
+                });
+            }
+
+            let blockedList = readBlockedList();
+
+            if (!blockedList.includes(groupId)) {
+                return sock.sendMessage(chatId, {
+                    text: `Group tidak ada di block list: ${groupId}`
+                });
+            }
+
+            blockedList = blockedList.filter(id => id !== groupId);
+            saveBlockedList(blockedList);
+
+            logger.info(`Group di-unblock: ${groupId}`);
+
+            sock.sendMessage(chatId, {
+                text: `Group berhasil dibuka:\n${groupId}`
+            });
+        }
+
+        if (text === '!listblock') {
+            const blockedList = readBlockedList();
+
+            if (blockedList.length === 0) {
+                return sock.sendMessage(chatId, {
+                    text: "Tidak ada group yang di-block"
+                });
+            }
+
+            sock.sendMessage(chatId, {
+                text: "Blocked List:\n" + blockedList.join('\n')
+            });
         }
 
 
@@ -355,12 +442,12 @@ function setupAdminCommands(sock) {
 
 
 
-        if (text.startsWith('&botstatus')) {
+        if (text.startsWith('!botstatus')) {
             let status = await checkBotStatus();
             sock.sendMessage(chatId, { text: status });
         }
 
-        if (text.startsWith('&restart')) {
+        if (text.startsWith('!restart')) {
             await reconnectBot();
             sock.sendMessage(chatId, { text: `[XL]--Merestart Semua Bot Operation.` });
             logger.info(`Merestart Semua Bot Operation.`);
@@ -371,7 +458,7 @@ function setupAdminCommands(sock) {
             logger.info(`Group ID diminta oleh ${chatId}`);
         }
 
-        if (text === '&hi') {
+        if (text === '!hi') {
             try {
                 logger.info('Check Connection All Bot');
                 data = getOperationSock()
@@ -385,7 +472,7 @@ function setupAdminCommands(sock) {
                 logger.error({ err }, 'Gagal Info Operation Bot.');
             }
         }
-        if (text.startsWith('&ho')) {
+        if (text.startsWith('!ho')) {
             try {
                 const [command] = text.split(' ');
                 if (command === '!ho') {

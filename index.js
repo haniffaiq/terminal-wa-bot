@@ -14,6 +14,7 @@ const multer = require('multer');
 const axios = require('axios');
 const mime = require('mime-types');
 
+
 process.on('uncaughtException', (err) => {
     console.error('? Uncaught Exception:', err);
 });
@@ -31,6 +32,16 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 app.use(express.json());
 app.use(midleware);
+
+function getBlockedList() {
+    try {
+        const data = fs.readFileSync('./blocked.json', 'utf8');
+        return JSON.parse(data);
+    } catch (err) {
+        console.error("Gagal baca blocket.json:", err);
+        return [];
+    }
+}
 
 // Helper function untuk format waktu
 function formatDate(date) {
@@ -509,46 +520,130 @@ app.post('/send-message', async (req, res) => {
     });
 });
 
-// Menangani satu nomor target
+// // Menangani satu nomor target
+// async function handleSingleTarget(rawNumber, message, caption, transactionId) {
+//     const sendStartTime = Date.now();
+
+
+//     const maxRetry = 10;
+//     const retryDelay = 100000; // 1 detik
+
+//     try {
+//         let targetNumber = rawNumber;
+
+//         if (!targetNumber.includes('@')) {
+//             targetNumber = await phoneNumberFormatter(targetNumber);
+//         }
+
+//         let botSock = null;
+//         let attempt = 0;
+
+//         // Retry jika bot tidak tersedia
+//         while (attempt <= maxRetry) {
+//             if (targetNumber.endsWith('@g.us')) {
+//                 logger('info', `[${transactionId}] Attempt ${attempt + 1}: Mencari bot aktif untuk grup: ${targetNumber}`);
+//                 botSock = getNextBotForGroup(targetNumber);
+//             } else if (targetNumber.endsWith('@c.us')) {
+//                 logger('Error', `[${transactionId}] Attempt ${attempt + 1}: Tidak Dapat mengirim ke personal number: ${targetNumber}`);
+//                 //BLOCK PERSONAL NUMBER
+//                 // botSock = getNextBotForIndividual(targetNumber);
+//                 return {
+//                     number: targetNumber,
+//                     success: false,
+//                     error: "Please don't send to personal number",
+//                     // retried: attempt,
+//                     // response_time_seconds: Number(elapsed.toFixed(3))
+//                 }
+//             }
+
+//             if (botSock && botSock.sendMessage) {
+//                 break; // bot ditemukan, lanjut kirim pesan
+//             }
+
+//             if (attempt < maxRetry) {
+//                 await new Promise(resolve => setTimeout(resolve, retryDelay)); // tunggu sebelum retry
+//             }
+
+//             attempt++;
+//         }
+
+//         if (!botSock || !botSock.sendMessage) {
+//             const errMsg = `Tidak ada bot aktif untuk kirim ke ${targetNumber} setelah ${attempt} percobaan`;
+//             logger('warn', `[${transactionId}] ${errMsg}`);
+//             return {
+//                 number: targetNumber,
+//                 success: false,
+//                 error: errMsg,
+//                 response_time_seconds: 0
+//             };
+//         }
+
+//         const result = await sendMessageWithRetry(botSock, targetNumber, message, caption, transactionId);
+//         return result;
+
+//     } catch (err) {
+//         const elapsed = (Date.now() - sendStartTime) / 1000;
+//         logger('error', `[${transactionId}] Gagal kirim ke ${rawNumber} dalam ${elapsed.toFixed(3)} detik: ${err.message}`);
+//         return {
+//             number: rawNumber,
+//             success: false,
+//             error: err.message,
+//             response_time_seconds: Number(elapsed.toFixed(3))
+//         };
+//     }
+// }
+
+
 async function handleSingleTarget(rawNumber, message, caption, transactionId) {
     const sendStartTime = Date.now();
+
+    // ================== BLOCK CHECK ==================
+    const blockedList = getBlockedList();
+
+    let targetNumber = rawNumber;
+
+    if (!targetNumber.includes('@')) {
+        targetNumber = await phoneNumberFormatter(targetNumber);
+    }
+
+    if (blockedList.includes(targetNumber)) {
+        logger('warn', `[${transactionId}] Blocked target (skip): ${targetNumber}`);
+        return {
+            number: targetNumber,
+            success: false,
+            error: "Group is blocked, please tell to administrator",
+            response_time_seconds: 0
+        };
+    }
+    // =================================================
+
     const maxRetry = 10;
-    const retryDelay = 100000; // 1 detik
+    const retryDelay = 100000;
 
     try {
-        let targetNumber = rawNumber;
-
-        if (!targetNumber.includes('@')) {
-            targetNumber = await phoneNumberFormatter(targetNumber);
-        }
 
         let botSock = null;
         let attempt = 0;
 
-        // Retry jika bot tidak tersedia
         while (attempt <= maxRetry) {
             if (targetNumber.endsWith('@g.us')) {
                 logger('info', `[${transactionId}] Attempt ${attempt + 1}: Mencari bot aktif untuk grup: ${targetNumber}`);
                 botSock = getNextBotForGroup(targetNumber);
             } else if (targetNumber.endsWith('@c.us')) {
                 logger('Error', `[${transactionId}] Attempt ${attempt + 1}: Tidak Dapat mengirim ke personal number: ${targetNumber}`);
-                //BLOCK PERSONAL NUMBER
-                // botSock = getNextBotForIndividual(targetNumber);
                 return {
                     number: targetNumber,
                     success: false,
-                    error: "Please don't send to personal number",
-                    // retried: attempt,
-                    // response_time_seconds: Number(elapsed.toFixed(3))
+                    error: "Please don't send to personal number"
                 }
             }
 
             if (botSock && botSock.sendMessage) {
-                break; // bot ditemukan, lanjut kirim pesan
+                break;
             }
 
             if (attempt < maxRetry) {
-                await new Promise(resolve => setTimeout(resolve, retryDelay)); // tunggu sebelum retry
+                await new Promise(resolve => setTimeout(resolve, retryDelay));
             }
 
             attempt++;
@@ -579,7 +674,6 @@ async function handleSingleTarget(rawNumber, message, caption, transactionId) {
         };
     }
 }
-
 
 // Logic retry pengiriman
 
