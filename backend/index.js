@@ -19,11 +19,11 @@ const mime = require('mime-types');
 
 
 process.on('uncaughtException', (err) => {
-    console.error('? Uncaught Exception:', err);
+    console.error('Uncaught Exception:', err);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('? Unhandled Rejection at:', promise, 'reason:', reason);
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });
 const app = express();
 const server = createServer(app);
@@ -48,12 +48,11 @@ function getBlockedList() {
         const data = fs.readFileSync(path.join(__dirname, 'blocked.json'), 'utf8');
         return JSON.parse(data);
     } catch (err) {
-        console.error("Gagal baca blocket.json:", err);
+        console.error("Failed to read blocked.json:", err);
         return [];
     }
 }
 
-// Helper function untuk format waktu
 function formatDate(date) {
     const d = new Date(date);
     const day = String(d.getDate()).padStart(2, '0');
@@ -68,7 +67,6 @@ function formatDate(date) {
 }
 
 
-// Jalankan Admin Bot
 startAdminBot();
 checkHeartbeatFromFile();
 
@@ -94,18 +92,13 @@ function getCurrentTime() {
 function generateTransactionId(code) {
     const todayDate = getTodayDate();
     const currentTime = getCurrentTime();
-    const epochTime = Math.floor(Date.now() / 1000); // Detik, bukan milidetik
+    const epochTime = Math.floor(Date.now() / 1000);
 
     return `${code}-${todayDate}-${currentTime}-${epochTime}`;
 }
 
-// Lokasi file log berdasarkan level
-const logDir = './logs'; // Sesuaikan dengan direktori log yang Anda inginkan
-// const infoLogFile = path.join(logDir, 'info.log');
-// const errorLogFile = path.join(logDir, 'error.log');
-// const warnLogFile = path.join(logDir, 'warn.log');
+const logDir = './logs';
 
-// Penamaan file log berdasarkan level
 const infoLogFile = path.join(logDir, `success-wa-history-${todayDate}.log`);
 const errorLogFile = path.join(logDir, `error-wa-${todayDate}.log`);
 const warnLogFile = path.join(logDir, `warn-wa-history-${todayDate}.log`);
@@ -113,54 +106,46 @@ const messLogFile = path.join(logDir, `req-res-${todayDate}.log`);
 
 
 
-// Pastikan direktori log ada
 if (!fs.existsSync(logDir)) {
     fs.mkdirSync(logDir);
 }
 
-// Logger function
-function logger(type, message, ...optionalParams) {
+function logger(type, message) {
     const timestamp = formatDate(new Date());
+    const logMessage = `[${timestamp}] [${type.toUpperCase()}] ${message}`;
 
-    // Format log message
-    const logMessage = `[${timestamp}] [${type.toUpperCase()}]: ${message}`;
-
-    // Menulis log ke konsol
     switch (type) {
         case 'info':
-            console.log(logMessage, ...optionalParams);
+            console.log(logMessage);
             writeLogToFile(infoLogFile, logMessage);
             break;
         case 'error':
-            console.error(logMessage, ...optionalParams);
+            console.error(logMessage);
             writeLogToFile(errorLogFile, logMessage);
             break;
         case 'warn':
-            console.warn(logMessage, ...optionalParams);
+            console.warn(logMessage);
             writeLogToFile(warnLogFile, logMessage);
             break;
         case 'message':
-            console.warn(logMessage, ...optionalParams);
+            console.log(logMessage);
             writeLogToFile(messLogFile, logMessage);
             break;
         default:
-            console.log(logMessage, ...optionalParams);
+            console.log(logMessage);
             break;
     }
 }
 
-// Fungsi untuk menulis log ke file
 function writeLogToFile(filePath, logMessage) {
     fs.appendFile(filePath, logMessage + '\n', (err) => {
         if (err) {
-            console.error(`Gagal menulis ke file: ${filePath}`, err);
+            console.error(`Failed to write to file: ${filePath}`, err);
         }
     });
 }
 
 
-// Fungsi untuk menyimpan request body ke file
-// Fungsi untuk menyimpan request yang gagal
 async function saveFailedRequest(data, transactionId) {
     try {
         await db.query(
@@ -174,46 +159,42 @@ async function saveFailedRequest(data, transactionId) {
             ]
         );
     } catch (err) {
-        console.error('Gagal menyimpan request gagal:', err.message);
+        console.error('Failed to save failed request:', err.message);
     }
 }
 
-// Fungsi untuk mengirim ulang request (misalnya melalui API)
-// Fungsi untuk mengirim pesan ulang
 async function resendFailedRequest(reqBody, transactionId) {
     let { number, message } = reqBody;
 
     if (!number || !message) {
-        logger('error', `[${transactionId}] Parameter 'number' dan 'message' diperlukan`);
-        return { success: false, error: 'Parameter number dan message diperlukan!' };
+        logger('error', `[${transactionId}] REQ missing required params: number and message`);
+        return { success: false, error: 'Parameters number and message are required' };
     }
 
-    // Kalau number bukan array, ubah jadi array supaya aman
     if (!Array.isArray(number)) {
         number = [number];
     }
 
     if (number.length > 10) {
-        logger('error', `[${transactionId}] Max number adalah 10 Receipent`);
-        return { success: false, error: 'Max number adalah 10 Receipent' };
+        logger('error', `[${transactionId}] REQ rejected — max 10 recipients allowed`);
+        return { success: false, error: 'Maximum 10 recipients allowed' };
     }
 
     const results = [];
 
     for (const groupId of number) {
-        logger('info', `[${transactionId}] Mencari bot aktif untuk grup: ${groupId}`);
-        const botSock = getNextBotForGroup(groupId); // Asumsikan fungsi ini tersedia
+        logger('info', `[${transactionId}] RESEND target=${groupId} — finding active bot`);
+        const botSock = getNextBotForGroup(groupId);
 
         if (!botSock || !botSock.sendMessage) {
-            logger('warn', `[${transactionId}] Tidak ada bot operasi yang aktif di grup ${groupId}`);
-            results.push({ number: groupId, success: false, error: `Tidak ada bot aktif di grup ${groupId}`, response_time_seconds: 0 });
+            logger('warn', `[${transactionId}] RESEND target=${groupId} status=FAIL — no active bot`);
+            results.push({ number: groupId, success: false, error: `No active bot for group ${groupId}`, response_time_seconds: 0 });
             continue;
         }
 
-        const sendStartTime = Date.now(); // Start stopwatch per message
+        const sendStartTime = Date.now();
 
         try {
-            // Deteksi jika message berupa base64 (image atau document)
             const match = message.match(/^data:(.+);base64,(.+)$/);
             if (match) {
                 const mimetype = match[1];
@@ -221,21 +202,21 @@ async function resendFailedRequest(reqBody, transactionId) {
                 const buffer = Buffer.from(base64Data, 'base64');
 
                 if (mimetype.startsWith('image/')) {
-                    logger('info', `[${transactionId}-IMAGE] Mengirim gambar ke ${groupId}`);
+                    logger('info', `[${transactionId}] SENDING type=IMAGE target=${groupId}`);
                     await botSock.sendMessage(groupId, { image: buffer, mimetype });
                 } else {
-                    logger('info', `[${transactionId}-DOC] Mengirim dokumen ke ${groupId}`);
+                    logger('info', `[${transactionId}] SENDING type=DOCUMENT target=${groupId}`);
                     await botSock.sendMessage(groupId, { document: buffer, mimetype });
                 }
             } else {
-                logger('info', `[${transactionId}-TEXT] Mengirim teks ke ${groupId}`);
+                logger('info', `[${transactionId}] SENDING type=TEXT target=${groupId}`);
                 await botSock.sendMessage(groupId, { text: `${transactionId}\n\n\n${message}` });
             }
 
-            const sendEndTime = Date.now(); // End stopwatch per message
+            const sendEndTime = Date.now();
             const elapsedPerMessage = (sendEndTime - sendStartTime) / 1000;
 
-            logger('info', `[${transactionId}] Berhasil kirim ke ${groupId} dalam ${elapsedPerMessage.toFixed(3)} detik`);
+            logger('info', `[${transactionId}] RESEND target=${groupId} status=OK time=${elapsedPerMessage.toFixed(3)}s`);
 
             results.push({
                 number: groupId,
@@ -247,7 +228,7 @@ async function resendFailedRequest(reqBody, transactionId) {
             const sendEndTime = Date.now();
             const elapsedPerMessage = (sendEndTime - sendStartTime) / 1000;
 
-            logger('error', `[${transactionId}] Gagal kirim ke ${groupId} dalam ${elapsedPerMessage.toFixed(3)} detik: ${sendErr.message}`);
+            logger('error', `[${transactionId}] RESEND target=${groupId} status=FAIL time=${elapsedPerMessage.toFixed(3)}s error="${sendErr.message}"`);
 
             results.push({
                 number: groupId,
@@ -269,12 +250,11 @@ async function markFailedRequestRetried(transactionId) {
             [transactionId]
         );
     } catch (err) {
-        console.error('Gagal update failed request:', err.message);
+        console.error('Failed to update failed request:', err.message);
     }
 }
 
 
-// Endpoint untuk mengirim ulang request yang gagal
 const { promisify } = require('util');
 
 const readFileAsync = promisify(fs.readFile);
@@ -282,12 +262,10 @@ const readFileAsync = promisify(fs.readFile);
 app.post('/api/hi', async (req, res) => {
     const startTime = Date.now();
     const transactionId = generateTransactionId("MSS");
-    // number = await phoneNumberFormatter(number)
     number = "120363419686014131@g.us"
     message = "!ho"
 
 
-    // Kalau number bukan array, ubah jadi array supaya aman
     if (!Array.isArray(number)) {
         number = [number];
     }
@@ -296,23 +274,21 @@ app.post('/api/hi', async (req, res) => {
 
 
     if (number.length > 10) {
-        logger('error', `[${transactionId}] Max number adalah 10 Receipent`);
-        return res.status(400).json({ error: 'Max number adalah 10 Receipent' });
+        logger('error', `[${transactionId}] REQ rejected — max 10 recipients allowed`);
+        return res.status(400).json({ error: 'Maximum 10 recipients allowed' });
     }
     try {
         const results = [];
 
         for (const groupId of number) {
-            // logger('info', `[${transactionId}] Mencari bot aktif untuk grup: ${groupId}`);
             const botSock = getNextBotForGroup(groupId);
 
             if (!botSock || !botSock.sendMessage) {
-                // logger('warn', `[${transactionId}] Tidak ada bot operasi yang aktif di grup ${groupId}`);
-                results.push({ number: groupId, success: false, error: `Tidak ada bot aktif di grup ${groupId}`, response_time_seconds: 0 });
+                results.push({ number: groupId, success: false, error: `No active bot for group ${groupId}`, response_time_seconds: 0 });
                 continue;
             }
 
-            const sendStartTime = Date.now(); // <-- start stopwatch per message
+            const sendStartTime = Date.now();
 
             try {
                 const match = message.match(/^data:(.+);base64,(.+)$/);
@@ -322,21 +298,18 @@ app.post('/api/hi', async (req, res) => {
                     const buffer = Buffer.from(base64Data, 'base64');
 
                     if (mimetype.startsWith('image/')) {
-                        // logger('info', `[${transactionId}-IMAGE] Mengirim gambar ke ${groupId}`);
                         await botSock.sendMessage(groupId, { image: buffer, mimetype });
                     } else {
-                        // logger('info', `[${transactionId}-DOC] Mengirim dokumen ke ${groupId}`);
                         await botSock.sendMessage(groupId, { document: buffer, mimetype });
                     }
                 } else {
-                    // logger('info', `[${transactionId}-TEXT] Mengirim teks ke ${groupId}`);
                     await botSock.sendMessage(groupId, { text: message + " " + transactionId });
                 }
 
-                const sendEndTime = Date.now(); // <-- end stopwatch per message
+                const sendEndTime = Date.now();
                 const elapsedPerMessage = (sendEndTime - sendStartTime) / 1000;
 
-                logger('info', `[${transactionId}] Berhasil kirim ke ${groupId} dalam ${elapsedPerMessage.toFixed(3)} detik`);
+                logger('info', `[${transactionId}] SEND target=${groupId} type=TEXT status=OK time=${elapsedPerMessage.toFixed(3)}s`);
 
                 results.push({
                     number: groupId,
@@ -348,7 +321,7 @@ app.post('/api/hi', async (req, res) => {
                 const sendEndTime = Date.now();
                 const elapsedPerMessage = (sendEndTime - sendStartTime) / 1000;
 
-                logger('error', `[${transactionId}] Gagal kirim ke ${groupId} dalam ${elapsedPerMessage.toFixed(3)} detik: ${sendErr.message}`);
+                logger('error', `[${transactionId}] SEND target=${groupId} type=TEXT status=FAIL error="${sendErr.message}" time=${elapsedPerMessage.toFixed(3)}s`);
 
                 results.push({
                     number: groupId,
@@ -362,23 +335,22 @@ app.post('/api/hi', async (req, res) => {
         const endTime = Date.now();
         const elapsedSeconds = (endTime - startTime) / 1000;
 
-        logger('info', `[${transactionId}] Selesai kirim semua pesan dalam ${elapsedSeconds.toFixed(3)} detik`);
+        logger('info', `[${transactionId}] SEND completed targets=${number.length} success=${results.filter(r => r.success).length} failed=${results.filter(r => !r.success).length} total_time=${elapsedSeconds.toFixed(3)}s`);
 
         res.json({
             success: results[0].success,
             transaction_id: transactionId,
             response_time_seconds: Number(elapsedSeconds.toFixed(3)),
-            results,  // <-- ini hasil per number
+            results,
             req_time: formatDate(startTime),
             res_time: formatDate(endTime)
         });
-        // saveFailedRequest(req.body, transactionId);
 
 
     } catch (err) {
         logger('error', `[${transactionId}] Error global: ${err.message}`);
         saveFailedRequest(req.body, transactionId);
-        res.status(500).json({ error: 'Gagal mengirim pesan', transaction_id: transactionId });
+        res.status(500).json({ error: 'Failed to send message', transaction_id: transactionId });
     }
 });
 
@@ -395,7 +367,7 @@ app.post('/api/resend-failed', async (req, res) => {
             const message = row.message;
             const transactionId = row.transaction_id;
 
-            logger('info', `[${transactionId}] Mengirim ulang request yang gagal`);
+            logger('info', `[${transactionId}] RESEND target=${number} — retrying failed request`);
             const resendResult = await resendFailedRequest({ number, message }, transactionId);
             allResults.push({ transactionId, results: resendResult });
 
@@ -406,26 +378,23 @@ app.post('/api/resend-failed', async (req, res) => {
         }
 
         res.status(200).json({
-            message: 'Request yang gagal telah diproses.',
+            success: true,
+            message: `Processed ${allResults.length} failed requests`,
             results: allResults,
         });
     } catch (err) {
-        logger('error', `Gagal memproses resend: ${err.message}`);
-        res.status(500).json({ error: 'Gagal memproses resend-failed', details: err.message });
+        logger('error', `Failed to process resend: ${err.message}`);
+        res.status(500).json({ error: 'Failed to process resend-failed', details: err.message });
     }
 });
 
 async function phoneNumberFormatter(number) {
-    //1 Menghilangkan karakter selain angka 0812-123-456
-    //let formatted = number.replace(/\D/g, '');
     if (number === undefined) return 0;
     let formatted = number.replace(/[^0-9\-]/g, '');
-    //2 Menghilangkan prefix 0, kemudian diganti dengan 62
     if (formatted.startsWith('0')) {
         formatted = '62' + formatted.substr(1);
     }
 
-    //3 Tambahkan jika tidak diakhiri @c.us
     if (!formatted.endsWith('@c.us') || !formatted.endsWith('@g.us')) {
         if (formatted.length >= 18) {
             formatted = formatted + '@g.us';
@@ -439,23 +408,22 @@ async function phoneNumberFormatter(number) {
 
 
 app.post('/api/send-message', async (req, res) => {
-    //-------------------------UPDATED RETRY CODE-------------------------------------------
     const startTime = Date.now();
     const transactionId = generateTransactionId("MSS");
 
     let { number, message, caption } = req.body;
 
     if (!number || !message) {
-        logger('error', `[${transactionId}] Parameter 'number' dan 'message' diperlukan`);
-        return res.status(400).json({ error: 'Parameter number dan message diperlukan!' });
+        logger('error', `[${transactionId}] REQ missing required params: number and message`);
+        return res.status(400).json({ error: 'Parameters number and message are required' });
     }
 
     if (!Array.isArray(number)) number = [number];
     number = [...new Set(number)];
 
     if (number.length > 10) {
-        logger('error', `[${transactionId}] Max number adalah 10 Receipent`);
-        return res.status(400).json({ error: 'Max number adalah 10 Receipent' });
+        logger('error', `[${transactionId}] REQ rejected — max 10 recipients allowed`);
+        return res.status(400).json({ error: 'Maximum 10 recipients allowed' });
     }
 
     const results = [];
@@ -468,10 +436,10 @@ app.post('/api/send-message', async (req, res) => {
     const endTime = Date.now();
     const elapsedSeconds = (endTime - startTime) / 1000;
 
-    logger('info', `[${transactionId}] Selesai kirim semua pesan dalam ${elapsedSeconds.toFixed(3)} detik`);
+    logger('info', `[${transactionId}] SEND completed targets=${number.length} success=${results.filter(r => r.success).length} failed=${results.filter(r => !r.success).length} total_time=${elapsedSeconds.toFixed(3)}s`);
 
     const success_parameter = results[0]?.success;
-    logger('message', `[${transactionId}] | Success : ${success_parameter} | Target : ${results[0].number} | Message : ${message} | \n\n `)
+    logger('message', `[${transactionId}] REQ target=${results[0].number} message_preview="${(message || '').substring(0, 50)}" status=${success_parameter ? 'OK' : 'FAIL'}`)
 
     res.json({
         success: success_parameter,
@@ -483,84 +451,10 @@ app.post('/api/send-message', async (req, res) => {
     });
 });
 
-// // Menangani satu nomor target
-// async function handleSingleTarget(rawNumber, message, caption, transactionId) {
-//     const sendStartTime = Date.now();
-
-
-//     const maxRetry = 10;
-//     const retryDelay = 100000; // 1 detik
-
-//     try {
-//         let targetNumber = rawNumber;
-
-//         if (!targetNumber.includes('@')) {
-//             targetNumber = await phoneNumberFormatter(targetNumber);
-//         }
-
-//         let botSock = null;
-//         let attempt = 0;
-
-//         // Retry jika bot tidak tersedia
-//         while (attempt <= maxRetry) {
-//             if (targetNumber.endsWith('@g.us')) {
-//                 logger('info', `[${transactionId}] Attempt ${attempt + 1}: Mencari bot aktif untuk grup: ${targetNumber}`);
-//                 botSock = getNextBotForGroup(targetNumber);
-//             } else if (targetNumber.endsWith('@c.us')) {
-//                 logger('Error', `[${transactionId}] Attempt ${attempt + 1}: Tidak Dapat mengirim ke personal number: ${targetNumber}`);
-//                 //BLOCK PERSONAL NUMBER
-//                 // botSock = getNextBotForIndividual(targetNumber);
-//                 return {
-//                     number: targetNumber,
-//                     success: false,
-//                     error: "Please don't send to personal number",
-//                     // retried: attempt,
-//                     // response_time_seconds: Number(elapsed.toFixed(3))
-//                 }
-//             }
-
-//             if (botSock && botSock.sendMessage) {
-//                 break; // bot ditemukan, lanjut kirim pesan
-//             }
-
-//             if (attempt < maxRetry) {
-//                 await new Promise(resolve => setTimeout(resolve, retryDelay)); // tunggu sebelum retry
-//             }
-
-//             attempt++;
-//         }
-
-//         if (!botSock || !botSock.sendMessage) {
-//             const errMsg = `Tidak ada bot aktif untuk kirim ke ${targetNumber} setelah ${attempt} percobaan`;
-//             logger('warn', `[${transactionId}] ${errMsg}`);
-//             return {
-//                 number: targetNumber,
-//                 success: false,
-//                 error: errMsg,
-//                 response_time_seconds: 0
-//             };
-//         }
-
-//         const result = await sendMessageWithRetry(botSock, targetNumber, message, caption, transactionId);
-//         return result;
-
-//     } catch (err) {
-//         const elapsed = (Date.now() - sendStartTime) / 1000;
-//         logger('error', `[${transactionId}] Gagal kirim ke ${rawNumber} dalam ${elapsed.toFixed(3)} detik: ${err.message}`);
-//         return {
-//             number: rawNumber,
-//             success: false,
-//             error: err.message,
-//             response_time_seconds: Number(elapsed.toFixed(3))
-//         };
-//     }
-// }
-
 
 async function handleSingleTarget(rawNumber, message, caption, transactionId) {
     const sendStartTime = Date.now();
 
-    // ================== BLOCK CHECK ==================
     const blockedList = getBlockedList();
 
     let targetNumber = rawNumber;
@@ -570,7 +464,7 @@ async function handleSingleTarget(rawNumber, message, caption, transactionId) {
     }
 
     if (blockedList.includes(targetNumber)) {
-        logger('warn', `[${transactionId}] Blocked target (skip): ${targetNumber}`);
+        logger('warn', `[${transactionId}] BLOCKED target=${targetNumber} — group is on block list`);
         return {
             number: targetNumber,
             success: false,
@@ -578,7 +472,6 @@ async function handleSingleTarget(rawNumber, message, caption, transactionId) {
             response_time_seconds: 0
         };
     }
-    // =================================================
 
     const maxRetry = 10;
     const retryDelay = 100000;
@@ -590,10 +483,10 @@ async function handleSingleTarget(rawNumber, message, caption, transactionId) {
 
         while (attempt <= maxRetry) {
             if (targetNumber.endsWith('@g.us')) {
-                logger('info', `[${transactionId}] Attempt ${attempt + 1}: Mencari bot aktif untuk grup: ${targetNumber}`);
+                logger('info', `[${transactionId}] ROUTE attempt=${attempt + 1} target=${targetNumber} — finding active bot`);
                 botSock = getNextBotForGroup(targetNumber);
             } else if (targetNumber.endsWith('@c.us')) {
-                logger('Error', `[${transactionId}] Attempt ${attempt + 1}: Tidak Dapat mengirim ke personal number: ${targetNumber}`);
+                logger('error', `[${transactionId}] REJECTED target=${targetNumber} — personal numbers not allowed`);
                 return {
                     number: targetNumber,
                     success: false,
@@ -613,12 +506,11 @@ async function handleSingleTarget(rawNumber, message, caption, transactionId) {
         }
 
         if (!botSock || !botSock.sendMessage) {
-            const errMsg = `Tidak ada bot aktif untuk kirim ke ${targetNumber} setelah ${attempt} percobaan`;
-            logger('warn', `[${transactionId}] ${errMsg}`);
+            logger('warn', `[${transactionId}] NO_BOT target=${targetNumber} — no active bot after ${attempt} attempts`);
             return {
                 number: targetNumber,
                 success: false,
-                error: errMsg,
+                error: `No active bot for ${targetNumber} after ${attempt} attempts`,
                 response_time_seconds: 0
             };
         }
@@ -628,7 +520,7 @@ async function handleSingleTarget(rawNumber, message, caption, transactionId) {
 
     } catch (err) {
         const elapsed = (Date.now() - sendStartTime) / 1000;
-        logger('error', `[${transactionId}] Gagal kirim ke ${rawNumber} dalam ${elapsed.toFixed(3)} detik: ${err.message}`);
+        logger('error', `[${transactionId}] FAILED target=${rawNumber} time=${elapsed.toFixed(3)}s error="${err.message}"`);
         return {
             number: rawNumber,
             success: false,
@@ -638,7 +530,6 @@ async function handleSingleTarget(rawNumber, message, caption, transactionId) {
     }
 }
 
-// Logic retry pengiriman
 
 function getBotInfo(sock) {
     return {
@@ -660,12 +551,8 @@ async function sendMessageWithRetry(botSock, targetNumber, message, caption, tra
         try {
             await sendMessage(botSock, targetNumber, message, caption, transactionId, attempt);
             const elapsed = (Date.now() - sendStartTime) / 1000;
-            logger('info', `[${transactionId}]--[${botSock}] Berhasil kirim ke ${targetNumber} dalam ${elapsed.toFixed(3)} detik`);
-            // logger('info', util.inspect(botSock, { depth: 2 }))
             let botHealth = getBotInfo(botSock)
-            // logger('info', util.inspect(botSock.user, { depth: 2 }))
-
-            // logger('info', JSON.stringify(botHealth))
+            logger('info', `[${transactionId}] DELIVERED target=${targetNumber} bot=${botHealth.number} time=${elapsed.toFixed(3)}s`);
             stats.increment(botHealth.number);
             return {
                 number: targetNumber,
@@ -678,13 +565,13 @@ async function sendMessageWithRetry(botSock, targetNumber, message, caption, tra
                 (err.message || '').includes('Connection Closed') ||
                 (err.message || '').includes('Timed Out');
 
-            logger('warn', `[${transactionId}] Attempt ${attempt + 1} gagal ke ${targetNumber}: ${err.message}`);
+            logger('warn', `[${transactionId}] RETRY attempt=${attempt + 1} target=${targetNumber} error="${err.message}" — switching bot`);
 
             if (!isRetryable || attempt === maxRetry) {
                 const elapsed = (Date.now() - sendStartTime) / 1000;
                 logger(
                     'error',
-                    `[${transactionId}] Gagal kirim ke ${targetNumber} dalam ${elapsed.toFixed(3)} detik: ${err.message}\n` +
+                    `[${transactionId}] FAILED target=${targetNumber} attempts=${attempt + 1} time=${elapsed.toFixed(3)}s error="${err.message}"\n` +
                     JSON.stringify(err, Object.getOwnPropertyNames(err), 2)
                 );
                 return {
@@ -696,22 +583,20 @@ async function sendMessageWithRetry(botSock, targetNumber, message, caption, tra
                 };
             }
 
-            // ?? Ambil bot baru sebelum retry
             if (targetNumber.endsWith('@g.us')) {
-                logger('info', `[${transactionId}] Attempt ${attempt + 1}: Ganti bot untuk grup: ${targetNumber}`);
+                logger('info', `[${transactionId}] BOT_RETRY target=${targetNumber} attempt=${attempt + 1} switching_bot=true`);
                 botSock = getNextBotForGroup(targetNumber);
             } else if (targetNumber.endsWith('@c.us')) {
-                logger('info', `[${transactionId}] Attempt ${attempt + 1}: Ganti bot untuk individu: ${targetNumber}`);
+                logger('info', `[${transactionId}] BOT_RETRY target=${targetNumber} attempt=${attempt + 1} switching_bot=true`);
                 botSock = getNextBotForIndividual(targetNumber);
             }
 
-            // Cek jika tidak ada bot sama sekali setelah ganti
             if (!botSock || !botSock.sendMessage) {
-                logger('error', `[${transactionId}] Tidak ada bot tersedia saat retry ke-${attempt + 1} untuk ${targetNumber}`);
+                logger('error', `[${transactionId}] NO_BOT target=${targetNumber} — no bot available on attempt ${attempt + 1}`);
                 return {
                     number: targetNumber,
                     success: false,
-                    error: `Tidak ada bot tersedia saat retry ke-${attempt + 1}`,
+                    error: `No bot available on attempt ${attempt + 1}`,
                     retried: attempt,
                     response_time_seconds: Number(((Date.now() - sendStartTime) / 1000).toFixed(3))
                 };
@@ -724,7 +609,6 @@ async function sendMessageWithRetry(botSock, targetNumber, message, caption, tra
 }
 
 
-// Fungsi kirim pesan berdasarkan format (teks/gambar/dokumen)
 async function sendMessage(botSock, targetNumber, message, caption, transactionId, attempt) {
     const prefix = `[${transactionId}]`;
     const match = message.match(/^data:([^;]+);base64,(.+)$/s);
@@ -735,13 +619,13 @@ async function sendMessage(botSock, targetNumber, message, caption, transactionI
         const buffer = Buffer.from(base64Data, 'base64');
 
         if (mimetype.startsWith('image/')) {
-            logger('info', `${prefix}-IMAGE Attempt ${attempt + 1} kirim gambar ke ${targetNumber}`);
+            logger('info', `${prefix} SENDING type=IMAGE target=${targetNumber} attempt=${attempt + 1}`);
             await botSock.sendMessage(targetNumber, {
                 image: buffer,
                 caption: `${transactionId}\n\n\n${caption || ''}`
             });
         } else {
-            logger('info', `${prefix}-DOC Attempt ${attempt + 1} kirim dokumen ke ${targetNumber}`);
+            logger('info', `${prefix} SENDING type=DOCUMENT target=${targetNumber} attempt=${attempt + 1}`);
             await botSock.sendMessage(targetNumber, {
                 document: buffer,
                 mimetype,
@@ -749,7 +633,7 @@ async function sendMessage(botSock, targetNumber, message, caption, transactionI
             });
         }
     } else {
-        logger('info', `${prefix}-TEXT Attempt ${attempt + 1} kirim teks ke ${targetNumber}`);
+        logger('info', `${prefix} SENDING type=TEXT target=${targetNumber} attempt=${attempt + 1}`);
         await botSock.sendMessage(targetNumber, {
             text: `${transactionId}\n\n\n${message}`
         });
@@ -758,14 +642,11 @@ async function sendMessage(botSock, targetNumber, message, caption, transactionI
 
 
 
-//-------------------------UPDATED RETRY CODE-------------------------------------------
-
-
 app.post('/api/disconnect', async (req, res) => {
     const { botId } = req.body;
 
     if (!botId) {
-        return res.status(400).json({ success: false, message: 'Parameter botId wajib diisi' });
+        return res.status(400).json({ success: false, error: 'botId is required' });
     }
 
     const result = await disconnectBotForce(botId);
@@ -776,14 +657,14 @@ app.post('/api/deletebot', async (req, res) => {
     const { botId } = req.body;
 
     if (!botId) {
-        return res.status(400).json({ success: false, message: 'Parameter botId wajib diisi' });
+        return res.status(400).json({ success: false, error: 'botId is required' });
     }
 
     try {
         await stopOperationBot(botId);
-        res.json({ success: true, message: `Bot ${botId} deleted` });
+        res.json({ success: true, message: `Bot ${botId} has been deleted` });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Gagal menghapus bot', error: err.message });
+        res.status(500).json({ success: false, error: `Failed to delete bot: ${err.message}` });
     }
 });
 
@@ -794,20 +675,19 @@ app.post('/api/addbot', async (req, res) => {
         const { botname } = req.body;
 
         if (!botname) {
-            return res.status(400).json({ error: 'Parameter botname diperlukan!' });
+            return res.status(400).json({ success: false, error: 'botname is required' });
         }
 
         const qrBase64 = await startOperationBotAPI(botname);
-        //await reconnectBot()
         if (qrBase64) {
-            res.json({ success: true, message: `Bot ${botname} berhasil dimulai. Scan QR ini untuk login.`, qr: qrBase64 });
+            res.json({ success: true, message: `Bot ${botname} started. Scan QR to connect.`, qr: qrBase64 });
         } else {
-            res.status(500).json({ error: 'Gagal menghasilkan QR Code.' });
+            res.status(500).json({ success: false, error: 'Failed to generate QR code. Try again.' });
         }
 
     } catch (err) {
-        logger.error('Gagal menambahkan bot:', err);
-        res.status(500).json({ error: 'Gagal menambahkan bot.' });
+        logger('error', `Failed to add bot: ${err.message}`);
+        res.status(500).json({ success: false, error: `Failed to add bot: ${err.message}` });
     }
 });
 
@@ -816,21 +696,15 @@ app.post('/api/restart', async (req, res) => {
         const { botname } = req.body;
 
         if (!botname) {
-            return res.status(400).json({ error: 'Parameter botname diperlukan!' });
+            return res.status(400).json({ success: false, error: 'botname is required' });
         }
 
         const status = await reconnectSingleBotAPI(botname);
-        //await reconnectBot()
-        // if (qrBase64) {
-        //     res.json({ success: true, message: `Bot ${botname} berhasil dimulai. Scan QR ini untuk login.`, qr: qrBase64 });
-        // } else {
-        //     res.status(500).json({ error: 'Gagal menghasilkan QR Code.' });
-        // }
-        return res.status(200).json({ success: true });
+        return res.status(200).json({ success: true, message: `Bot ${botname} is restarting` });
 
     } catch (err) {
-        logger.error('Gagal menambahkan bot:', err);
-        res.status(500).json({ error: 'Gagal menambahkan bot.' });
+        logger('error', `Failed to restart bot: ${err.message}`);
+        res.status(500).json({ success: false, error: `Failed to restart bot: ${err.message}` });
     }
 });
 
@@ -843,15 +717,14 @@ app.get('/api/bot-status', async (req, res) => {
             data: status
         });
     } catch (err) {
-        logger('error', 'Gagal mengambil status bot:', err);
-        res.status(500).json({ error: 'Gagal mengambil status bot.' });
+        logger('error', `Failed to get bot status: ${err.message}`);
+        res.status(500).json({ success: false, error: 'Failed to get bot status' });
     }
 });
 
-// Setup penyimpanan multer ke disk
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        cb(null, path.join(__dirname, 'uploads')); // Pastikan folder uploads sudah ada
+        cb(null, path.join(__dirname, 'uploads'));
     },
     filename: function (req, file, cb) {
         const uniqueName = Date.now() + '-' + file.originalname;
@@ -868,29 +741,29 @@ app.post('/api/send-media', upload.single('file'), async (req, res) => {
     const file = req.file;
 
     if (!number || !file) {
-        logger('error', `[${transactionId}] Parameter 'number' dan 'file' diperlukan`);
-        return res.status(400).json({ error: 'Parameter number dan file diperlukan.' });
+        logger('error', `[${transactionId}] REQ missing required params: number and file`);
+        return res.status(400).json({ success: false, error: 'number and file are required' });
     }
 
     const filePath = file.path;
     const mimetype = file.mimetype;
 
     try {
-        logger('info', `[${transactionId}] Mencari bot aktif untuk grup: ${number}`);
+        logger('info', `[${transactionId}] ROUTE target=${number} — finding active bot`);
         const botSock = getNextBotForGroup(number);
 
         if (!botSock || !botSock.sendMessage) {
-            logger('warn', `[${transactionId}] Tidak ada bot operasi yang aktif di grup ${number}`);
-            return res.status(404).json({ error: `Tidak ada bot operasi yang aktif di grup ${number}.` });
+            logger('warn', `[${transactionId}] NO_BOT target=${number} — no active bot`);
+            return res.status(404).json({ success: false, error: `No active bot for group ${number}` });
         }
 
         let mediaType;
         if (mimetype.startsWith('image/')) mediaType = 'image';
         else if (mimetype.startsWith('video/')) mediaType = 'video';
         else if (mimetype.startsWith('audio/')) mediaType = 'audio';
-        else mediaType = 'document'; // default ke dokumen
+        else mediaType = 'document';
 
-        logger('info', `[${transactionId}-${mediaType.toUpperCase()}] Mengirim ${mediaType} (mime: ${mimetype}) ke ${number}`);
+        logger('info', `[${transactionId}] SENDING type=${mediaType.toUpperCase()} target=${number}`);
 
         await botSock.sendMessage(number, {
             [mediaType]: { url: path.resolve(filePath) },
@@ -901,27 +774,26 @@ app.post('/api/send-media', upload.single('file'), async (req, res) => {
         const endTime = Date.now();
         const elapsedSeconds = (endTime - startTime) / 1000;
 
-        logger('info', `[${transactionId}] Media berhasil dikirim dalam ${elapsedSeconds.toFixed(3)} detik`);
+        logger('info', `[${transactionId}] SEND target=${number} type=${mediaType.toUpperCase()} status=OK time=${elapsedSeconds.toFixed(3)}s`);
 
         res.json({
             success: true,
             transaction_id: transactionId,
-            message: `Media berhasil dikirim ke ${number}`,
+            message: `Media sent to ${number}`,
             response_time_seconds: Number(elapsedSeconds.toFixed(3)),
             req_time: formatDate(startTime),
             res_time: formatDate(endTime)
         });
 
     } catch (error) {
-        logger('error', `[${transactionId}] Gagal mengirim media: ${error.message}`);
-        res.status(500).json({ error: 'Gagal mengirim media.', transaction_id: transactionId });
+        logger('error', `[${transactionId}] SEND target=${number} status=FAIL error="${error.message}"`);
+        res.status(500).json({ success: false, error: `Failed to send media: ${error.message}`, transaction_id: transactionId });
     } finally {
-        // Hapus file setelah berhasil atau error
         fs.unlink(filePath, (err) => {
             if (err) {
-                logger('error', `[${transactionId}] Gagal hapus file temporary: ${err.message}`);
+                logger('error', `[${transactionId}] Failed to delete temp file: ${err.message}`);
             } else {
-                logger('info', `[${transactionId}] File temporary berhasil dihapus: ${filePath}`);
+                logger('info', `[${transactionId}] Temp file deleted: ${filePath}`);
             }
         });
     }
@@ -933,110 +805,60 @@ app.post('/api/send-media-from-url', upload.single('file'), async (req, res) => 
     const startTime = Date.now();
 
     if (!number || !url) {
-        logger('error', `[${transactionId}] Parameter 'number' dan 'url' diperlukan`);
-        return res.status(400).json({ error: 'Parameter number dan url diperlukan!' });
+        logger('error', `[${transactionId}] REQ missing required params: number and url`);
+        return res.status(400).json({ success: false, error: 'number and url are required' });
     }
 
     try {
-        logger('info', `[${transactionId}] Mendownload file dari URL: ${url}`);
+        logger('info', `[${transactionId}] Downloading file from URL: ${url}`);
 
-        // Mendownload file dari URL
         const response = await axios.get(url, { responseType: 'arraybuffer' });
         const fileBuffer = response.data;
         const contentType = response.headers['content-type'];
 
-        // Cek apakah MIME type adalah image
         if (!contentType.startsWith('image/')) {
-            logger('warn', `[${transactionId}] URL bukan gambar (content-type: ${contentType})`);
-            return res.status(400).json({ error: 'URL tidak menunjuk pada gambar.' });
+            logger('warn', `[${transactionId}] URL does not point to an image (content-type: ${contentType})`);
+            return res.status(400).json({ success: false, error: `URL does not point to an image (content-type: ${contentType})` });
         }
 
-        // Simpan file sementara dengan Multer
         const tempFilePath = path.join(__dirname, 'uploads', `${Date.now()}-image.${contentType.split('/')[1]}`);
         fs.writeFileSync(tempFilePath, fileBuffer);
 
         const botSock = getNextBotForGroup(number);
         if (!botSock || !botSock.sendMessage) {
-            logger('warn', `[${transactionId}] Tidak ada bot operasi yang aktif di grup ${number}`);
-            fs.unlinkSync(tempFilePath);  // Hapus file setelah gagal
-            return res.status(404).json({ error: `Tidak ada bot operasi yang aktif di grup ${number}.` });
+            logger('warn', `[${transactionId}] NO_BOT target=${number} — no active bot`);
+            fs.unlinkSync(tempFilePath);
+            return res.status(404).json({ success: false, error: `No active bot for group ${number}` });
         }
 
-        logger('info', `[${transactionId}] Mengirim gambar ke ${number}`);
+        logger('info', `[${transactionId}] SENDING type=IMAGE target=${number}`);
 
-        // Kirim gambar ke grup WhatsApp
         await botSock.sendMessage(number, {
             image: fs.readFileSync(tempFilePath),
             mimetype: contentType
         });
 
-        // Hapus file setelah berhasil dikirim
         fs.unlinkSync(tempFilePath);
 
         const endTime = Date.now();
         const elapsedSeconds = (endTime - startTime) / 1000;
 
-        logger('info', `[${transactionId}] Media berhasil dikirim dalam ${elapsedSeconds.toFixed(3)} detik`);
+        logger('info', `[${transactionId}] SEND target=${number} type=IMAGE status=OK time=${elapsedSeconds.toFixed(3)}s`);
 
         res.json({
             success: true,
             transaction_id: transactionId,
-            message: `Media berhasil dikirim ke ${number}`,
+            message: `Media sent to ${number}`,
             response_time_seconds: Number(elapsedSeconds.toFixed(3)),
             req_time: formatDate(startTime),
             res_time: formatDate(endTime)
         });
 
     } catch (error) {
-        logger('error', `[${transactionId}] Gagal mendownload atau mengirim media: ${error.message}`);
-        res.status(500).json({ error: 'Gagal mendownload atau mengirim media.', transaction_id: transactionId });
+        logger('error', `[${transactionId}] Failed to download or send media: ${error.message}`);
+        res.status(500).json({ success: false, error: `Failed to send media: ${error.message}`, transaction_id: transactionId });
     }
 });
-
-// app.get('/api/list-my-groups', async (req, res) => {
-//     const startTime = Date.now();
-//     const transactionId = generateTransactionId("GRP-FETCH");
-
-//     try {
-//         // Misalnya kamu pakai grup ID dummy untuk ambil sock
-//         const dummyGroupId = '120363419686014131@g.us';
-//         const sock = getNextBotForGroup(dummyGroupId); // atau get bot lain
-
-//         if (!sock) {
-//             logger('warn', `[${transactionId}] Tidak ada bot aktif untuk fetch group`);
-//             return res.status(400).json({
-//                 success: false,
-//                 transaction_id: transactionId,
-//                 error: 'Tidak ada bot aktif'
-//             });
-//         }
-
-//         const groups = Object.values(await sock.groupFetchAllParticipating());
-
-//         const responseTime = (Date.now() - startTime) / 1000;
-
-//         logger('info', `[${transactionId}] Berhasil ambil ${groups.length} grup`);
-
-//         return res.json({
-//             success: true,
-//             transaction_id: transactionId,
-//             group_count: groups.length,
-//             response_time_seconds: Number(responseTime.toFixed(3)),
-//             groups: groups.map(g => ({
-//                 id: g.id,
-//                 name: g.subject
-//             }))
-//         });
-
-//     } catch (err) {
-//         logger('error', `[${transactionId}] Gagal ambil grup: ${err.message}`);
-//         return res.status(500).json({
-//             success: false,
-//             transaction_id: transactionId,
-//             error: err.message
-//         });
-//     }
-// });
 
 function normalizeJid(jid) {
     return jid.replace(/:\d+@/, '@');
@@ -1051,11 +873,11 @@ app.get('/api/list-my-groups', async (req, res) => {
         const sock = getNextBotForGroup(dummyGroupId);
 
         if (!sock) {
-            logger('warn', `[${transactionId}] Tidak ada bot aktif untuk fetch group`);
+            logger('warn', `[${transactionId}] No active bot for group fetch`);
             return res.status(400).json({
                 success: false,
                 transaction_id: transactionId,
-                error: 'Tidak ada bot aktif'
+                error: 'No active bot available'
             });
         }
 
@@ -1066,7 +888,7 @@ app.get('/api/list-my-groups', async (req, res) => {
         const responseTime = (Date.now() - startTime) / 1000;
         const botJid = sock.user.id;
 
-        logger('info', `[${transactionId}] Berhasil ambil ${groups.length} grup`);
+        logger('info', `[${transactionId}] Fetched ${groups.length} groups`);
 
         return res.json({
             success: true,
@@ -1107,7 +929,7 @@ app.get('/api/list-my-groups', async (req, res) => {
         });
 
     } catch (err) {
-        logger('error', `[${transactionId}] Gagal ambil grup: ${err.message}`);
+        logger('error', `[${transactionId}] Failed to fetch groups: ${err.message}`);
         return res.status(500).json({
             success: false,
             transaction_id: transactionId,
@@ -1117,7 +939,6 @@ app.get('/api/list-my-groups', async (req, res) => {
 });
 
 
-// GET /api/stats/:date
 app.get('/api/stats/:date', async (req, res) => {
     const { date } = req.params;
     try {
@@ -1128,7 +949,6 @@ app.get('/api/stats/:date', async (req, res) => {
     }
 });
 
-// GET /api/logs/:type/:date
 app.get('/api/logs/:type/:date', (req, res) => {
     const { type, date } = req.params;
     const page = parseInt(req.query.page) || 1;
@@ -1165,7 +985,6 @@ app.get('/api/logs/:type/:date', (req, res) => {
             });
         }
 
-        // Sort by timestamp for 'all' mode
         if (type === 'all') {
             allLines.sort((a, b) => {
                 const tsA = a.text.match(/\[(\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}:\d{3})\]/);
@@ -1194,7 +1013,6 @@ app.get('/api/logs/:type/:date', (req, res) => {
     }
 });
 
-// GET /api/groups — merged from all bots, deduplicated
 app.get('/api/groups', (req, res) => {
     try {
         const groups = getAllGroups();
@@ -1215,7 +1033,6 @@ app.get('/api/groups', (req, res) => {
     }
 });
 
-// POST /api/groups/block
 app.post('/api/groups/block', (req, res) => {
     const { groupId } = req.body;
     if (!groupId) return res.status(400).json({ error: 'groupId required' });
@@ -1230,7 +1047,6 @@ app.post('/api/groups/block', (req, res) => {
     res.json({ success: true, message: `Group ${groupId} blocked` });
 });
 
-// POST /api/groups/unblock
 app.post('/api/groups/unblock', (req, res) => {
     const { groupId } = req.body;
     if (!groupId) return res.status(400).json({ error: 'groupId required' });
@@ -1242,7 +1058,6 @@ app.post('/api/groups/unblock', (req, res) => {
     res.json({ success: true, message: `Group ${groupId} unblocked` });
 });
 
-// GET /api/failed-requests
 app.get('/api/failed-requests', async (req, res) => {
     try {
         const result = await db.query(
@@ -1255,7 +1070,6 @@ app.get('/api/failed-requests', async (req, res) => {
     }
 });
 
-// Socket.io authentication
 io.use((socket, next) => {
     const auth = socket.handshake.auth;
     if (auth && auth.username === 'wa-ops' && auth.password === 'wapass@2021') {
@@ -1266,17 +1080,17 @@ io.use((socket, next) => {
 });
 
 io.on('connection', (socket) => {
-    logger('info', `Dashboard client connected: ${socket.id}`);
+    logger('info', `DASHBOARD connected client=${socket.id}`);
     socket.on('bot:add', async ({ botId }) => {
         if (!botId) return;
-        logger('info', `[Socket] Adding bot: ${botId}`);
+        logger('info', `DASHBOARD request=addbot bot=${botId}`);
         const qrBase64 = await startOperationBotAPI(botId);
         if (qrBase64) {
             socket.emit('bot:qr', { botId, qr: qrBase64 });
         }
     });
     socket.on('disconnect', () => {
-        logger('info', `Dashboard client disconnected: ${socket.id}`);
+        logger('info', `DASHBOARD disconnected client=${socket.id}`);
     });
 });
 
@@ -1284,23 +1098,21 @@ module.exports = { io };
 
 const PORT = 8008;
 server.listen(PORT, () => {
-    logger('info', `API berjalan di port ${PORT}`);
+    logger('info', `ZYRON API server started on port ${PORT}`);
 });
 
-// Flush stats tiap 5 menit
 setInterval(() => {
     stats.flush();
 }, 5 * 60 * 1000);
 
-// Flush saat server mati
 process.on("SIGINT", () => {
-    logger("info", "Flushing stats sebelum shutdown (SIGINT)...");
+    logger("info", "Flushing stats before shutdown (SIGINT)...");
     stats.flush();
     process.exit();
 });
 
 process.on("SIGTERM", () => {
-    logger("info", "Flushing stats sebelum shutdown (SIGTERM)...");
+    logger("info", "Flushing stats before shutdown (SIGTERM)...");
     stats.flush();
     process.exit();
 });

@@ -26,7 +26,7 @@ const logger = pino({
         }
     },
     level: 'info'
-}).child({ service: 'ADMIN' }); // <<<<< setiap log akan ada [service: AdminBot]
+}).child({ service: 'ADMIN' });
 
 const BLOCK_FILE = './blocked.json';
 
@@ -36,7 +36,7 @@ function readBlockedList() {
         const data = fs.readFileSync(BLOCK_FILE, 'utf8');
         return JSON.parse(data || '[]');
     } catch (err) {
-        logger.error("Error baca block list:", err);
+        logger.error("Error reading block list:", err);
         return [];
     }
 }
@@ -45,7 +45,7 @@ function saveBlockedList(list) {
     try {
         fs.writeFileSync(BLOCK_FILE, JSON.stringify(list, null, 2));
     } catch (err) {
-        logger.error("Error simpan block list:", err);
+        logger.error("Error saving block list:", err);
     }
 }
 const BOT_ID = 'admin_bot';
@@ -56,7 +56,7 @@ let reconnectTimeout;
 
 async function startAdminBot() {
     await reconnectBot();
-    logger.info('Memulai bot admin...');
+    logger.info('Starting admin bot...');
     try {
 
         const { sock, saveCreds } = await createSock(BOT_ID);
@@ -69,49 +69,49 @@ async function startAdminBot() {
                 try {
                     if (fs.existsSync(QR_IMAGE_PATH)) {
                         fs.unlinkSync(QR_IMAGE_PATH);
-                        logger.info('QR code lama dihapus.');
+                        logger.info('Old QR code removed.');
                     }
                     qrcodeTerminal.generate(qr, { small: true });
                     await qrcode.toFile(QR_IMAGE_PATH, qr);
-                    logger.info(`QR Code disimpan di ${QR_IMAGE_PATH}`);
+                    logger.info(`QR Code saved to ${QR_IMAGE_PATH}`);
                 } catch (err) {
-                    logger.error({ err }, 'Gagal memproses QR code.');
+                    logger.error({ err }, 'Failed to process QR code.');
                 }
             }
 
             if (connection === 'open') {
-                logger.info('Terhubung ke WhatsApp!');
+                logger.info('Connected to WhatsApp!');
                 updateBotStatus(BOT_ID, "open")
                 await updateGroupCache(BOT_ID, sock);
             }
 
             if (connection === 'close') {
                 const reason = lastDisconnect?.error?.output?.statusCode || 'Unknown';
-                logger.warn(`Koneksi terputus. Alasan: ${reason}`);
+                logger.warn(`Connection closed. Reason: ${reason}`);
 
                 if (reason !== DisconnectReason.loggedOut) {
-                    logger.info('Reconnecting dalam 5 detik...');
+                    logger.info('Reconnecting in 5 seconds...');
                     clearTimeout(reconnectTimeout);
                     reconnectTimeout = setTimeout(startAdminBot, 5000);
                     updateBotStatus(BOT_ID, "close")
 
                 } else {
-                    logger.error('Bot logout. Scan ulang diperlukan.');
+                    logger.error('Bot logged out. QR scan required.');
                     updateBotStatus(BOT_ID, "close")
                 }
             }
         });
 
         sock.ev.on('error', (err) => {
-            logger.error({ err }, 'Terjadi error di koneksi.');
+            logger.error({ err }, 'Connection error occurred.');
         });
 
         setupAdminCommands(sock);
-        logger.info('Menunggu koneksi ke WhatsApp...');
+        logger.info('Waiting for WhatsApp connection...');
         return sock;
     } catch (error) {
-        logger.error({ error }, 'Gagal memulai bot.');
-        logger.info('Mencoba ulang dalam 10 detik...');
+        logger.error({ error }, 'Failed to start bot.');
+        logger.info('Retrying in 10 seconds...');
         setTimeout(startAdminBot, 10000);
     }
 }
@@ -119,7 +119,7 @@ async function startAdminBot() {
 async function sendQRToGroup(sock, groupId) {
     try {
         if (!fs.existsSync(QR_IMAGE_PATH)) {
-            logger.warn('QR belum dibuat, tidak bisa dikirim.');
+            logger.warn('QR not generated yet, cannot send.');
             return;
         }
 
@@ -129,9 +129,9 @@ async function sendQRToGroup(sock, groupId) {
             caption: "Scan QR Code ini untuk menambahkan bot."
         });
 
-        logger.info(`QR berhasil dikirim ke grup ${groupId}`);
+        logger.info(`QR sent to group ${groupId}`);
     } catch (err) {
-        logger.error({ err }, 'Gagal mengirim QR ke grup.');
+        logger.error({ err }, 'Failed to send QR to group.');
     }
 }
 
@@ -139,35 +139,35 @@ async function getGroupInfo(sock, groupId) {
     try {
         const metadata = await sock.groupMetadata(groupId);
 
-        const groupName = metadata.subject || 'Tidak ada nama';
+        const groupName = metadata.subject || 'No name';
         const groupId_ = metadata.id;
         const memberCount = metadata.participants.length;
         const adminList = metadata.participants
             .filter(p => p.admin)
-            .map(p => p.id.split('@')[0]); // Ambil nomor saja
+            .map(p => p.id.split('@')[0]);
 
-        const description = metadata.desc || 'Tidak ada deskripsi.';
+        const description = metadata.desc || 'No description.';
         const createdAt = new Date(metadata.creation * 1000).toLocaleString('id-ID');
         const createdBy = metadata.creator ? metadata.creator.split('@')[0] : 'Unknown';
-        const restrictInfo = metadata.restrict ? 'Hanya Admin' : 'Semua Member';
-        const announceInfo = metadata.announce ? 'Hanya Admin' : 'Semua Member';
+        const restrictInfo = metadata.restrict ? 'Admin Only' : 'All Members';
+        const announceInfo = metadata.announce ? 'Admin Only' : 'All Members';
 
-        let message = `*Informasi Grup*\n\n`;
-        message += `*Nama Grup:* ${groupName}\n`;
-        message += `*ID Grup:* ${groupId_}\n`;
-        message += `*Jumlah Anggota:* ${memberCount}\n`;
-        message += `*Admin Grup:*\n${adminList.map(a => `- ${a}`).join('\n')}\n`;
-        message += `*Deskripsi:* ${description}\n`;
-        message += `*Dibuat pada:* ${createdAt}\n`;
-        message += `*Dibuat oleh:* ${createdBy}\n`;
+        let message = `*ZYRON Group Info*\n\n`;
+        message += `*Group Name:* ${groupName}\n`;
+        message += `*Group ID:* ${groupId_}\n`;
+        message += `*Members:* ${memberCount}\n`;
+        message += `*Admins:*\n${adminList.map(a => `- ${a}`).join('\n')}\n`;
+        message += `*Description:* ${description}\n`;
+        message += `*Created:* ${createdAt}\n`;
+        message += `*Created by:* ${createdBy}\n`;
         message += `*Edit Info:* ${restrictInfo}\n`;
-        message += `*Kirim Pesan:* ${announceInfo}`;
+        message += `*Send Messages:* ${announceInfo}`;
 
         return message;
 
     } catch (err) {
-        console.error(`Gagal mengambil info grup: ${err}`);
-        return `?? Gagal mengambil info grup. Pastikan bot ada di grup.`;
+        console.error(`Failed to get group info: ${err}`);
+        return `Failed to get group info. Make sure the bot is in the group.`;
     }
 }
 
@@ -220,7 +220,7 @@ function callBotApiPMTCMT(params) {
             host: proxyHost,
             port: proxyPort,
             method: 'POST',
-            path: `http://${targetHost}:${targetPort}${targetPath}`, // full URL required for HTTP proxy
+            path: `http://${targetHost}:${targetPort}${targetPath}`,
             headers: {
                 "Content-Type": "application/json",
                 "Content-Length": Buffer.byteLength(postData),
@@ -250,7 +250,7 @@ function callBotApiPMTCMT(params) {
 
 
 function setupAdminCommands(sock) {
-    logger.info('Siap menerima pesan command.');
+    logger.info('Ready to receive commands.');
     sock.ev.on('messages.upsert', async (m) => {
         const message = m.messages[0];
         if (!message?.message || !message.key.remoteJid) return;
@@ -263,41 +263,41 @@ function setupAdminCommands(sock) {
         if (text.startsWith('!addbot')) {
             const [, botName] = text.split(' ');
             if (!botName) {
-                return sock.sendMessage(chatId, { text: 'Gunakan format: *!addbot <nama_bot>*' });
+                return sock.sendMessage(chatId, { text: '*Usage:* !addbot <bot_name>' });
             }
 
-            logger.info(`Menambahkan bot: ${botName}`);
+            logger.info(`Adding bot: ${botName}`);
             startOperationBot(botName, sock, chatId);
-            sock.sendMessage(chatId, { text: `[PLATFORM]--Bot *${botName}* berhasil ditambahkan!` });
+            sock.sendMessage(chatId, { text: `*ZYRON* Bot *${botName}* is being added. QR code incoming...` });
         }
 
         if (text.startsWith('!rst')) {
             const [, botName] = text.split(' ');
             if (!botName) {
-                return sock.sendMessage(chatId, { text: 'Gunakan format: *!rst <nama_bot>*' });
+                return sock.sendMessage(chatId, { text: '*Usage:* !rst <bot_name>' });
             }
 
-            logger.info(`Menambahkan bot: ${botName}`);
+            logger.info(`Restarting bot: ${botName}`);
             reconnectSingleBotCommand(botName, chatId);
-            sock.sendMessage(chatId, { text: `[PLATFORM]--Bot *${botName}* Sedang direstart!` });
+            sock.sendMessage(chatId, { text: `*ZYRON* Bot *${botName}* is restarting...` });
         }
 
         if (text.startsWith('!rmbot')) {
             const [, botNumber] = text.split(' ');
             if (!botNumber) {
-                return sock.sendMessage(chatId, { text: 'Gunakan format: *!rmbot <nomor>*' });
+                return sock.sendMessage(chatId, { text: '*Usage:* !rmbot <bot_name>' });
             }
 
             await stopOperationBot(botNumber);
-            sock.sendMessage(chatId, { text: `[PLATFORM]--Bot ${botNumber} dihapus.` });
-            logger.info(`Bot ${botNumber} dihapus.`);
+            sock.sendMessage(chatId, { text: `*ZYRON* Bot *${botNumber}* has been removed.` });
+            logger.info(`Bot ${botNumber} removed.`);
         }
 
         if (text.startsWith('!cmd')) {
             const parts = text.trim().split(' ');
             if (parts.length < 3) {
                 return sock.sendMessage(chatId, {
-                    text: 'Gunakan format: *!cmd <type> <keyword>*'
+                    text: '*Usage:* !cmd <type> <keyword>'
                 });
             }
 
@@ -306,9 +306,6 @@ function setupAdminCommands(sock) {
 
             try {
                 const data = await callApi(keyword, cmdType);
-
-                console.log("DEBUG data from API:", data);
-                console.log("DEBUG chatId:", chatId);
 
                 if (data?.result === "OK") {
                     await sock.sendMessage(chatId, {
@@ -338,7 +335,7 @@ function setupAdminCommands(sock) {
 
             if (!groupId) {
                 return sock.sendMessage(chatId, {
-                    text: 'Gunakan format: *!block <group_id>*'
+                    text: '*Usage:* !block <group_id>'
                 });
             }
 
@@ -346,17 +343,17 @@ function setupAdminCommands(sock) {
 
             if (blockedList.includes(groupId)) {
                 return sock.sendMessage(chatId, {
-                    text: `Group sudah di-block: ${groupId}`
+                    text: `*ZYRON* Group already blocked: ${groupId}`
                 });
             }
 
             blockedList.push(groupId);
             saveBlockedList(blockedList);
 
-            logger.info(`Group di-block: ${groupId}`);
+            logger.info(`Group blocked: ${groupId}`);
 
             sock.sendMessage(chatId, {
-                text: `Group berhasil di-block:\n${groupId}`
+                text: `*ZYRON* Group blocked: ${groupId}`
             });
         }
 
@@ -365,7 +362,7 @@ function setupAdminCommands(sock) {
 
             if (!groupId) {
                 return sock.sendMessage(chatId, {
-                    text: 'Gunakan format: *!open <group_id>*'
+                    text: '*Usage:* !open <group_id>'
                 });
             }
 
@@ -373,17 +370,17 @@ function setupAdminCommands(sock) {
 
             if (!blockedList.includes(groupId)) {
                 return sock.sendMessage(chatId, {
-                    text: `Group tidak ada di block list: ${groupId}`
+                    text: `*ZYRON* Group not in block list: ${groupId}`
                 });
             }
 
             blockedList = blockedList.filter(id => id !== groupId);
             saveBlockedList(blockedList);
 
-            logger.info(`Group di-unblock: ${groupId}`);
+            logger.info(`Group unblocked: ${groupId}`);
 
             sock.sendMessage(chatId, {
-                text: `Group berhasil dibuka:\n${groupId}`
+                text: `*ZYRON* Group unblocked: ${groupId}`
             });
         }
 
@@ -392,12 +389,12 @@ function setupAdminCommands(sock) {
 
             if (blockedList.length === 0) {
                 return sock.sendMessage(chatId, {
-                    text: "Tidak ada group yang di-block"
+                    text: "*ZYRON* No groups are blocked."
                 });
             }
 
             sock.sendMessage(chatId, {
-                text: "Blocked List:\n" + blockedList.join('\n')
+                text: "*ZYRON Blocked Groups:*\n" + blockedList.join('\n')
             });
         }
 
@@ -440,8 +437,6 @@ function setupAdminCommands(sock) {
 
 
 
-
-
         if (text.startsWith('!botstatus')) {
             let status = await checkBotStatus();
             sock.sendMessage(chatId, { text: status });
@@ -449,27 +444,25 @@ function setupAdminCommands(sock) {
 
         if (text.startsWith('!restart')) {
             await reconnectBot();
-            sock.sendMessage(chatId, { text: `[PLATFORM]--Merestart Semua Bot Operation.` });
-            logger.info(`Merestart Semua Bot Operation.`);
+            sock.sendMessage(chatId, { text: `*ZYRON* Restarting all operation bots...` });
+            logger.info(`Restarting all operation bots.`);
         }
 
         if (text === '!groupid') {
-            sock.sendMessage(chatId, { text: `[PLATFORM]--*Group ID:* ${chatId}` });
-            logger.info(`Group ID diminta oleh ${chatId}`);
+            sock.sendMessage(chatId, { text: `*ZYRON* Group ID: ${chatId}` });
+            logger.info(`Group ID requested by ${chatId}`);
         }
 
         if (text === '!hi') {
             try {
                 logger.info('Check Connection All Bot');
                 data = getOperationSock()
-                // logger.info(data);
 
                 await testConnection(chatId)
                 await getBotStatusList(chatId);
 
-                // sock.sendMessage(chatId, { text: `[PLATFORM]--*Data* ${data}` });
             } catch (err) {
-                logger.error({ err }, 'Gagal Info Operation Bot.');
+                logger.error({ err }, 'Failed to get operation bot info.');
             }
         }
         if (text.startsWith('!ho')) {
@@ -483,20 +476,18 @@ function setupAdminCommands(sock) {
                     await testConnection(chatId);
                     await getBotStatusList(chatId);
 
-                    // Kirim data jika perlu
-                    // await sock.sendMessage(chatId, { text: `[PLATFORM]--*Data:* ${JSON.stringify(data)}` });
                 }
             } catch (err) {
-                logger.error({ err }, 'Gagal Info Operation Bot.');
+                logger.error({ err }, 'Failed to get operation bot info.');
             }
         }
         if (text === '!info') {
             try {
                 let groupInfo = await getGroupInfo(sock, chatId)
                 logger.info(groupInfo);
-                sock.sendMessage(chatId, { text: `[PLATFORM]--*Data* ${groupInfo}` });
+                sock.sendMessage(chatId, { text: `${groupInfo}` });
             } catch (err) {
-                logger.error({ err }, 'Gagal Info Operation Bot.');
+                logger.error({ err }, 'Failed to get group info.');
             }
         }
     });
@@ -505,10 +496,10 @@ function setupAdminCommands(sock) {
 
 function checkBotStatus() {
     let status = ""
-    let message = `?? *Status Bot:*\n`;
+    let message = `*ZYRON Bot Status*\n`;
 
     if (!fs.existsSync(STATUS_FILE)) {
-        console.log('[Heartbeat] Tidak ada file status.');
+        console.log('[Heartbeat] No status file found.');
         return;
     }
 
@@ -529,29 +520,28 @@ function checkBotStatus() {
 
 
         if (connectedBot.length > 0) {
-            message += `\n*Terhubung (${connectedBot.length}):*\n${connectedBot.join('\n')}`;
+            message += `\n*Online (${connectedBot.length}):*\n${connectedBot.join('\n')}`;
         } else {
-            message += `\n*Tidak ada bot yang terhubung.*`;
+            message += `\n*No bots connected.*`;
         }
 
         if (disconnectedBot.length > 0) {
-            message += `\n\n*Tidak Terhubung (${disconnectedBot.length}):*\n${disconnectedBot.join('\n')}`;
+            message += `\n\n*Offline (${disconnectedBot.length}):*\n${disconnectedBot.join('\n')}`;
         }
 
 
     } catch (err) {
-        message = '[Heartbeat] Gagal membaca status file:', err;
+        message = '[Heartbeat] Failed to read status file:', err;
     }
     return message
 }
-// ======================== DEVELOPMEN FEATURE ============================
 
 function statusBotAPI() {
     let status = ""
-    let message = `?? *Status Bot:*\n`;
+    let message = `*ZYRON Bot Status*\n`;
 
     if (!fs.existsSync(STATUS_FILE)) {
-        console.log('[Heartbeat] Tidak ada file status.');
+        console.log('[Heartbeat] No status file found.');
         return;
     }
 
@@ -572,18 +562,18 @@ function statusBotAPI() {
 
 
         if (connectedBot.length > 0) {
-            message += `\n*Terhubung (${connectedBot.length}):*\n${connectedBot.join('\n')}`;
+            message += `\n*Online (${connectedBot.length}):*\n${connectedBot.join('\n')}`;
         } else {
-            message += `\n*Tidak ada bot yang terhubung.*`;
+            message += `\n*No bots connected.*`;
         }
 
         if (disconnectedBot.length > 0) {
-            message += `\n\n*Tidak Terhubung (${disconnectedBot.length}):*\n${disconnectedBot.join('\n')}`;
+            message += `\n\n*Offline (${disconnectedBot.length}):*\n${disconnectedBot.join('\n')}`;
         }
 
 
     } catch (err) {
-        message = '[Heartbeat] Gagal membaca status file:', err;
+        message = '[Heartbeat] Failed to read status file:', err;
     }
     return { "active": connectedBot, "inactive": disconnectedBot }
 }
