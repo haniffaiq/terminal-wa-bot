@@ -1,8 +1,10 @@
 
 const express = require('express');
+const cors = require('cors');
+const { createServer } = require('http');
+const { Server } = require('socket.io');
 const { startAdminBot, testConnection, statusBotAPI } = require('./bots/adminBot');
 const { checkHeartbeatFromFile } = require('./bots/hertbeat');
-// const cors = require('cors');
 const stats = require("./utils/statmanager");
 const util = require('util')
 
@@ -23,19 +25,26 @@ process.on('unhandledRejection', (reason, promise) => {
     console.error('? Unhandled Rejection at:', promise, 'reason:', reason);
 });
 const app = express();
+const server = createServer(app);
+const io = new Server(server, {
+    cors: {
+        origin: process.env.NODE_ENV === 'production' ? false : ['http://localhost:5173'],
+        credentials: true
+    }
+});
+
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// app.use(cors({
-//     origin: '*'
-// }));
-
-
 app.use(express.json());
+app.use(cors({
+    origin: process.env.NODE_ENV === 'production' ? false : ['http://localhost:5173'],
+    credentials: true
+}));
 app.use(midleware);
 
 function getBlockedList() {
     try {
-        const data = fs.readFileSync('./blocked.json', 'utf8');
+        const data = fs.readFileSync(path.join(__dirname, 'blocked.json'), 'utf8');
         return JSON.parse(data);
     } catch (err) {
         console.error("Gagal baca blocket.json:", err);
@@ -302,7 +311,7 @@ const { promisify } = require('util');
 
 const readFileAsync = promisify(fs.readFile);
 
-app.post('/hi', async (req, res) => {
+app.post('/api/hi', async (req, res) => {
     const startTime = Date.now();
     const transactionId = generateTransactionId("MSS");
     // number = await phoneNumberFormatter(number)
@@ -405,7 +414,7 @@ app.post('/hi', async (req, res) => {
     }
 });
 
-app.post('/resend-failed', async (req, res) => {
+app.post('/api/resend-failed', async (req, res) => {
     const failedRequestsFile = path.join(__dirname, 'failed_requests.json');
 
     try {
@@ -475,7 +484,7 @@ async function phoneNumberFormatter(number) {
 }
 
 
-app.post('/send-message', async (req, res) => {
+app.post('/api/send-message', async (req, res) => {
     //-------------------------UPDATED RETRY CODE-------------------------------------------
     const startTime = Date.now();
     const transactionId = generateTransactionId("MSS");
@@ -798,7 +807,7 @@ async function sendMessage(botSock, targetNumber, message, caption, transactionI
 //-------------------------UPDATED RETRY CODE-------------------------------------------
 
 
-app.post('/disconnect', async (req, res) => {
+app.post('/api/disconnect', async (req, res) => {
     const { botId } = req.body;
 
     if (!botId) {
@@ -811,7 +820,7 @@ app.post('/disconnect', async (req, res) => {
 
 
 
-app.post('/addbot', async (req, res) => {
+app.post('/api/addbot', async (req, res) => {
     try {
         const { botname } = req.body;
 
@@ -833,7 +842,7 @@ app.post('/addbot', async (req, res) => {
     }
 });
 
-app.post('/restart', async (req, res) => {
+app.post('/api/restart', async (req, res) => {
     try {
         const { botname } = req.body;
 
@@ -856,7 +865,7 @@ app.post('/restart', async (req, res) => {
     }
 });
 
-app.get('/bot-status', async (req, res) => {
+app.get('/api/bot-status', async (req, res) => {
     try {
 
         const status = await statusBotAPI()
@@ -873,7 +882,7 @@ app.get('/bot-status', async (req, res) => {
 // Setup penyimpanan multer ke disk
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        cb(null, './uploads/'); // Pastikan folder uploads sudah ada
+        cb(null, path.join(__dirname, 'uploads')); // Pastikan folder uploads sudah ada
     },
     filename: function (req, file, cb) {
         const uniqueName = Date.now() + '-' + file.originalname;
@@ -882,7 +891,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 
-app.post('/send-media', upload.single('file'), async (req, res) => {
+app.post('/api/send-media', upload.single('file'), async (req, res) => {
     const startTime = Date.now();
     const transactionId = generateTransactionId("MSD");
 
@@ -949,7 +958,7 @@ app.post('/send-media', upload.single('file'), async (req, res) => {
     }
 });
 
-app.post('/send-media-from-url', upload.single('file'), async (req, res) => {
+app.post('/api/send-media-from-url', upload.single('file'), async (req, res) => {
     const { number, url } = req.body;
     const transactionId = generateTransactionId("MSU");
     const startTime = Date.now();
@@ -1015,7 +1024,7 @@ app.post('/send-media-from-url', upload.single('file'), async (req, res) => {
     }
 });
 
-// app.get('/list-my-groups', async (req, res) => {
+// app.get('/api/list-my-groups', async (req, res) => {
 //     const startTime = Date.now();
 //     const transactionId = generateTransactionId("GRP-FETCH");
 
@@ -1064,7 +1073,7 @@ function normalizeJid(jid) {
     return jid.replace(/:\d+@/, '@');
 }
 
-app.get('/list-my-groups', async (req, res) => {
+app.get('/api/list-my-groups', async (req, res) => {
     const startTime = Date.now();
     const transactionId = generateTransactionId("GRP-FETCH");
 
@@ -1139,8 +1148,147 @@ app.get('/list-my-groups', async (req, res) => {
 });
 
 
+// GET /api/stats/:date
+app.get('/api/stats/:date', (req, res) => {
+    const { date } = req.params;
+    const statsFile = path.join(__dirname, 'stats', `stats-${date}.json`);
+    if (!fs.existsSync(statsFile)) {
+        return res.status(404).json({ error: 'Stats not found for this date' });
+    }
+    try {
+        const data = JSON.parse(fs.readFileSync(statsFile, 'utf-8'));
+        res.json({ success: true, date, data });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to read stats file' });
+    }
+});
+
+// GET /api/logs/:type/:date
+app.get('/api/logs/:type/:date', (req, res) => {
+    const { type, date } = req.params;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 100;
+    const logFileMap = {
+        'success': `success-wa-history-${date}.log`,
+        'error': `error-wa-${date}.log`,
+        'warn': `warn-wa-history-${date}.log`,
+        'req-res': `req-res-${date}.log`
+    };
+    const fileName = logFileMap[type];
+    if (!fileName) {
+        return res.status(400).json({ error: 'Invalid log type. Use: success, error, warn, req-res' });
+    }
+    const logFile = path.join(__dirname, 'logs', fileName);
+    if (!fs.existsSync(logFile)) {
+        return res.status(404).json({ error: 'Log file not found' });
+    }
+    try {
+        const content = fs.readFileSync(logFile, 'utf-8');
+        const lines = content.split('\n').filter(l => l.trim());
+        const totalLines = lines.length;
+        const start = (page - 1) * limit;
+        const paginatedLines = lines.slice(start, start + limit);
+        res.json({ success: true, type, date, page, limit, totalLines, totalPages: Math.ceil(totalLines / limit), lines: paginatedLines });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to read log file' });
+    }
+});
+
+// GET /api/groups
+app.get('/api/groups', async (req, res) => {
+    try {
+        const dummyGroupId = '120363419686014131@g.us';
+        const sock = getNextBotForGroup(dummyGroupId);
+        if (!sock) {
+            return res.status(400).json({ success: false, error: 'No active bot available' });
+        }
+        const groups = Object.values(await sock.groupFetchAllParticipating());
+        const blockedList = getBlockedList();
+        res.json({
+            success: true,
+            group_count: groups.length,
+            groups: groups.map(g => ({
+                id: g.id,
+                name: g.subject,
+                member_count: g.participants.length,
+                is_blocked: blockedList.includes(g.id)
+            }))
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// POST /api/groups/block
+app.post('/api/groups/block', (req, res) => {
+    const { groupId } = req.body;
+    if (!groupId) return res.status(400).json({ error: 'groupId required' });
+    const blockedFile = path.join(__dirname, 'blocked.json');
+    let blockedList = [];
+    try { blockedList = JSON.parse(fs.readFileSync(blockedFile, 'utf-8')); } catch (e) { blockedList = []; }
+    if (blockedList.includes(groupId)) {
+        return res.json({ success: true, message: 'Already blocked' });
+    }
+    blockedList.push(groupId);
+    fs.writeFileSync(blockedFile, JSON.stringify(blockedList, null, 2));
+    res.json({ success: true, message: `Group ${groupId} blocked` });
+});
+
+// POST /api/groups/unblock
+app.post('/api/groups/unblock', (req, res) => {
+    const { groupId } = req.body;
+    if (!groupId) return res.status(400).json({ error: 'groupId required' });
+    const blockedFile = path.join(__dirname, 'blocked.json');
+    let blockedList = [];
+    try { blockedList = JSON.parse(fs.readFileSync(blockedFile, 'utf-8')); } catch (e) { blockedList = []; }
+    blockedList = blockedList.filter(id => id !== groupId);
+    fs.writeFileSync(blockedFile, JSON.stringify(blockedList, null, 2));
+    res.json({ success: true, message: `Group ${groupId} unblocked` });
+});
+
+// GET /api/failed-requests
+app.get('/api/failed-requests', (req, res) => {
+    const failedFile = path.join(__dirname, 'failed_requests.json');
+    try {
+        if (!fs.existsSync(failedFile)) {
+            return res.json({ success: true, data: [] });
+        }
+        const data = JSON.parse(fs.readFileSync(failedFile, 'utf-8'));
+        res.json({ success: true, data });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to read failed requests' });
+    }
+});
+
+// Socket.io authentication
+io.use((socket, next) => {
+    const auth = socket.handshake.auth;
+    if (auth && auth.username === 'wa-ops' && auth.password === 'wapass@2021') {
+        next();
+    } else {
+        next(new Error('Authentication failed'));
+    }
+});
+
+io.on('connection', (socket) => {
+    logger('info', `Dashboard client connected: ${socket.id}`);
+    socket.on('bot:add', async ({ botId }) => {
+        if (!botId) return;
+        logger('info', `[Socket] Adding bot: ${botId}`);
+        const qrBase64 = await startOperationBotAPI(botId);
+        if (qrBase64) {
+            socket.emit('bot:qr', { botId, qr: qrBase64 });
+        }
+    });
+    socket.on('disconnect', () => {
+        logger('info', `Dashboard client disconnected: ${socket.id}`);
+    });
+});
+
+module.exports = { io };
+
 const PORT = 8008;
-app.listen(PORT, () => {
+server.listen(PORT, () => {
     logger('info', `API berjalan di port ${PORT}`);
 });
 

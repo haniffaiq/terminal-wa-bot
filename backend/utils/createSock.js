@@ -96,6 +96,16 @@ function updateBotStatus(botId, status) {
     } catch (err) {
         console.error('Gagal menulis status file:', err);
     }
+
+    // Emit to dashboard if io is available
+    try {
+        const { io } = require('../index');
+        if (io) {
+            io.emit('bot:status', { botId, status, timestamp: new Date().toISOString() });
+        }
+    } catch (e) {
+        // io not ready yet during startup, ignore
+    }
 }
 
 async function createSock(botId, options = {}) {
