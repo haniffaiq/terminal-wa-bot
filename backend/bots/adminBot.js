@@ -4,7 +4,7 @@ const qrcode = require('qrcode');
 const qrcodeTerminal = require('qrcode-terminal');
 const path = require('path');
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('baileys');
-const { startOperationBot, stopOperationBot, reconnectBot, getOperationSock, getBotStatusList, reconnectSingleBotCommand } = require('./operationBot');
+const { startOperationBot, stopOperationBot, reconnectBot, getOperationSock, getBotStatusList, reconnectSingleBotCommand, updateGroupCache } = require('./operationBot');
 
 const { createSock, updateBotStatus } = require('../utils/createSock');
 const { connected, disconnect } = require('process');
@@ -82,7 +82,7 @@ async function startAdminBot() {
             if (connection === 'open') {
                 logger.info('Terhubung ke WhatsApp!');
                 updateBotStatus(BOT_ID, "open")
-
+                await updateGroupCache(BOT_ID, sock);
             }
 
             if (connection === 'close') {

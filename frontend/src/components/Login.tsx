@@ -41,7 +41,7 @@ export function Login({ onLogin }: { onLogin: () => void }) {
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle className="text-center">WA Bot Dashboard</CardTitle>
+          <CardTitle className="text-center">ZYRON Dashboard</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">

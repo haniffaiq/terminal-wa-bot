@@ -409,5 +409,6 @@ module.exports = {
     reconnectSingleBotAPI,
     disconnectBotForce,
     getNextBotForIndividual,
-    getAllGroups
+    getAllGroups,
+    updateGroupCache
 };

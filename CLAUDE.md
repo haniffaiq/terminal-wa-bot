@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Terminal WA Bot is a Node.js WhatsApp bot delivery gateway for internal operational teams. It broadcasts messages to WhatsApp groups through multiple bot accounts using the Baileys library, with an Express HTTP API, socket.io realtime events, and a React frontend dashboard.
+Terminal ZYRON is a Node.js WhatsApp bot delivery gateway for internal operational teams. It broadcasts messages to WhatsApp groups through multiple bot accounts using the Baileys library, with an Express HTTP API, socket.io realtime events, and a React frontend dashboard.
 
 ## Project Structure
 

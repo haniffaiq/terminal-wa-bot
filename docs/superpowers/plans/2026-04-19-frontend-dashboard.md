@@ -803,7 +803,7 @@ export function Login({ onLogin }: { onLogin: () => void }) {
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle className="text-center">WA Bot Dashboard</CardTitle>
+          <CardTitle className="text-center">ZYRON Dashboard</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -893,7 +893,7 @@ export function Layout({ children, onLogout }: { children: React.ReactNode; onLo
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         <div className="flex items-center justify-between h-16 px-4 border-b">
-          <h1 className="text-lg font-bold">WA Bot</h1>
+          <h1 className="text-lg font-bold">ZYRON</h1>
           <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setSidebarOpen(false)}>
             <X className="h-5 w-5" />
           </Button>
