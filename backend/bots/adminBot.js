@@ -334,6 +334,10 @@ async function startSingleAdminBot(tenant, attempt = 0) {
 
     logger.info(`[${tenantId}] Starting admin bot: ${botId} (attempt ${attempt + 1})`);
 
+    let qrResolve = null;
+    const qrPromise = new Promise((resolve) => { qrResolve = resolve; });
+    let qrTimeout = setTimeout(() => qrResolve(null), 15000);
+
     try {
         // Close old socket if exists
         if (adminBots[tenantId]) {
@@ -347,6 +351,14 @@ async function startSingleAdminBot(tenant, attempt = 0) {
             if (qr) {
                 try {
                     qrcodeTerminal.generate(qr, { small: true });
+                    const qrcode_ = require('qrcode');
+                    const qrBuffer = await qrcode_.toBuffer(qr);
+                    const qrBase64 = `data:image/png;base64,${qrBuffer.toString('base64')}`;
+                    if (qrResolve) {
+                        clearTimeout(qrTimeout);
+                        qrResolve(qrBase64);
+                        qrResolve = null;
+                    }
                     logger.info(`[${tenantId}] QR generated for admin bot ${botId} — scan with WhatsApp`);
                 } catch (err) {
                     logger.error(`[${tenantId}] QR error: ${err.message}`);
@@ -381,7 +393,9 @@ async function startSingleAdminBot(tenant, attempt = 0) {
         });
 
         setupAdminCommands(sock, tenant);
-        return sock;
+        // Return QR for dashboard (or null if already connected)
+        const qr = await qrPromise;
+        return { sock, qr };
     } catch (error) {
         logger.error(`[${tenantId}] Failed to start admin bot: ${error.message}`);
         const delay = Math.min(10000 * (attempt + 1), 60000);

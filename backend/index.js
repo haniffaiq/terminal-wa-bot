@@ -700,20 +700,20 @@ app.post('/api/addbot', async (req, res) => {
             // Set as tenant's admin bot
             await db.query('UPDATE tenants SET admin_bot_id = $1 WHERE id = $2', [botname, tenantId]);
 
-            // Fetch tenant data for admin bot startup
+            // Start as admin bot (with command handler, NOT as operation bot)
             const tenantResult = await db.query('SELECT * FROM tenants WHERE id = $1', [tenantId]);
             const tenant = tenantResult.rows[0];
 
+            let qrBase64 = null;
             if (tenant) {
-                // Start admin bot with command handler
-                startSingleAdminBot(tenant);
+                const result = await startSingleAdminBot(tenant);
+                qrBase64 = result?.qr || null;
             }
 
-            const qrBase64 = await startOperationBotAPI(botname, tenantId);
             res.json({
                 success: true,
                 message: `Admin bot ${botname} started. Scan QR to connect.`,
-                qr: qrBase64 || null,
+                qr: qrBase64,
                 is_admin_bot: true
             });
         } else {
