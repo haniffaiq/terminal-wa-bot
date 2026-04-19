@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Terminal ZYRON is a Node.js WhatsApp bot delivery gateway for internal operational teams. It broadcasts messages to WhatsApp groups through multiple bot accounts using the Baileys library, with an Express HTTP API, socket.io realtime events, and a React frontend dashboard.
+ZYRON is a multi-tenant WhatsApp bot delivery gateway. Each tenant gets isolated bots, groups, statistics, and customizable bot responses. Built with Node.js/Express, Baileys (WhatsApp), PostgreSQL, and a React dashboard.
 
 ## Project Structure
 
@@ -21,7 +21,7 @@ terminal-wa-bot/
 ### Development
 
 ```bash
-# Backend
+# Backend (requires PostgreSQL running)
 cd backend && npm install && node index.js    # port 8008
 
 # Frontend (separate terminal)
@@ -31,82 +31,111 @@ cd frontend && npm install && npm run dev     # port 5173 (proxies /api to backe
 ### Docker Compose
 
 ```bash
-docker compose up --build    # backend:8008, frontend:3000
+docker compose up --build    # backend:8008, frontend:3000, postgres:5432
+./redeploy.sh                # full rebuild shortcut
 ```
 
-### Production (PM2, backend only)
+### Environment Variables
 
-```bash
-cd backend
-pm2 start index.js --name terminal-wa-bot
-```
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DB_HOST` | `localhost` | PostgreSQL host |
+| `DB_PORT` | `5432` | PostgreSQL port |
+| `DB_NAME` | `wabot` | Database name |
+| `DB_USER` | `wabot` | Database user |
+| `DB_PASSWORD` | `wabot123` | Database password |
+| `JWT_SECRET` | `zyron-secret-change-me` | JWT signing secret |
+| `SUPER_ADMIN_USER` | `admin` | Initial super admin username |
+| `SUPER_ADMIN_PASSWORD` | `admin123` | Initial super admin password |
 
-No test suite exists.
+## Multi-Tenancy Architecture
+
+### Roles
+- **Super Admin** — `role='super_admin'`, `tenant_id=NULL`. Creates/manages tenants. Sees all data.
+- **Tenant Admin** — `role='admin'`, scoped to their `tenant_id`. Manages own bots, groups, commands.
+
+### Auth Flow
+1. `POST /api/auth/login` → returns JWT token
+2. JWT payload: `{ userId, tenantId, role, brandName }`
+3. Token stored in `sessionStorage`, sent as `Authorization: Bearer <token>`
+4. Middleware extracts tenant context from JWT — all queries scoped by `tenantId`
+
+### Data Isolation
+- All DB queries filter by `tenant_id` (from JWT, never from client input)
+- Bot sockets: `operationBots[tenantId][botId]`
+- Group cache: `groupCache[tenantId] = Map(...)`
+- Auth sessions: `auth_sessions/{tenantId}/{botId}/`
+- Socket.io rooms: `tenant:{tenantId}` per tenant, `super_admin` for admin
+
+### Custom Commands
+- Tenants create custom WhatsApp commands (e.g. `!stock`) via dashboard
+- Response templates support variables: `{brand}`, `{date}`, `{time}`, `{group_name}`, `{group_id}`, `{bot_count}`, `{member_count}`, `{sender}`
+- System commands (e.g. `!addbot`, `!rst`) cannot be overridden
 
 ## Backend Architecture
 
-**Entry point:** `backend/index.js` — Express app + socket.io server, API routes (all prefixed `/api`), logging, transaction ID generation.
+**Entry point:** `backend/index.js` — Express + socket.io, JWT auth middleware, API routes prefixed `/api`.
 
-**Two bot types:**
-- **Admin bot** (`bots/adminBot.js`) — single master bot handling WhatsApp commands (`!addbot`, `!rst`, `!block`, etc.)
-- **Operation bots** (`bots/operationBot.js`) — multiple worker bots for message delivery; round-robin selection per group
+**Bot types (per tenant):**
+- **Admin bot** (`bots/adminBot.js`) — one per tenant, handles WhatsApp commands with tenant's `brand_name`
+- **Operation bots** (`bots/operationBot.js`) — multiple per tenant, round-robin message delivery
 
-**Supporting modules:**
-- `utils/createSock.js` — Baileys socket factory, auth state, QR code generation, emits `bot:status` via socket.io
-- `utils/midleware.js` — Basic Auth middleware
-- `utils/statmanager.js` — hourly message delivery stats, persisted to `stats/` as JSON
-- `bots/hertbeat.js` — monitors bot connection status every 5 seconds
-- `bots/proxyConfig.js` — proxy configuration (gitignored)
+**Key modules:**
+- `utils/auth.js` — JWT sign/verify, bcrypt hash/compare
+- `utils/midleware.js` — JWT auth middleware, `requireSuperAdmin` guard
+- `utils/db.js` — PostgreSQL connection pool
+- `utils/seed.js` — seeds super admin user on first run
+- `utils/statmanager.js` — message stats (PostgreSQL)
+- `utils/createSock.js` — Baileys socket factory
+- `routes/auth.js` — login endpoint
+- `routes/tenants.js` — super admin tenant CRUD
+- `routes/commands.js` — custom commands CRUD
 
-**Data flow:** API request → Basic Auth → resolve target groups → `getNextBotForGroup()` round-robin → Baileys sends message → tracked with transaction ID → failures saved to `failed_requests.json`.
-
-**Socket.io events:**
-- `bot:status` (server→client) — bot connect/disconnect updates
-- `bot:qr` (server→client) — QR code for new bot login
-- `bot:add` (client→server) — request to create new bot
+**Database tables:** `tenants`, `users`, `custom_commands`, `bot_status`, `message_stats`, `failed_requests`
 
 ## Frontend Architecture
 
 **Tech stack:** React, Vite, TypeScript, Tailwind CSS, shadcn/ui (base-ui), recharts, socket.io-client
 
-**Key files:**
-- `src/lib/auth.ts` — in-memory Basic Auth credential store
-- `src/lib/api.ts` — `fetchApi`/`postApi`/`uploadFile` wrappers with auto-inject auth header
-- `src/lib/socket.ts` — socket.io client singleton
-- `src/hooks/useSocket.ts` — React hook for realtime bot status and QR events
-- `src/components/Layout.tsx` — sidebar navigation with 7 pages
-- `src/components/Login.tsx` — login form, validates against `/api/bot-status`
+**Auth:** JWT-based. `src/lib/auth.ts` stores token in sessionStorage, decodes payload for user info.
 
-**Pages:** Dashboard, BotManagement, SendMessage, Groups, FailedRequests, Statistics, Logs
+**Pages:** Dashboard, BotManagement, SendMessage, Groups, FailedRequests, Statistics, Logs, CustomCommands (tenant admin), TenantManagement (super admin)
 
-**Note:** shadcn/ui components use `@base-ui/react` (not radix-ui). Check component files in `src/components/ui/` for actual API before using.
+**Note:** shadcn/ui uses `@base-ui/react` (not radix-ui). Check `src/components/ui/` for actual component APIs.
 
 ## API Endpoints
 
-All prefixed with `/api`, require Basic Auth (`wa-ops` / `wapass@2021`).
+### Public
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/api/auth/login` | Login, returns JWT |
 
+### Super Admin Only
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/tenants` | List all tenants |
+| POST | `/api/tenants` | Create tenant + user |
+| PUT | `/api/tenants/:id` | Update tenant |
+| DELETE | `/api/tenants/:id` | Deactivate tenant |
+
+### Tenant Admin (scoped by JWT)
 | Method | Path | Purpose |
 |--------|------|---------|
 | POST | `/api/send-message` | Broadcast text to groups |
-| POST | `/api/send-media` | Send uploaded file to groups |
-| POST | `/api/send-media-from-url` | Fetch URL media and send |
-| POST | `/api/addbot` | Create new operation bot |
-| POST | `/api/restart` | Restart a specific bot |
-| POST | `/api/disconnect` | Force disconnect bot |
-| GET | `/api/bot-status` | Get all bot connection statuses |
-| GET | `/api/list-my-groups` | List groups from active bots |
-| POST | `/api/resend-failed` | Retry all failed requests |
-| GET | `/api/stats/:date` | Stats JSON for a date (YYYY-MM-DD) |
-| GET | `/api/logs/:type/:date` | Paginated log content |
-| GET | `/api/groups` | List all groups with blocked status |
-| POST | `/api/groups/block` | Block a group |
-| POST | `/api/groups/unblock` | Unblock a group |
-| GET | `/api/failed-requests` | List failed requests |
-
-## Key Patterns
-
-- **Transaction IDs:** Format `{CODE}-{YYYYMMDD}-{HHMMSS}-{EPOCH}`
-- **File-based state:** JSON files in `backend/` (`data/bot_status.json`, `blocked.json`, `failed_requests.json`)
-- **Per-bot auth sessions:** `backend/auth_sessions/{botId}/`
-- **Daily log files:** `backend/logs/` — separate files for success, error, warn, req-res
-- **Docker volumes:** `auth_sessions`, `data`, `logs`, `stats`, `uploads` are mounted from host
+| POST | `/api/send-media` | Send uploaded file |
+| POST | `/api/send-media-from-url` | Send URL media |
+| POST | `/api/addbot` | Create new bot |
+| POST | `/api/restart` | Restart bot |
+| POST | `/api/disconnect` | Disconnect bot |
+| POST | `/api/deletebot` | Delete bot |
+| GET | `/api/bot-status` | Bot statuses |
+| GET | `/api/groups` | List groups |
+| GET | `/api/stats/:date` | Daily stats |
+| GET | `/api/logs/:type/:date` | Log viewer |
+| GET | `/api/failed-requests` | Failed requests |
+| POST | `/api/resend-failed` | Retry failed |
+| GET | `/api/commands` | List custom commands |
+| POST | `/api/commands` | Create command |
+| PUT | `/api/commands/:id` | Update command |
+| DELETE | `/api/commands/:id` | Delete command |
+| PUT | `/api/tenant/profile` | Update brand name |
