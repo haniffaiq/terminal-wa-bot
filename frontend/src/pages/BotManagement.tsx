@@ -120,6 +120,11 @@ export default function BotManagement() {
         </Dialog>
       </div>
 
+      <div className="rounded-md border bg-blue-50 border-blue-200 p-4 text-sm text-blue-800">
+        <p><strong>admin_bot</strong> is the admin bot — it starts automatically when the server runs and handles WhatsApp commands (!addbot, !rst, !block, etc.).</p>
+        <p className="mt-1">All other bots are <strong>operation bots</strong> — they handle message delivery via round-robin. Each bot requires a different WhatsApp number.</p>
+      </div>
+
       <Table>
         <TableHeader>
           <TableRow>
