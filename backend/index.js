@@ -1132,30 +1132,65 @@ app.get('/api/stats/:date', async (req, res) => {
 app.get('/api/logs/:type/:date', (req, res) => {
     const { type, date } = req.params;
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 100;
+    const limit = parseInt(req.query.limit) || 200;
+    const search = req.query.search || '';
+
     const logFileMap = {
         'success': `success-wa-history-${date}.log`,
         'error': `error-wa-${date}.log`,
         'warn': `warn-wa-history-${date}.log`,
         'req-res': `req-res-${date}.log`
     };
-    const fileName = logFileMap[type];
-    if (!fileName) {
-        return res.status(400).json({ error: 'Invalid log type. Use: success, error, warn, req-res' });
+
+    let filesToRead = [];
+    if (type === 'all') {
+        filesToRead = Object.entries(logFileMap).map(([t, f]) => ({ type: t, file: f }));
+    } else {
+        const fileName = logFileMap[type];
+        if (!fileName) {
+            return res.status(400).json({ error: 'Invalid log type. Use: all, success, error, warn, req-res' });
+        }
+        filesToRead = [{ type, file: fileName }];
     }
-    const logFile = path.join(__dirname, 'logs', fileName);
-    if (!fs.existsSync(logFile)) {
-        return res.status(404).json({ error: 'Log file not found' });
-    }
+
     try {
-        const content = fs.readFileSync(logFile, 'utf-8');
-        const lines = content.split('\n').filter(l => l.trim());
-        const totalLines = lines.length;
+        let allLines = [];
+
+        for (const { type: logType, file } of filesToRead) {
+            const logFile = path.join(__dirname, 'logs', file);
+            if (!fs.existsSync(logFile)) continue;
+            const content = fs.readFileSync(logFile, 'utf-8');
+            content.split('\n').filter(l => l.trim()).forEach(line => {
+                allLines.push({ type: logType, text: line });
+            });
+        }
+
+        // Sort by timestamp for 'all' mode
+        if (type === 'all') {
+            allLines.sort((a, b) => {
+                const tsA = a.text.match(/\[(\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}:\d{3})\]/);
+                const tsB = b.text.match(/\[(\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}:\d{3})\]/);
+                if (!tsA || !tsB) return 0;
+                return tsA[1].localeCompare(tsB[1]);
+            });
+        }
+
+        if (search) {
+            const q = search.toLowerCase();
+            allLines = allLines.filter(l => l.text.toLowerCase().includes(q));
+        }
+
+        const totalLines = allLines.length;
         const start = (page - 1) * limit;
-        const paginatedLines = lines.slice(start, start + limit);
-        res.json({ success: true, type, date, page, limit, totalLines, totalPages: Math.ceil(totalLines / limit), lines: paginatedLines });
+        const paginatedLines = allLines.slice(start, start + limit);
+
+        res.json({
+            success: true, type, date, page, limit, totalLines,
+            totalPages: Math.ceil(totalLines / limit),
+            lines: paginatedLines
+        });
     } catch (err) {
-        res.status(500).json({ error: 'Failed to read log file' });
+        res.status(500).json({ error: 'Failed to read log files' });
     }
 });
 
