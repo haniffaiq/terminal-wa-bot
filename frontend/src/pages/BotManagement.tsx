@@ -21,7 +21,7 @@ import {
 import { fetchApi, postApi } from '@/lib/api';
 import { useSocket } from '@/hooks/useSocket';
 import { getSocket } from '@/lib/socket';
-import { Plus, RotateCcw, Power } from 'lucide-react';
+import { Plus, RotateCcw, Power, Trash2 } from 'lucide-react';
 
 interface BotStatusResponse {
   success: boolean;
@@ -64,6 +64,17 @@ export default function BotManagement() {
     setLoading(botId);
     try {
       await postApi('/disconnect', { botId });
+      await loadBots();
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  async function handleDelete(botId: string) {
+    if (!confirm(`Delete bot "${botId}"? This will remove its session permanently.`)) return;
+    setLoading(botId);
+    try {
+      await postApi('/deletebot', { botId });
       await loadBots();
     } finally {
       setLoading(null);
@@ -148,6 +159,15 @@ export default function BotManagement() {
                     disabled={loading === botId}
                   >
                     <Power className="h-3 w-3 mr-1" />Disconnect
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDelete(botId)}
+                    disabled={loading === botId}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <Trash2 className="h-3 w-3 mr-1" />Delete
                   </Button>
                 </TableCell>
               </TableRow>

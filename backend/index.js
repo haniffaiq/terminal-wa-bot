@@ -8,7 +8,7 @@ const { checkHeartbeatFromFile } = require('./bots/hertbeat');
 const stats = require("./utils/statmanager");
 const util = require('util')
 
-const { getOperationSock, getNextBotForGroup, reconnectBot, startOperationBotAPI, getBotStatusList, disconnectBotForce, reconnectSingleBotAPI, getNextBotForIndividual } = require('./bots/operationBot');
+const { getOperationSock, getNextBotForGroup, reconnectBot, startOperationBotAPI, getBotStatusList, disconnectBotForce, reconnectSingleBotAPI, getNextBotForIndividual, stopOperationBot } = require('./bots/operationBot');
 const midleware = require('./utils/midleware');
 const fs = require('fs');
 const path = require('path');
@@ -816,6 +816,21 @@ app.post('/api/disconnect', async (req, res) => {
 
     const result = await disconnectBotForce(botId);
     res.json(result);
+});
+
+app.post('/api/deletebot', async (req, res) => {
+    const { botId } = req.body;
+
+    if (!botId) {
+        return res.status(400).json({ success: false, message: 'Parameter botId wajib diisi' });
+    }
+
+    try {
+        await stopOperationBot(botId);
+        res.json({ success: true, message: `Bot ${botId} deleted` });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Gagal menghapus bot', error: err.message });
+    }
 });
 
 
