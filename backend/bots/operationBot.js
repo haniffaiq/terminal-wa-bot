@@ -21,6 +21,8 @@ const logger = pino({
 let operationBots = {};
 let groupBots = {};
 const reconnectTimers = {};
+// Merged group cache: groupId → { id, name, member_count, bots: [botId, ...] }
+const groupCache = new Map();
 const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_DELAY = 10000;
 
@@ -33,6 +35,43 @@ function getBotStatusMap() {
     } catch (err) {
         return {};
     }
+}
+
+// ============================================================
+// Group cache management
+// ============================================================
+async function updateGroupCache(botId, sock) {
+    try {
+        const groups = Object.values(await sock.groupFetchAllParticipating());
+        groups.forEach((group) => {
+            // Update groupBots for round-robin
+            if (!groupBots[group.id]) groupBots[group.id] = [];
+            if (!groupBots[group.id].includes(botId)) groupBots[group.id].push(botId);
+
+            // Update merged cache
+            const existing = groupCache.get(group.id);
+            if (existing) {
+                // Update info, add bot to list
+                existing.name = group.subject || existing.name;
+                existing.member_count = group.participants.length;
+                if (!existing.bots.includes(botId)) existing.bots.push(botId);
+            } else {
+                groupCache.set(group.id, {
+                    id: group.id,
+                    name: group.subject || '',
+                    member_count: group.participants.length,
+                    bots: [botId]
+                });
+            }
+        });
+        logger.info(`[${botId}] Registered in ${groups.length} groups. Total unique groups: ${groupCache.size}`);
+    } catch (err) {
+        logger.error(`[${botId}] Gagal fetch groups: ${err.message}`);
+    }
+}
+
+function getAllGroups() {
+    return Array.from(groupCache.values());
 }
 
 // ============================================================
@@ -97,16 +136,7 @@ async function connectBot(botId, opts = {}) {
                     } catch (e) {}
                 }
 
-                try {
-                    const groups = Object.values(await sock.groupFetchAllParticipating());
-                    groups.forEach((group) => {
-                        if (!groupBots[group.id]) groupBots[group.id] = [];
-                        if (!groupBots[group.id].includes(botId)) groupBots[group.id].push(botId);
-                    });
-                    logger.info(`[${botId}] Registered in ${groups.length} groups.`);
-                } catch (err) {
-                    logger.error(`[${botId}] Gagal fetch groups: ${err.message}`);
-                }
+                await updateGroupCache(botId, sock);
             }
 
             if (connection === 'close') {
@@ -190,16 +220,7 @@ async function startOperationBotAPI(botId) {
                 logger.info(`[${botId}] Connected via API.`);
                 operationBots[botId] = sock;
                 updateBotStatus(botId, 'open');
-
-                try {
-                    const groups = Object.values(await sock.groupFetchAllParticipating());
-                    groups.forEach((group) => {
-                        if (!groupBots[group.id]) groupBots[group.id] = [];
-                        if (!groupBots[group.id].includes(botId)) groupBots[group.id].push(botId);
-                    });
-                } catch (err) {
-                    logger.error(`[${botId}] Gagal fetch groups: ${err.message}`);
-                }
+                await updateGroupCache(botId, sock);
             }
 
             if (connection === 'close') {
@@ -387,5 +408,6 @@ module.exports = {
     reconnectSingleBotCommand,
     reconnectSingleBotAPI,
     disconnectBotForce,
-    getNextBotForIndividual
+    getNextBotForIndividual,
+    getAllGroups
 };

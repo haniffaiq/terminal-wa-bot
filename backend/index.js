@@ -8,7 +8,7 @@ const { checkHeartbeatFromFile } = require('./bots/hertbeat');
 const stats = require("./utils/statmanager");
 const util = require('util')
 
-const { getOperationSock, getNextBotForGroup, reconnectBot, startOperationBotAPI, getBotStatusList, disconnectBotForce, reconnectSingleBotAPI, getNextBotForIndividual, stopOperationBot } = require('./bots/operationBot');
+const { getOperationSock, getNextBotForGroup, reconnectBot, startOperationBotAPI, getBotStatusList, disconnectBotForce, reconnectSingleBotAPI, getNextBotForIndividual, stopOperationBot, getAllGroups } = require('./bots/operationBot');
 const midleware = require('./utils/midleware');
 const fs = require('fs');
 const path = require('path');
@@ -1209,23 +1209,19 @@ app.get('/api/logs/:type/:date', (req, res) => {
     }
 });
 
-// GET /api/groups
-app.get('/api/groups', async (req, res) => {
+// GET /api/groups — merged from all bots, deduplicated
+app.get('/api/groups', (req, res) => {
     try {
-        const dummyGroupId = '120363419686014131@g.us';
-        const sock = getNextBotForGroup(dummyGroupId);
-        if (!sock) {
-            return res.status(400).json({ success: false, error: 'No active bot available' });
-        }
-        const groups = Object.values(await sock.groupFetchAllParticipating());
+        const groups = getAllGroups();
         const blockedList = getBlockedList();
         res.json({
             success: true,
             group_count: groups.length,
             groups: groups.map(g => ({
                 id: g.id,
-                name: g.subject,
-                member_count: g.participants.length,
+                name: g.name,
+                member_count: g.member_count,
+                bots: g.bots,
                 is_blocked: blockedList.includes(g.id)
             }))
         });
