@@ -28,6 +28,9 @@ services:
       - DB_NAME=wabot
       - DB_USER=wabot
       - DB_PASSWORD=wabot123
+      - JWT_SECRET=your-secret-here-change-in-production
+      - SUPER_ADMIN_USER=admin
+      - SUPER_ADMIN_PASSWORD=admin123
     depends_on:
       - db
     restart: unless-stopped
