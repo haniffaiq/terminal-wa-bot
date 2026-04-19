@@ -319,23 +319,35 @@ function setupAdminCommands(sock, tenant) {
 // ============================================================
 // Start admin bot for a single tenant
 // ============================================================
-async function startSingleAdminBot(tenant) {
+const adminReconnectAttempts = {};
+const MAX_ADMIN_RECONNECT = 5;
+
+async function startSingleAdminBot(tenant, attempt = 0) {
     const botId = tenant.admin_bot_id;
     const tenantId = tenant.id;
 
-    logger.info(`[${tenantId}] Starting admin bot: ${botId}`);
+    if (attempt >= MAX_ADMIN_RECONNECT) {
+        logger.error(`[${tenantId}] Admin bot max reconnect attempts (${MAX_ADMIN_RECONNECT}) reached. Stopping.`);
+        await updateBotStatus(botId, 'close', tenantId);
+        return;
+    }
+
+    logger.info(`[${tenantId}] Starting admin bot: ${botId} (attempt ${attempt + 1})`);
 
     try {
+        // Close old socket if exists
+        if (adminBots[tenantId]) {
+            try { await adminBots[tenantId].end(); } catch (e) {}
+            delete adminBots[tenantId];
+        }
+
         const { sock } = await createSock(botId, tenantId);
 
         sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
             if (qr) {
                 try {
-                    const qrPath = path.join(__dirname, '..', 'auth_sessions', tenantId, `${botId}.png`);
-                    if (!fs.existsSync(path.dirname(qrPath))) fs.mkdirSync(path.dirname(qrPath), { recursive: true });
                     qrcodeTerminal.generate(qr, { small: true });
-                    await qrcode.toFile(qrPath, qr);
-                    logger.info(`[${tenantId}] QR saved for admin bot ${botId}`);
+                    logger.info(`[${tenantId}] QR generated for admin bot ${botId} — scan with WhatsApp`);
                 } catch (err) {
                     logger.error(`[${tenantId}] QR error: ${err.message}`);
                 }
@@ -344,6 +356,7 @@ async function startSingleAdminBot(tenant) {
             if (connection === 'open') {
                 logger.info(`[${tenantId}] Admin bot ${botId} connected.`);
                 adminBots[tenantId] = sock;
+                adminReconnectAttempts[tenantId] = 0;
                 await updateBotStatus(botId, 'open', tenantId);
                 await updateGroupCache(botId, sock, tenantId);
             }
@@ -352,12 +365,17 @@ async function startSingleAdminBot(tenant) {
                 const reason = lastDisconnect?.error?.output?.statusCode || 'Unknown';
                 logger.warn(`[${tenantId}] Admin bot disconnected. Reason: ${reason}`);
                 await updateBotStatus(botId, 'close', tenantId);
+                delete adminBots[tenantId];
 
-                if (reason !== DisconnectReason.loggedOut) {
-                    logger.info(`[${tenantId}] Admin bot reconnecting in 10s...`);
-                    setTimeout(() => startSingleAdminBot(tenant), 10000);
+                if (reason === DisconnectReason.loggedOut) {
+                    logger.error(`[${tenantId}] Admin bot logged out. Delete and re-scan.`);
+                    adminReconnectAttempts[tenantId] = MAX_ADMIN_RECONNECT;
                 } else {
-                    logger.error(`[${tenantId}] Admin bot logged out. QR scan required.`);
+                    const nextAttempt = (adminReconnectAttempts[tenantId] || 0) + 1;
+                    adminReconnectAttempts[tenantId] = nextAttempt;
+                    const delay = Math.min(10000 * nextAttempt, 60000);
+                    logger.info(`[${tenantId}] Admin bot reconnecting in ${delay / 1000}s (attempt ${nextAttempt})...`);
+                    setTimeout(() => startSingleAdminBot(tenant, nextAttempt), delay);
                 }
             }
         });
@@ -366,7 +384,8 @@ async function startSingleAdminBot(tenant) {
         return sock;
     } catch (error) {
         logger.error(`[${tenantId}] Failed to start admin bot: ${error.message}`);
-        setTimeout(() => startSingleAdminBot(tenant), 10000);
+        const delay = Math.min(10000 * (attempt + 1), 60000);
+        setTimeout(() => startSingleAdminBot(tenant, attempt + 1), delay);
     }
 }
 

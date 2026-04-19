@@ -67,10 +67,10 @@ CREATE TABLE IF NOT EXISTS failed_requests (
 -- Auth sessions (replaces file-based auth_sessions/)
 CREATE TABLE IF NOT EXISTS auth_sessions (
     id SERIAL PRIMARY KEY,
-    tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
+    tenant_id VARCHAR(100) NOT NULL,
     bot_id VARCHAR(100) NOT NULL,
     key_name VARCHAR(255) NOT NULL,
-    key_data JSONB NOT NULL,
+    key_data TEXT NOT NULL,
     updated_at TIMESTAMP DEFAULT NOW(),
     UNIQUE(tenant_id, bot_id, key_name)
 );

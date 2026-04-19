@@ -1,8 +1,17 @@
-const { makeWASocket, makeCacheableSignalKeyStore, fetchLatestBaileysVersion, proto, initAuthCreds } = require('baileys');
+const { makeWASocket, makeCacheableSignalKeyStore, fetchLatestBaileysVersion, proto, initAuthCreds, BufferJSON } = require('baileys');
 const pino = require('pino');
 const { query } = require('./db');
 
-// DB-backed auth state (replaces useMultiFileAuthState)
+// Serialize with Buffer support (same as Baileys useMultiFileAuthState)
+function serialize(data) {
+    return JSON.stringify(data, BufferJSON.replacer);
+}
+
+function deserialize(str) {
+    return JSON.parse(str, BufferJSON.reviver);
+}
+
+// DB-backed auth state
 async function useDatabaseAuthState(botId, tenantId) {
     const tId = tenantId || '__global__';
 
@@ -13,7 +22,11 @@ async function useDatabaseAuthState(botId, tenantId) {
                 [tId, botId, key]
             );
             if (result.rows.length === 0) return null;
-            return result.rows[0].key_data;
+            const raw = result.rows[0].key_data;
+            // key_data is stored as text (serialized JSON with Buffer support)
+            if (typeof raw === 'string') return deserialize(raw);
+            // If PostgreSQL returned it as parsed JSON, re-serialize then deserialize for Buffer revival
+            return deserialize(JSON.stringify(raw));
         } catch (err) {
             return null;
         }
@@ -21,15 +34,16 @@ async function useDatabaseAuthState(botId, tenantId) {
 
     async function writeData(key, data) {
         try {
+            const serialized = serialize(data);
             await query(
                 `INSERT INTO auth_sessions (tenant_id, bot_id, key_name, key_data, updated_at)
                  VALUES ($1, $2, $3, $4, NOW())
                  ON CONFLICT (tenant_id, bot_id, key_name)
                  DO UPDATE SET key_data = $4, updated_at = NOW()`,
-                [tId, botId, key, JSON.stringify(data)]
+                [tId, botId, key, serialized]
             );
         } catch (err) {
-            console.error(`Auth state write error [${botId}]:`, err.message);
+            console.error(`Auth write error [${botId}/${key}]:`, err.message);
         }
     }
 
@@ -44,7 +58,7 @@ async function useDatabaseAuthState(botId, tenantId) {
 
     // Load or init credentials
     const credsData = await readData('creds');
-    const creds = credsData ? JSON.parse(typeof credsData === 'string' ? credsData : JSON.stringify(credsData)) : initAuthCreds();
+    const creds = credsData || initAuthCreds();
 
     const saveCreds = async () => {
         await writeData('creds', creds);
@@ -56,28 +70,28 @@ async function useDatabaseAuthState(botId, tenantId) {
             for (const id of ids) {
                 const data = await readData(`${type}-${id}`);
                 if (data) {
-                    let parsed = typeof data === 'string' ? JSON.parse(data) : data;
-                    // Handle Buffer fields for proto types
                     if (type === 'app-state-sync-key') {
-                        result[id] = proto.Message.AppStateSyncKeyData.fromObject(parsed);
+                        result[id] = proto.Message.AppStateSyncKeyData.fromObject(data);
                     } else {
-                        result[id] = parsed;
+                        result[id] = data;
                     }
                 }
             }
             return result;
         },
         set: async (data) => {
+            const promises = [];
             for (const category in data) {
                 for (const id in data[category]) {
                     const value = data[category][id];
                     if (value) {
-                        await writeData(`${category}-${id}`, value);
+                        promises.push(writeData(`${category}-${id}`, value));
                     } else {
-                        await removeData(`${category}-${id}`);
+                        promises.push(removeData(`${category}-${id}`));
                     }
                 }
             }
+            await Promise.all(promises);
         }
     };
 
@@ -115,7 +129,6 @@ async function createSock(botId, tenantId) {
     }
 
     const sock = makeWASocket(socketOptions);
-
     sock.ev.on('creds.update', saveCreds);
 
     return { sock, saveCreds };
