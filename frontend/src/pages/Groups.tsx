@@ -9,6 +9,7 @@ interface Group {
   id: string;
   name: string;
   member_count: number;
+  bots: string[];
   is_blocked: boolean;
 }
 
@@ -77,6 +78,7 @@ export default function Groups() {
                 <th className="text-left px-4 py-3 font-medium">Name</th>
                 <th className="text-left px-4 py-3 font-medium">Group ID</th>
                 <th className="text-left px-4 py-3 font-medium">Members</th>
+                <th className="text-left px-4 py-3 font-medium">Bots</th>
                 <th className="text-left px-4 py-3 font-medium">Status</th>
                 <th className="text-right px-4 py-3 font-medium">Action</th>
               </tr>
@@ -87,6 +89,15 @@ export default function Groups() {
                   <td className="px-4 py-3 font-medium">{g.name || '—'}</td>
                   <td className="px-4 py-3 text-xs text-gray-500 font-mono">{g.id}</td>
                   <td className="px-4 py-3">{g.member_count}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap gap-1">
+                      {(g.bots || []).map(bot => (
+                        <span key={bot} className="inline-block bg-gray-100 text-gray-700 text-xs px-2 py-0.5 rounded font-mono">
+                          {bot}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
                   <td className="px-4 py-3">
                     <Badge variant={g.is_blocked ? 'destructive' : 'default'}>
                       {g.is_blocked ? 'Blocked' : 'Active'}
@@ -110,7 +121,7 @@ export default function Groups() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-gray-500">No groups found</td>
+                  <td colSpan={6} className="px-4 py-8 text-center text-gray-500">No groups found</td>
                 </tr>
               )}
             </tbody>
