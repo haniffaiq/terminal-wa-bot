@@ -418,11 +418,16 @@ async function stopOperationBot(botId, tenantId) {
         await query('UPDATE tenants SET admin_bot_id = NULL WHERE id = $1 AND admin_bot_id = $2', [tenantId, botId]);
     } catch (err) {}
 
-    // Delete all DB records: bot_status + auth_sessions
+    // Delete session files
+    const authFolder = path.join(__dirname, '..', 'auth_sessions', tenantId || '', botId);
+    if (fs.existsSync(authFolder)) {
+        fs.rmSync(authFolder, { recursive: true, force: true });
+    }
+
+    // Delete from DB
     try {
         await query('DELETE FROM bot_status WHERE tenant_id = $1 AND bot_id = $2', [tenantId, botId]);
-        await query('DELETE FROM auth_sessions WHERE tenant_id = $1 AND bot_id = $2', [tenantId, botId]);
-        logger.info(`[${botId}] Deleted bot_status + auth_sessions from DB (tenant ${tenantId})`);
+        logger.info(`[${botId}] Deleted bot_status + session files (tenant ${tenantId})`);
     } catch (err) {
         logger.error(`[${botId}] DB cleanup error: ${err.message}`);
     }
