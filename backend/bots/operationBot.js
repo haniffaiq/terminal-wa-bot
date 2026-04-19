@@ -351,7 +351,7 @@ async function getBotStatusList(target) {
             connected.push(botId);
             if (target) {
                 try {
-                    await operationBots[botId].sendMessage(target, { text: `Bot ${botId} CONNECTED` });
+                    await operationBots[botId].sendMessage(target, { text: `✅ *${botId}* — responding` });
                 } catch (err) {}
             }
         } else {

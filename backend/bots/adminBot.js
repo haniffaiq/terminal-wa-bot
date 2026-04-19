@@ -139,35 +139,38 @@ async function getGroupInfo(sock, groupId) {
     try {
         const metadata = await sock.groupMetadata(groupId);
 
-        const groupName = metadata.subject || 'No name';
-        const groupId_ = metadata.id;
+        const groupName = metadata.subject || 'Unnamed';
         const memberCount = metadata.participants.length;
         const adminList = metadata.participants
             .filter(p => p.admin)
-            .map(p => p.id.split('@')[0]);
-
-        const description = metadata.desc || 'No description.';
+            .map(p => `  ${p.admin === 'superadmin' ? '👑' : '🔹'} ${p.id.split('@')[0]}`);
+        const description = metadata.desc || '_No description_';
         const createdAt = new Date(metadata.creation * 1000).toLocaleString('id-ID');
         const createdBy = metadata.creator ? metadata.creator.split('@')[0] : 'Unknown';
-        const restrictInfo = metadata.restrict ? 'Admin Only' : 'All Members';
-        const announceInfo = metadata.announce ? 'Admin Only' : 'All Members';
 
-        let message = `*ZYRON Group Info*\n\n`;
-        message += `*Group Name:* ${groupName}\n`;
-        message += `*Group ID:* ${groupId_}\n`;
-        message += `*Members:* ${memberCount}\n`;
-        message += `*Admins:*\n${adminList.map(a => `- ${a}`).join('\n')}\n`;
-        message += `*Description:* ${description}\n`;
-        message += `*Created:* ${createdAt}\n`;
-        message += `*Created by:* ${createdBy}\n`;
-        message += `*Edit Info:* ${restrictInfo}\n`;
-        message += `*Send Messages:* ${announceInfo}`;
+        let msg = `╔══════════════════════\n`;
+        msg += `║  *ZYRON — Group Info*\n`;
+        msg += `╠══════════════════════\n`;
+        msg += `║  📌 *${groupName}*\n`;
+        msg += `║  🆔 \`${metadata.id}\`\n`;
+        msg += `╠══════════════════════\n`;
+        msg += `║  👥 Members: *${memberCount}*\n`;
+        msg += `║  🛡️ Admins: *${adminList.length}*\n`;
+        msg += `${adminList.join('\n')}\n`;
+        msg += `╠══════════════════════\n`;
+        msg += `║  📝 ${description}\n`;
+        msg += `╠══════════════════════\n`;
+        msg += `║  📅 Created: ${createdAt}\n`;
+        msg += `║  👤 By: ${createdBy}\n`;
+        msg += `║  ✏️ Edit: ${metadata.restrict ? 'Admin Only' : 'All Members'}\n`;
+        msg += `║  💬 Send: ${metadata.announce ? 'Admin Only' : 'All Members'}\n`;
+        msg += `╚══════════════════════`;
 
-        return message;
+        return msg;
 
     } catch (err) {
-        console.error(`Failed to get group info: ${err}`);
-        return `Failed to get group info. Make sure the bot is in the group.`;
+        logger.error(`Failed to get group info: ${err.message}`);
+        return `❌ Failed to get group info. Make sure the bot is in this group.`;
     }
 }
 
@@ -296,9 +299,7 @@ function setupAdminCommands(sock) {
         if (text.startsWith('!cmd')) {
             const parts = text.trim().split(' ');
             if (parts.length < 3) {
-                return sock.sendMessage(chatId, {
-                    text: '*Usage:* !cmd <type> <keyword>'
-                });
+                return sock.sendMessage(chatId, { text: '*Usage:* !cmd <type> <keyword>' });
             }
 
             const cmdType = parts[1];
@@ -306,27 +307,22 @@ function setupAdminCommands(sock) {
 
             try {
                 const data = await callApi(keyword, cmdType);
+                logger.info(`CMD executed type=${cmdType} keyword="${keyword}"`);
 
                 if (data?.result === "OK") {
                     await sock.sendMessage(chatId, {
-                        text: "Menunggu Respons Autohealing"
+                        text: `✅ *ZYRON CMD*\nType: ${cmdType}\nKeyword: ${keyword}\nStatus: *Sent* — awaiting response`
                     });
                 } else {
                     await sock.sendMessage(chatId, {
-                        text: "Gagal atau respons tidak sesuai"
+                        text: `❌ *ZYRON CMD*\nType: ${cmdType}\nKeyword: ${keyword}\nStatus: *Failed* — unexpected response`
                     });
                 }
-
-                logger.info("CMD executed", data);
-
             } catch (err) {
-                console.error("ERROR in !cmd handler:", err?.stack || err);
-
-                try {
-                    await sock.sendMessage(chatId, {
-                        text: "Gagal memproses perintah. Cek log untuk detail."
-                    });
-                } catch (_) { }
+                logger.error(`CMD failed type=${cmdType}: ${err.message}`);
+                await sock.sendMessage(chatId, {
+                    text: `❌ *ZYRON CMD*\nType: ${cmdType}\nError: ${err.message}`
+                }).catch(() => {});
             }
         }
 
@@ -402,35 +398,34 @@ function setupAdminCommands(sock) {
 
         if (text.startsWith("!pmtcmt")) {
             const parts = text.trim().split(/\s+/);
-
-            const param1 = parts[1] || "-";
-            const param2 = parts[2] || "-";
-            const param3 = parts[3] || "-";
-            const param4 = parts[4] || "-";
-            const param5 = parts[5] || "-";
-            const param6 = parts[6] || "-";
-
+            const params = {
+                param1: parts[1] || "-",
+                param2: parts[2] || "-",
+                param3: parts[3] || "-",
+                param4: parts[4] || "-",
+                param5: parts[5] || "-",
+            };
 
             try {
-                const apiResp = await callBotApiPMTCMT({ param1, param2, param3, param4, param5 });
-                logger.info("PMTCMT API response:", apiResp);
-
-                const respMessage = apiResp && (apiResp.message || JSON.stringify(apiResp, null, 2));
+                const apiResp = await callBotApiPMTCMT(params);
+                logger.info(`PMTCMT API called params=${JSON.stringify(params)}`);
 
                 if (apiResp && (apiResp.success === true || apiResp.code === 200)) {
+                    const respMsg = apiResp.message || JSON.stringify(apiResp, null, 2);
                     await sock.sendMessage(chatId, {
-                        text: `PMT CMT API berhasil dipanggil\nResponse:\n${respMessage}`
+                        text: `✅ *ZYRON PMT-CMT*\nStatus: *Success*\n\n\`\`\`\n${respMsg}\n\`\`\``
                     });
                 } else {
-                    const body = apiResp && (apiResp.raw ? apiResp.raw : JSON.stringify(apiResp, null, 2));
+                    const body = apiResp?.raw || JSON.stringify(apiResp, null, 2) || 'No response';
                     await sock.sendMessage(chatId, {
-                        text: `PMT CMT API gagal.\nResponse:\n${body || "No response"}`
+                        text: `❌ *ZYRON PMT-CMT*\nStatus: *Failed*\n\n\`\`\`\n${body}\n\`\`\``
                     });
                 }
-
             } catch (err) {
-                logger.error("Error !pmtcmt:", err);
-                await sock.sendMessage(chatId, { text: "Error panggil PMT CMT API. Cek log." });
+                logger.error(`PMTCMT API error: ${err.message}`);
+                await sock.sendMessage(chatId, {
+                    text: `❌ *ZYRON PMT-CMT*\nError: ${err.message}`
+                });
             }
         }
 
@@ -453,41 +448,38 @@ function setupAdminCommands(sock) {
             logger.info(`Group ID requested by ${chatId}`);
         }
 
-        if (text === '!hi') {
+        if (text === '!hi' || text === '!ho') {
             try {
-                logger.info('Check Connection All Bot');
-                data = getOperationSock()
+                logger.info('Health check requested');
+                const statusMsg = checkBotStatus();
+                await sock.sendMessage(chatId, { text: statusMsg });
 
-                await testConnection(chatId)
-                await getBotStatusList(chatId);
+                // Send ping from each connected operation bot
+                const botList = await getBotStatusList(chatId);
+                const now = new Date().toLocaleString('id-ID');
 
+                let summary = `╔══════════════════════\n`;
+                summary += `║  *ZYRON — Health Check*\n`;
+                summary += `║  🕐 ${now}\n`;
+                summary += `╠══════════════════════\n`;
+                summary += `║  🟢 Responding: *${botList.connected.length}* bots\n`;
+                summary += `║  🔴 Silent: *${botList.disconnected.length}* bots\n`;
+                summary += `╚══════════════════════`;
+
+                await sock.sendMessage(chatId, { text: summary });
             } catch (err) {
-                logger.error({ err }, 'Failed to get operation bot info.');
+                logger.error(`Health check failed: ${err.message}`);
+                await sock.sendMessage(chatId, { text: '❌ Health check failed. Check server logs.' });
             }
         }
-        if (text.startsWith('!ho')) {
-            try {
-                const [command] = text.split(' ');
-                if (command === '!ho') {
-                    logger.info('Check Connection All Bot');
 
-                    const data = getOperationSock();
-
-                    await testConnection(chatId);
-                    await getBotStatusList(chatId);
-
-                }
-            } catch (err) {
-                logger.error({ err }, 'Failed to get operation bot info.');
-            }
-        }
         if (text === '!info') {
             try {
-                let groupInfo = await getGroupInfo(sock, chatId)
-                logger.info(groupInfo);
-                sock.sendMessage(chatId, { text: `${groupInfo}` });
+                const groupInfo = await getGroupInfo(sock, chatId);
+                sock.sendMessage(chatId, { text: groupInfo });
             } catch (err) {
-                logger.error({ err }, 'Failed to get group info.');
+                logger.error(`Group info failed: ${err.message}`);
+                sock.sendMessage(chatId, { text: '❌ Failed to get group info.' });
             }
         }
     });
@@ -495,45 +487,51 @@ function setupAdminCommands(sock) {
 
 
 function checkBotStatus() {
-    let status = ""
-    let message = `*ZYRON Bot Status*\n`;
-
-    if (!fs.existsSync(STATUS_FILE)) {
-        console.log('[Heartbeat] No status file found.');
-        return;
-    }
+    if (!fs.existsSync(STATUS_FILE)) return '❌ No status file found.';
 
     try {
         const raw = fs.readFileSync(STATUS_FILE, 'utf-8');
         const statusData = JSON.parse(raw || '{}');
 
-        const connectedBot = [];
-        const disconnectedBot = [];
+        const online = [];
+        const offline = [];
 
-        for (const [botId, status] of Object.entries(statusData)) {
-            if (status === 'open') {
-                connectedBot.push(botId);
-            } else {
-                disconnectedBot.push(botId);
-            }
+        for (const [botId, st] of Object.entries(statusData)) {
+            if (st === 'open') online.push(botId);
+            else offline.push(botId);
         }
 
+        const total = online.length + offline.length;
+        const now = new Date().toLocaleString('id-ID');
 
-        if (connectedBot.length > 0) {
-            message += `\n*Online (${connectedBot.length}):*\n${connectedBot.join('\n')}`;
+        let msg = `╔══════════════════════\n`;
+        msg += `║  *ZYRON — Bot Status*\n`;
+        msg += `║  📊 ${total} bots registered\n`;
+        msg += `║  🕐 ${now}\n`;
+        msg += `╠══════════════════════\n`;
+
+        if (online.length > 0) {
+            msg += `║  🟢 *Online (${online.length})*\n`;
+            online.forEach(b => { msg += `║    ✅ ${b}\n`; });
         } else {
-            message += `\n*No bots connected.*`;
+            msg += `║  🟢 *Online:* _none_\n`;
         }
 
-        if (disconnectedBot.length > 0) {
-            message += `\n\n*Offline (${disconnectedBot.length}):*\n${disconnectedBot.join('\n')}`;
+        msg += `╠══════════════════════\n`;
+
+        if (offline.length > 0) {
+            msg += `║  🔴 *Offline (${offline.length})*\n`;
+            offline.forEach(b => { msg += `║    ❌ ${b}\n`; });
+        } else {
+            msg += `║  🔴 *Offline:* _none_\n`;
         }
 
+        msg += `╚══════════════════════`;
+        return msg;
 
     } catch (err) {
-        message = '[Heartbeat] Failed to read status file:', err;
+        return '❌ Failed to read bot status.';
     }
-    return message
 }
 
 function statusBotAPI() {
@@ -581,7 +579,10 @@ function statusBotAPI() {
 
 
 function testConnection(target) {
-    adminGlobalSock.sendMessage(target, { text: `[PLATFORM]--Bot ADMIN sudah CONNECTED!` });
+    const now = new Date().toLocaleString('id-ID');
+    adminGlobalSock.sendMessage(target, {
+        text: `🤖 *ZYRON Admin Bot*\n✅ Connected & operational\n🕐 ${now}`
+    });
 }
 
 module.exports = { startAdminBot, testConnection, checkBotStatus, statusBotAPI };
