@@ -64,6 +64,19 @@ CREATE TABLE IF NOT EXISTS failed_requests (
     retried_at TIMESTAMP
 );
 
+-- Auth sessions (replaces file-based auth_sessions/)
+CREATE TABLE IF NOT EXISTS auth_sessions (
+    id SERIAL PRIMARY KEY,
+    tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
+    bot_id VARCHAR(100) NOT NULL,
+    key_name VARCHAR(255) NOT NULL,
+    key_data JSONB NOT NULL,
+    updated_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(tenant_id, bot_id, key_name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_lookup ON auth_sessions(tenant_id, bot_id);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 CREATE INDEX IF NOT EXISTS idx_users_tenant ON users(tenant_id);

@@ -1,37 +1,44 @@
-const fs = require('fs');
-const path = require('path');
+const { query } = require('../utils/db');
 
-const STATUS_FILE = path.join(__dirname, '../data/bot_status.json');
-
-// Heartbeat yang membaca status dari file
-function checkHeartbeatFromFile() {
-    setInterval(() => {
-        if (!fs.existsSync(STATUS_FILE)) {
-            console.log('[Heartbeat] Tidak ada file status.');
-            return;
-        }
-
+// Heartbeat — checks bot status from DB, grouped by tenant
+function checkHeartbeatFromDB() {
+    setInterval(async () => {
         try {
-            const raw = fs.readFileSync(STATUS_FILE, 'utf-8');
-            const statusData = JSON.parse(raw || '{}');
+            const result = await query(`
+                SELECT t.name as tenant_name, t.id as tenant_id,
+                       bs.bot_id, bs.status, bs.is_admin_bot, bs.updated_at
+                FROM bot_status bs
+                JOIN tenants t ON bs.tenant_id = t.id
+                WHERE t.is_active = TRUE
+                ORDER BY t.name, bs.bot_id
+            `);
 
-            const connected = [];
-            const disconnected = [];
+            if (result.rows.length === 0) return;
 
-            for (const [botId, status] of Object.entries(statusData)) {
-                if (status === 'open') {
-                    connected.push(botId);
+            // Group by tenant
+            const tenants = {};
+            for (const row of result.rows) {
+                if (!tenants[row.tenant_name]) {
+                    tenants[row.tenant_name] = { online: [], offline: [] };
+                }
+                if (row.status === 'open') {
+                    tenants[row.tenant_name].online.push(row.bot_id);
                 } else {
-                    disconnected.push(botId);
+                    tenants[row.tenant_name].offline.push(row.bot_id);
                 }
             }
 
-            console.log(`[Heartbeat] Connected: ${JSON.stringify(connected)}, Disconnected: ${JSON.stringify(disconnected)}`);
+            // Log per tenant
+            const summary = Object.entries(tenants).map(([name, data]) => {
+                return `[${name}] online=${data.online.length} offline=${data.offline.length}`;
+            }).join(' | ');
+
+            console.log(`[Heartbeat] ${summary}`);
+
         } catch (err) {
-            console.error('[Heartbeat] Gagal membaca status file:', err);
+            // DB not ready yet, silently skip
         }
-    }, 5000); // Setiap 5 detik
+    }, 30000); // Every 30 seconds
 }
 
-
-module.exports = {checkHeartbeatFromFile}
+module.exports = { checkHeartbeatFromFile: checkHeartbeatFromDB, checkHeartbeatFromDB };
