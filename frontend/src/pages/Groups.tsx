@@ -55,7 +55,10 @@ export default function Groups() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Groups</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Groups</h1>
+        <span className="text-sm text-gray-500">{groups.length} total groups</span>
+      </div>
 
       <Input
         placeholder="Search groups..."
