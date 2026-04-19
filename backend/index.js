@@ -6,6 +6,7 @@ const { Server } = require('socket.io');
 const { startAdminBot, testConnection, statusBotAPI } = require('./bots/adminBot');
 const { checkHeartbeatFromFile } = require('./bots/hertbeat');
 const stats = require("./utils/statmanager");
+const db = require("./utils/db");
 const util = require('util')
 
 const { getOperationSock, getNextBotForGroup, reconnectBot, startOperationBotAPI, getBotStatusList, disconnectBotForce, reconnectSingleBotAPI, getNextBotForIndividual, stopOperationBot, getAllGroups } = require('./bots/operationBot');
@@ -160,35 +161,21 @@ function writeLogToFile(filePath, logMessage) {
 
 // Fungsi untuk menyimpan request body ke file
 // Fungsi untuk menyimpan request yang gagal
-function saveFailedRequest(data, transactionId) {
-    const failedRequestsFile = path.join(__dirname, 'failed_requests.json');
-
-    // Membaca file jika sudah ada
-    fs.readFile(failedRequestsFile, (err, fileData) => {
-        let failedRequests = [];
-        if (!err && fileData.length > 0) {
-            failedRequests = JSON.parse(fileData);  // Ambil data sebelumnya
-        }
-
-        // Tambahkan transactionId ke dalam data
-        const failedData = {
-            ...data,
-            transactionId, // <--- Inject transactionId ke object
-            saved_at: new Date().toISOString() // (Optional) Tambahkan waktu disimpan
-        };
-
-        // Menambahkan request baru ke array
-        failedRequests.push(failedData);
-
-        // Simpan kembali ke file
-        fs.writeFile(failedRequestsFile, JSON.stringify(failedRequests, null, 2), (err) => {
-            if (err) {
-                console.error('Gagal menyimpan request gagal:', err);
-            } else {
-                console.log('Request gagal berhasil disimpan.');
-            }
-        });
-    });
+async function saveFailedRequest(data, transactionId) {
+    try {
+        await db.query(
+            `INSERT INTO failed_requests (transaction_id, target_numbers, message, error)
+             VALUES ($1, $2, $3, $4)`,
+            [
+                transactionId,
+                JSON.stringify(data.number || []),
+                data.message || '',
+                data.error || ''
+            ]
+        );
+    } catch (err) {
+        console.error('Gagal menyimpan request gagal:', err.message);
+    }
 }
 
 // Fungsi untuk mengirim ulang request (misalnya melalui API)
@@ -275,34 +262,15 @@ async function resendFailedRequest(reqBody, transactionId) {
 }
 
 
-function removeFailedRequest(requestData, callback) {
-    const failedRequestsFile = path.join(__dirname, 'failed_requests.json');
-
-    fs.readFile(failedRequestsFile, (err, fileData) => {
-        if (err) {
-            return callback(err);
-        }
-
-        let failedRequests = [];
-        if (fileData.length > 0) {
-            failedRequests = JSON.parse(fileData);
-        }
-
-        const updatedRequests = failedRequests.filter(request => {
-            return !(
-                request.transactionId === requestData.transactionId &&
-                JSON.stringify(request.number) === JSON.stringify(requestData.number) &&
-                request.message === requestData.message
-            );
-        });
-
-        fs.writeFile(failedRequestsFile, JSON.stringify(updatedRequests, null, 2), (err) => {
-            if (err) {
-                return callback(err);
-            }
-            callback(null);
-        });
-    });
+async function markFailedRequestRetried(transactionId) {
+    try {
+        await db.query(
+            `UPDATE failed_requests SET retried = TRUE, retried_at = NOW() WHERE transaction_id = $1`,
+            [transactionId]
+        );
+    } catch (err) {
+        console.error('Gagal update failed request:', err.message);
+    }
 }
 
 
@@ -415,38 +383,25 @@ app.post('/api/hi', async (req, res) => {
 });
 
 app.post('/api/resend-failed', async (req, res) => {
-    const failedRequestsFile = path.join(__dirname, 'failed_requests.json');
-
     try {
-        const fileData = await readFileAsync(failedRequestsFile);
-        let failedRequests = [];
-
-        if (fileData.length > 0) {
-            failedRequests = JSON.parse(fileData);
-        }
+        const result = await db.query(
+            `SELECT id, transaction_id, target_numbers, message FROM failed_requests WHERE retried = FALSE ORDER BY created_at`
+        );
 
         const allResults = [];
 
-        for (const failedRequest of failedRequests) {
-            const { transactionId, number, message } = failedRequest;
+        for (const row of result.rows) {
+            const number = row.target_numbers;
+            const message = row.message;
+            const transactionId = row.transaction_id;
+
             logger('info', `[${transactionId}] Mengirim ulang request yang gagal`);
-
             const resendResult = await resendFailedRequest({ number, message }, transactionId);
-            allResults.push({ transactionId, ...resendResult });
+            allResults.push({ transactionId, results: resendResult });
 
-            for (const result of resendResult) {
-                if (result.success) {
-                    console.log('REMOVE DATA:', failedRequest);
-                    removeFailedRequest(failedRequest, (err) => {
-                        if (err) {
-                            logger('error', `Gagal menghapus request yang berhasil: ${err.message}`);
-                        } else {
-                            logger('info', `Request berhasil dihapus setelah dikirim ulang`);
-                        }
-                    });
-                } else {
-                    console.log('GAGAL KIRIM ULANG:', result);
-                }
+            const anySuccess = resendResult.some(r => r.success);
+            if (anySuccess) {
+                await markFailedRequestRetried(transactionId);
             }
         }
 
@@ -454,7 +409,6 @@ app.post('/api/resend-failed', async (req, res) => {
             message: 'Request yang gagal telah diproses.',
             results: allResults,
         });
-
     } catch (err) {
         logger('error', `Gagal memproses resend: ${err.message}`);
         res.status(500).json({ error: 'Gagal memproses resend-failed', details: err.message });
@@ -1164,17 +1118,13 @@ app.get('/api/list-my-groups', async (req, res) => {
 
 
 // GET /api/stats/:date
-app.get('/api/stats/:date', (req, res) => {
+app.get('/api/stats/:date', async (req, res) => {
     const { date } = req.params;
-    const statsFile = path.join(__dirname, 'stats', `stats-${date}.json`);
-    if (!fs.existsSync(statsFile)) {
-        return res.status(404).json({ error: 'Stats not found for this date' });
-    }
     try {
-        const data = JSON.parse(fs.readFileSync(statsFile, 'utf-8'));
+        const data = await stats.getStatsByDate(date);
         res.json({ success: true, date, data });
     } catch (err) {
-        res.status(500).json({ error: 'Failed to read stats file' });
+        res.status(500).json({ error: 'Failed to read stats' });
     }
 });
 
@@ -1258,14 +1208,13 @@ app.post('/api/groups/unblock', (req, res) => {
 });
 
 // GET /api/failed-requests
-app.get('/api/failed-requests', (req, res) => {
-    const failedFile = path.join(__dirname, 'failed_requests.json');
+app.get('/api/failed-requests', async (req, res) => {
     try {
-        if (!fs.existsSync(failedFile)) {
-            return res.json({ success: true, data: [] });
-        }
-        const data = JSON.parse(fs.readFileSync(failedFile, 'utf-8'));
-        res.json({ success: true, data });
+        const result = await db.query(
+            `SELECT transaction_id as "transactionId", target_numbers as number, message, created_at as saved_at, retried
+             FROM failed_requests WHERE retried = FALSE ORDER BY created_at DESC`
+        );
+        res.json({ success: true, data: result.rows });
     } catch (err) {
         res.status(500).json({ error: 'Failed to read failed requests' });
     }
