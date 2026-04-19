@@ -58,7 +58,7 @@ export default function Groups() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Groups</h1>
-        <span className="text-sm text-gray-500">{groups.length} total groups</span>
+        <span className="text-sm text-muted-foreground">{groups.length} total groups</span>
       </div>
 
       <Input
@@ -69,11 +69,11 @@ export default function Groups() {
       />
 
       {loading ? (
-        <p className="text-gray-500">Loading groups...</p>
+        <p className="text-muted-foreground">Loading groups...</p>
       ) : (
         <div className="border rounded-lg overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b">
+            <thead className="bg-muted border-b">
               <tr>
                 <th className="text-left px-4 py-3 font-medium">Name</th>
                 <th className="text-left px-4 py-3 font-medium">Group ID</th>
@@ -87,12 +87,12 @@ export default function Groups() {
               {filtered.map(g => (
                 <tr key={g.id} className="border-b last:border-0">
                   <td className="px-4 py-3 font-medium">{g.name || '—'}</td>
-                  <td className="px-4 py-3 text-xs text-gray-500 font-mono">{g.id}</td>
+                  <td className="px-4 py-3 text-xs text-muted-foreground font-mono">{g.id}</td>
                   <td className="px-4 py-3">{g.member_count}</td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">
                       {(g.bots || []).map(bot => (
-                        <span key={bot} className="inline-block bg-gray-100 text-gray-700 text-xs px-2 py-0.5 rounded font-mono">
+                        <span key={bot} className="inline-block bg-muted text-muted-foreground text-xs px-2 py-0.5 rounded font-mono">
                           {bot}
                         </span>
                       ))}
@@ -121,7 +121,7 @@ export default function Groups() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-500">No groups found</td>
+                  <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">No groups found</td>
                 </tr>
               )}
             </tbody>

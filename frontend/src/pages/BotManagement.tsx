@@ -112,7 +112,7 @@ export default function BotManagement() {
               </Button>
               {qrCode && (
                 <div className="flex flex-col items-center gap-2">
-                  <p className="text-sm text-gray-500">Scan this QR code with WhatsApp:</p>
+                  <p className="text-sm text-muted-foreground">Scan this QR code with WhatsApp:</p>
                   <img src={qrCode.qr} alt="QR Code" className="w-64 h-64" />
                 </div>
               )}
@@ -121,7 +121,7 @@ export default function BotManagement() {
         </Dialog>
       </div>
 
-      <div className="rounded-md border bg-blue-50 border-blue-200 p-4 text-sm text-blue-800">
+      <div className="rounded-md border bg-accent border-border p-4 text-sm text-accent-foreground">
         <p><strong>admin_bot</strong> is the admin bot — it starts automatically when the server runs and handles WhatsApp commands (!addbot, !rst, !block, etc.).</p>
         <p className="mt-1">All other bots are <strong>operation bots</strong> — they handle message delivery via round-robin. Each bot requires a different WhatsApp number.</p>
       </div>
@@ -181,7 +181,7 @@ export default function BotManagement() {
           })}
           {allBots.length === 0 && (
             <TableRow>
-              <TableCell colSpan={3} className="text-center text-gray-500">No bots found</TableCell>
+              <TableCell colSpan={3} className="text-center text-muted-foreground">No bots found</TableCell>
             </TableRow>
           )}
         </TableBody>

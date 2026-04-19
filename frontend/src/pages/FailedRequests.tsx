@@ -54,11 +54,11 @@ export default function FailedRequests() {
       </div>
 
       {loading ? (
-        <p className="text-gray-500">Loading...</p>
+        <p className="text-muted-foreground">Loading...</p>
       ) : (
         <div className="border rounded-lg overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b">
+            <thead className="bg-muted border-b">
               <tr>
                 <th className="text-left px-4 py-3 font-medium">Transaction ID</th>
                 <th className="text-left px-4 py-3 font-medium">Target</th>
@@ -74,14 +74,14 @@ export default function FailedRequests() {
                     {Array.isArray(req.number) ? req.number.join(', ') : req.number}
                   </td>
                   <td className="px-4 py-3 max-w-xs truncate">{req.message?.substring(0, 80)}</td>
-                  <td className="px-4 py-3 text-xs text-gray-500">
+                  <td className="px-4 py-3 text-xs text-muted-foreground">
                     {req.saved_at ? new Date(req.saved_at).toLocaleString() : '—'}
                   </td>
                 </tr>
               ))}
               {requests.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">
                     No failed requests
                   </td>
                 </tr>

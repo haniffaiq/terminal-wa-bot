@@ -12,9 +12,12 @@ import {
   LogOut,
   Menu,
   X,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { clearCredentials } from '@/lib/auth';
 import { disconnectSocket } from '@/lib/socket';
+import { useTheme } from '@/hooks/useTheme';
 
 const navItems = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -29,6 +32,7 @@ const navItems = [
 export function Layout({ children, onLogout }: { children: React.ReactNode; onLogout: () => void }) {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { theme, toggleTheme } = useTheme();
 
   function handleLogout() {
     clearCredentials();
@@ -37,16 +41,16 @@ export function Layout({ children, onLogout }: { children: React.ReactNode; onLo
   }
 
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="flex h-screen bg-background text-foreground">
       {sidebarOpen && (
         <div className="fixed inset-0 z-20 bg-black/50 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
       <aside className={`
-        fixed inset-y-0 left-0 z-30 w-64 bg-white border-r transform transition-transform lg:relative lg:translate-x-0
+        fixed inset-y-0 left-0 z-30 w-64 bg-card border-r border-border transform transition-transform lg:relative lg:translate-x-0
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
-        <div className="flex items-center justify-between h-16 px-4 border-b">
+        <div className="flex items-center justify-between h-16 px-4 border-b border-border">
           <h1 className="text-lg font-bold">ZYRON</h1>
           <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setSidebarOpen(false)}>
             <X className="h-5 w-5" />
@@ -60,8 +64,8 @@ export function Layout({ children, onLogout }: { children: React.ReactNode; onLo
               onClick={() => setSidebarOpen(false)}
               className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
                 location.pathname === item.path
-                  ? 'bg-gray-100 text-gray-900 font-medium'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  ? 'bg-accent text-accent-foreground font-medium'
+                  : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
               }`}
             >
               <item.icon className="h-4 w-4" />
@@ -69,8 +73,12 @@ export function Layout({ children, onLogout }: { children: React.ReactNode; onLo
             </Link>
           ))}
         </nav>
-        <div className="absolute bottom-0 w-full p-4 border-t">
-          <Button variant="ghost" className="w-full justify-start gap-3 text-gray-600" onClick={handleLogout}>
+        <div className="absolute bottom-0 w-full p-4 border-t border-border space-y-2">
+          <Button variant="ghost" className="w-full justify-start gap-3 text-muted-foreground" onClick={toggleTheme}>
+            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+          </Button>
+          <Button variant="ghost" className="w-full justify-start gap-3 text-muted-foreground" onClick={handleLogout}>
             <LogOut className="h-4 w-4" />
             Logout
           </Button>
@@ -78,7 +86,7 @@ export function Layout({ children, onLogout }: { children: React.ReactNode; onLo
       </aside>
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="h-16 bg-white border-b flex items-center px-4 lg:hidden">
+        <header className="h-16 bg-card border-b border-border flex items-center px-4 lg:hidden">
           <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)}>
             <Menu className="h-5 w-5" />
           </Button>

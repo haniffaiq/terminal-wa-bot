@@ -157,7 +157,7 @@ export default function SendMessage() {
               {filteredGroups.map(g => (
                 <label
                   key={g.id}
-                  className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer"
+                  className="flex items-center gap-2 px-3 py-2 hover:bg-muted/50 cursor-pointer"
                 >
                   <input
                     type="checkbox"
@@ -168,7 +168,7 @@ export default function SendMessage() {
                 </label>
               ))}
               {filteredGroups.length === 0 && (
-                <p className="text-sm text-gray-400 p-3">No groups found</p>
+                <p className="text-sm text-muted-foreground p-3">No groups found</p>
               )}
             </div>
           </div>

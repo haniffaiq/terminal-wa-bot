@@ -77,7 +77,7 @@ export default function Statistics() {
       </div>
 
       {loading ? (
-        <p className="text-gray-500">Loading...</p>
+        <p className="text-muted-foreground">Loading...</p>
       ) : (
         <>
           <Card>
@@ -86,7 +86,7 @@ export default function Statistics() {
             </CardHeader>
             <CardContent>
               {botList.length === 0 ? (
-                <p className="text-gray-400 text-center py-10">No data for this date</p>
+                <p className="text-muted-foreground text-center py-10">No data for this date</p>
               ) : (
                 <ResponsiveContainer width="100%" height={400}>
                   <BarChart data={chartData}>
@@ -107,14 +107,14 @@ export default function Statistics() {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             <Card>
               <CardContent className="pt-6">
-                <p className="text-sm text-gray-500">Total</p>
+                <p className="text-sm text-muted-foreground">Total</p>
                 <p className="text-2xl font-bold">{grandTotal}</p>
               </CardContent>
             </Card>
             {Object.entries(botTotals).map(([bot, total]) => (
               <Card key={bot}>
                 <CardContent className="pt-6">
-                  <p className="text-sm text-gray-500 truncate">{bot}</p>
+                  <p className="text-sm text-muted-foreground truncate">{bot}</p>
                   <p className="text-2xl font-bold">{total}</p>
                 </CardContent>
               </Card>

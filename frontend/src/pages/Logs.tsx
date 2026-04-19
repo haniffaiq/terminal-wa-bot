@@ -91,19 +91,19 @@ export default function Logs() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Logs</h1>
-        <span className="text-sm text-gray-500">{formatDate(date)}</span>
+        <span className="text-sm text-muted-foreground">{formatDate(date)}</span>
       </div>
 
       {/* Tab bar */}
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
+      <div className="flex gap-1 bg-muted p-1 rounded-lg w-fit">
         {LOG_TABS.map(tab => (
           <button
             key={tab.key}
             onClick={() => setLogType(tab.key)}
             className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
               logType === tab.key
-                ? 'bg-white text-gray-900 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
+                ? 'bg-card text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             {tab.label}
@@ -127,7 +127,7 @@ export default function Logs() {
 
         <div className="flex items-center gap-2 flex-1 max-w-sm">
           <div className="relative flex-1">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               value={search}
               onChange={e => setSearch(e.target.value)}
@@ -158,7 +158,7 @@ export default function Logs() {
 
       {/* Stats bar */}
       {logData && (
-        <div className="flex items-center justify-between text-xs text-gray-500 px-1">
+        <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
           <span>
             {logData.totalLines} lines
             {search && <span className="ml-1">(filtered)</span>}
@@ -193,7 +193,7 @@ export default function Logs() {
         className="flex-1 min-h-[500px] max-h-[calc(100vh-320px)] bg-gray-950 rounded-lg border border-gray-800 overflow-auto"
       >
         {loading && (
-          <div className="flex items-center justify-center h-32 text-gray-500 text-sm">Loading...</div>
+          <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">Loading...</div>
         )}
 
         {!loading && logData && logData.lines.length > 0 && (
@@ -209,7 +209,7 @@ export default function Logs() {
                   </td>
                   {logType === 'all' && (
                     <td className="py-1 px-1 w-16 align-top">
-                      <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold border ${TYPE_BADGES[line.type] || 'text-gray-400'}`}>
+                      <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold border ${TYPE_BADGES[line.type] || 'text-muted-foreground'}`}>
                         {line.type === 'req-res' ? 'REQ' : line.type?.toUpperCase().slice(0, 4)}
                       </span>
                     </td>
