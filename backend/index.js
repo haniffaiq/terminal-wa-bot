@@ -168,7 +168,7 @@ async function saveFailedRequest(data, transactionId, tenantId) {
     }
 }
 
-async function resendFailedRequest(reqBody, transactionId) {
+async function resendFailedRequest(reqBody, transactionId, tenantId) {
     let { number, message } = reqBody;
 
     if (!number || !message) {
@@ -189,7 +189,7 @@ async function resendFailedRequest(reqBody, transactionId) {
 
     for (const groupId of number) {
         logger('info', `[${transactionId}] RESEND target=${groupId} — finding active bot`);
-        const botSock = getNextBotForGroup(groupId);
+        const botSock = getNextBotForGroup(groupId, tenantId);
 
         if (!botSock || !botSock.sendMessage) {
             logger('warn', `[${transactionId}] RESEND target=${groupId} status=FAIL — no active bot`);
@@ -286,7 +286,7 @@ app.post('/api/hi', async (req, res) => {
         const results = [];
 
         for (const groupId of number) {
-            const botSock = getNextBotForGroup(groupId);
+            const botSock = getNextBotForGroup(groupId, req.user.tenantId);
 
             if (!botSock || !botSock.sendMessage) {
                 results.push({ number: groupId, success: false, error: `No active bot for group ${groupId}`, response_time_seconds: 0 });
@@ -364,7 +364,7 @@ app.post('/api/resend-failed', async (req, res) => {
         const tenantFilter = req.user.role === 'super_admin' ? '' : 'AND tenant_id = $1';
         const params = req.user.role === 'super_admin' ? [] : [req.user.tenantId];
         const result = await db.query(
-            `SELECT id, transaction_id, target_numbers, message FROM failed_requests WHERE retried = FALSE ${tenantFilter} ORDER BY created_at`,
+            `SELECT id, transaction_id, target_numbers, message, tenant_id FROM failed_requests WHERE retried = FALSE ${tenantFilter} ORDER BY created_at`,
             params
         );
 
@@ -376,7 +376,7 @@ app.post('/api/resend-failed', async (req, res) => {
             const transactionId = row.transaction_id;
 
             logger('info', `[${transactionId}] RESEND target=${number} — retrying failed request`);
-            const resendResult = await resendFailedRequest({ number, message }, transactionId);
+            const resendResult = await resendFailedRequest({ number, message }, transactionId, row.tenant_id);
             allResults.push({ transactionId, results: resendResult });
 
             const anySuccess = resendResult.some(r => r.success);
@@ -437,7 +437,7 @@ app.post('/api/send-message', async (req, res) => {
     const results = [];
 
     for (const rawNumber of number) {
-        const result = await handleSingleTarget(rawNumber, message, caption, transactionId);
+        const result = await handleSingleTarget(rawNumber, message, caption, transactionId, req.user.tenantId);
         results.push(result);
     }
 
@@ -460,7 +460,7 @@ app.post('/api/send-message', async (req, res) => {
 });
 
 
-async function handleSingleTarget(rawNumber, message, caption, transactionId) {
+async function handleSingleTarget(rawNumber, message, caption, transactionId, tenantId) {
     const sendStartTime = Date.now();
 
     const blockedList = getBlockedList();
@@ -492,7 +492,7 @@ async function handleSingleTarget(rawNumber, message, caption, transactionId) {
         while (attempt <= maxRetry) {
             if (targetNumber.endsWith('@g.us')) {
                 logger('info', `[${transactionId}] ROUTE attempt=${attempt + 1} target=${targetNumber} — finding active bot`);
-                botSock = getNextBotForGroup(targetNumber);
+                botSock = getNextBotForGroup(targetNumber, tenantId);
             } else if (targetNumber.endsWith('@c.us')) {
                 logger('error', `[${transactionId}] REJECTED target=${targetNumber} — personal numbers not allowed`);
                 return {
@@ -523,7 +523,7 @@ async function handleSingleTarget(rawNumber, message, caption, transactionId) {
             };
         }
 
-        const result = await sendMessageWithRetry(botSock, targetNumber, message, caption, transactionId);
+        const result = await sendMessageWithRetry(botSock, targetNumber, message, caption, transactionId, tenantId);
         return result;
 
     } catch (err) {
@@ -551,7 +551,7 @@ function getBotInfo(sock) {
         wsUrl: sock.ws.url.hostname
     }
 }
-async function sendMessageWithRetry(botSock, targetNumber, message, caption, transactionId, maxRetry = 10) {
+async function sendMessageWithRetry(botSock, targetNumber, message, caption, transactionId, tenantId, maxRetry = 10) {
     const sendStartTime = Date.now();
     let attempt = 0;
 
@@ -561,7 +561,7 @@ async function sendMessageWithRetry(botSock, targetNumber, message, caption, tra
             const elapsed = (Date.now() - sendStartTime) / 1000;
             let botHealth = getBotInfo(botSock)
             logger('info', `[${transactionId}] DELIVERED target=${targetNumber} bot=${botHealth.number} time=${elapsed.toFixed(3)}s`);
-            stats.increment(botHealth.number);
+            stats.increment(botHealth.number, tenantId);
             return {
                 number: targetNumber,
                 success: true,
@@ -593,10 +593,10 @@ async function sendMessageWithRetry(botSock, targetNumber, message, caption, tra
 
             if (targetNumber.endsWith('@g.us')) {
                 logger('info', `[${transactionId}] BOT_RETRY target=${targetNumber} attempt=${attempt + 1} switching_bot=true`);
-                botSock = getNextBotForGroup(targetNumber);
+                botSock = getNextBotForGroup(targetNumber, tenantId);
             } else if (targetNumber.endsWith('@c.us')) {
                 logger('info', `[${transactionId}] BOT_RETRY target=${targetNumber} attempt=${attempt + 1} switching_bot=true`);
-                botSock = getNextBotForIndividual(targetNumber);
+                botSock = getNextBotForIndividual(targetNumber, tenantId);
             }
 
             if (!botSock || !botSock.sendMessage) {
@@ -657,7 +657,7 @@ app.post('/api/disconnect', async (req, res) => {
         return res.status(400).json({ success: false, error: 'botId is required' });
     }
 
-    const result = await disconnectBotForce(botId);
+    const result = await disconnectBotForce(botId, req.user.tenantId);
     res.json(result);
 });
 
@@ -669,7 +669,7 @@ app.post('/api/deletebot', async (req, res) => {
     }
 
     try {
-        await stopOperationBot(botId);
+        await stopOperationBot(botId, req.user.tenantId);
         res.json({ success: true, message: `Bot ${botId} has been deleted` });
     } catch (err) {
         res.status(500).json({ success: false, error: `Failed to delete bot: ${err.message}` });
@@ -681,18 +681,26 @@ app.post('/api/deletebot', async (req, res) => {
 app.post('/api/addbot', async (req, res) => {
     try {
         const { botname } = req.body;
-
         if (!botname) {
             return res.status(400).json({ success: false, error: 'botname is required' });
         }
 
-        const qrBase64 = await startOperationBotAPI(botname);
+        const tenantId = req.user.tenantId;
+
+        // Register bot in DB
+        await db.query(
+            `INSERT INTO bot_status (tenant_id, bot_id, status, is_admin_bot)
+             VALUES ($1, $2, 'connecting', FALSE)
+             ON CONFLICT (tenant_id, bot_id) DO NOTHING`,
+            [tenantId, botname]
+        );
+
+        const qrBase64 = await startOperationBotAPI(botname, tenantId);
         if (qrBase64) {
             res.json({ success: true, message: `Bot ${botname} started. Scan QR to connect.`, qr: qrBase64 });
         } else {
-            res.status(500).json({ success: false, error: 'Failed to generate QR code. Try again.' });
+            res.json({ success: true, message: `Bot ${botname} started. It may already be connected.` });
         }
-
     } catch (err) {
         logger('error', `Failed to add bot: ${err.message}`);
         res.status(500).json({ success: false, error: `Failed to add bot: ${err.message}` });
@@ -707,7 +715,7 @@ app.post('/api/restart', async (req, res) => {
             return res.status(400).json({ success: false, error: 'botname is required' });
         }
 
-        const status = await reconnectSingleBotAPI(botname);
+        const status = await reconnectSingleBotAPI(botname, req.user.tenantId);
         return res.status(200).json({ success: true, message: `Bot ${botname} is restarting` });
 
     } catch (err) {
@@ -761,7 +769,7 @@ app.post('/api/send-media', upload.single('file'), async (req, res) => {
 
     try {
         logger('info', `[${transactionId}] ROUTE target=${number} — finding active bot`);
-        const botSock = getNextBotForGroup(number);
+        const botSock = getNextBotForGroup(number, req.user.tenantId);
 
         if (!botSock || !botSock.sendMessage) {
             logger('warn', `[${transactionId}] NO_BOT target=${number} — no active bot`);
@@ -835,7 +843,7 @@ app.post('/api/send-media-from-url', upload.single('file'), async (req, res) => 
         const tempFilePath = path.join(__dirname, 'uploads', `${Date.now()}-image.${contentType.split('/')[1]}`);
         fs.writeFileSync(tempFilePath, fileBuffer);
 
-        const botSock = getNextBotForGroup(number);
+        const botSock = getNextBotForGroup(number, req.user.tenantId);
         if (!botSock || !botSock.sendMessage) {
             logger('warn', `[${transactionId}] NO_BOT target=${number} — no active bot`);
             fs.unlinkSync(tempFilePath);
@@ -881,7 +889,7 @@ app.get('/api/list-my-groups', async (req, res) => {
 
     try {
         const dummyGroupId = '120363419686014131@g.us';
-        const sock = getNextBotForGroup(dummyGroupId);
+        const sock = getNextBotForGroup(dummyGroupId, req.user.tenantId);
 
         if (!sock) {
             logger('warn', `[${transactionId}] No active bot for group fetch`);
