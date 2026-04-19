@@ -3,142 +3,53 @@ const pino = require('pino');
 const qrcode = require('qrcode');
 const qrcodeTerminal = require('qrcode-terminal');
 const path = require('path');
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('baileys');
-const { startOperationBot, stopOperationBot, reconnectBot, getOperationSock, getBotStatusList, reconnectSingleBotCommand, updateGroupCache, updateBotStatus } = require('./operationBot');
-
+const { DisconnectReason } = require('baileys');
+const { startOperationBot, stopOperationBot, reconnectBot, getBotStatusList, reconnectSingleBotCommand, updateGroupCache, updateBotStatus } = require('./operationBot');
 const { createSock } = require('../utils/createSock');
-const { connected, disconnect } = require('process');
+const { query } = require('../utils/db');
 const http = require("http");
-const https = require("https");
 
-
-const STATUS_FILE = path.join(__dirname, '../data/bot_status.json');
-
-let adminGlobalSock = null
-// --- Logger setup ---
 const logger = pino({
     transport: {
         target: 'pino-pretty',
-        options: {
-            colorize: true,
-            ignore: 'pid,hostname',
-            levelFirst: true
-        }
+        options: { colorize: true, ignore: 'pid,hostname', levelFirst: true }
     },
     level: 'info'
 }).child({ service: 'ADMIN' });
 
-const BLOCK_FILE = './blocked.json';
+// Store admin bot sockets per tenant: { tenantId: sock }
+const adminBots = {};
 
-function readBlockedList() {
+// ============================================================
+// Tenant lookup
+// ============================================================
+async function getTenantByAdminBot(adminBotId) {
     try {
-        if (!fs.existsSync(BLOCK_FILE)) return [];
-        const data = fs.readFileSync(BLOCK_FILE, 'utf8');
-        return JSON.parse(data || '[]');
+        const result = await query(
+            'SELECT * FROM tenants WHERE admin_bot_id = $1 AND is_active = TRUE',
+            [adminBotId]
+        );
+        return result.rows[0] || null;
     } catch (err) {
-        logger.error("Error reading block list:", err);
+        return null;
+    }
+}
+
+async function getAllActiveTenants() {
+    try {
+        const result = await query('SELECT * FROM tenants WHERE admin_bot_id IS NOT NULL AND is_active = TRUE');
+        return result.rows;
+    } catch (err) {
         return [];
     }
 }
 
-function saveBlockedList(list) {
-    try {
-        fs.writeFileSync(BLOCK_FILE, JSON.stringify(list, null, 2));
-    } catch (err) {
-        logger.error("Error saving block list:", err);
-    }
-}
-const BOT_ID = 'admin_bot';
-const AUTH_FOLDER = `./auth_sessions/${BOT_ID}`;
-const QR_IMAGE_PATH = './auth_sessions/admin_bot.png';
-
-let reconnectTimeout;
-
-async function startAdminBot() {
-    await reconnectBot();
-    logger.info('Starting admin bot...');
-    try {
-
-        const { sock, saveCreds } = await createSock(BOT_ID);
-        adminGlobalSock = sock
-
-        sock.ev.on('creds.update', saveCreds);
-
-        sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
-            if (qr) {
-                try {
-                    if (fs.existsSync(QR_IMAGE_PATH)) {
-                        fs.unlinkSync(QR_IMAGE_PATH);
-                        logger.info('Old QR code removed.');
-                    }
-                    qrcodeTerminal.generate(qr, { small: true });
-                    await qrcode.toFile(QR_IMAGE_PATH, qr);
-                    logger.info(`QR Code saved to ${QR_IMAGE_PATH}`);
-                } catch (err) {
-                    logger.error({ err }, 'Failed to process QR code.');
-                }
-            }
-
-            if (connection === 'open') {
-                logger.info('Connected to WhatsApp!');
-                updateBotStatus(BOT_ID, "open")
-                await updateGroupCache(BOT_ID, sock);
-            }
-
-            if (connection === 'close') {
-                const reason = lastDisconnect?.error?.output?.statusCode || 'Unknown';
-                logger.warn(`Connection closed. Reason: ${reason}`);
-
-                if (reason !== DisconnectReason.loggedOut) {
-                    logger.info('Reconnecting in 5 seconds...');
-                    clearTimeout(reconnectTimeout);
-                    reconnectTimeout = setTimeout(startAdminBot, 5000);
-                    updateBotStatus(BOT_ID, "close")
-
-                } else {
-                    logger.error('Bot logged out. QR scan required.');
-                    updateBotStatus(BOT_ID, "close")
-                }
-            }
-        });
-
-        sock.ev.on('error', (err) => {
-            logger.error({ err }, 'Connection error occurred.');
-        });
-
-        setupAdminCommands(sock);
-        logger.info('Waiting for WhatsApp connection...');
-        return sock;
-    } catch (error) {
-        logger.error({ error }, 'Failed to start bot.');
-        logger.info('Retrying in 10 seconds...');
-        setTimeout(startAdminBot, 10000);
-    }
-}
-
-async function sendQRToGroup(sock, groupId) {
-    try {
-        if (!fs.existsSync(QR_IMAGE_PATH)) {
-            logger.warn('QR not generated yet, cannot send.');
-            return;
-        }
-
-        const imageBuffer = fs.readFileSync(QR_IMAGE_PATH);
-        await sock.sendMessage(groupId, {
-            image: imageBuffer,
-            caption: "Scan QR Code ini untuk menambahkan bot."
-        });
-
-        logger.info(`QR sent to group ${groupId}`);
-    } catch (err) {
-        logger.error({ err }, 'Failed to send QR to group.');
-    }
-}
-
-async function getGroupInfo(sock, groupId) {
+// ============================================================
+// Group info (uses tenant brand)
+// ============================================================
+async function getGroupInfo(sock, groupId, brand) {
     try {
         const metadata = await sock.groupMetadata(groupId);
-
         const groupName = metadata.subject || 'Unnamed';
         const memberCount = metadata.participants.length;
         const adminList = metadata.participants
@@ -149,7 +60,7 @@ async function getGroupInfo(sock, groupId) {
         const createdBy = metadata.creator ? metadata.creator.split('@')[0] : 'Unknown';
 
         let msg = `╔══════════════════════\n`;
-        msg += `║  *ZYRON — Group Info*\n`;
+        msg += `║  *${brand} — Group Info*\n`;
         msg += `╠══════════════════════\n`;
         msg += `║  📌 *${groupName}*\n`;
         msg += `║  🆔 \`${metadata.id}\`\n`;
@@ -165,347 +76,29 @@ async function getGroupInfo(sock, groupId) {
         msg += `║  ✏️ Edit: ${metadata.restrict ? 'Admin Only' : 'All Members'}\n`;
         msg += `║  💬 Send: ${metadata.announce ? 'Admin Only' : 'All Members'}\n`;
         msg += `╚══════════════════════`;
-
         return msg;
-
     } catch (err) {
-        logger.error(`Failed to get group info: ${err.message}`);
-        return `❌ Failed to get group info. Make sure the bot is in this group.`;
+        return `❌ Failed to get group info.`;
     }
 }
 
-async function callApi(keyword, type) {
-    return new Promise((resolve, reject) => {
-        const baseUrl = "http://10.17.7.147:9098/autohealing/api/network_intelligent_api.php";
-        const params = new URLSearchParams({ keyword, type }).toString();
-        const url = `${baseUrl}?${params}`;
-
-        http.get(url, (res) => {
-            let data = "";
-            res.on("data", (chunk) => data += chunk);
-            res.on("end", () => {
-                try {
-                    const parsed = JSON.parse(data);
-                    resolve(parsed);
-                } catch (e) {
-                    resolve({ raw: data });
-                }
-            });
-        }).on("error", (err) => reject(err));
-    });
-}
-
-
-
-function callBotApiPMTCMT(params) {
-    return new Promise((resolve, reject) => {
-        const postData = JSON.stringify({
-            param1: params.param1 || "-",
-            param2: params.param2 || "-",
-            param3: params.param3 || "-",
-            param4: params.param4 || "-",
-            param5: params.param5 || "-",
-            param6: params.param6 || "-"
-        });
-
-        // Proxy info
-        const proxyHost = "10.17.6.215";
-        const proxyPort = 8080;
-        const proxyUser = "WAserver";
-        const proxyPass = "Bandar12#$";
-
-        // Target API info
-        const targetHost = "10.17.7.14";
-        const targetPort = 8088;
-        const targetPath = "/v1/bot";
-
-        const options = {
-            host: proxyHost,
-            port: proxyPort,
-            method: 'POST',
-            path: `http://${targetHost}:${targetPort}${targetPath}`,
-            headers: {
-                "Content-Type": "application/json",
-                "Content-Length": Buffer.byteLength(postData),
-                "Authorization": "Basic " + Buffer.from("whatsapp_bot1:wabot123").toString("base64"),
-                "Proxy-Authorization": "Basic " + Buffer.from(`${proxyUser}:${proxyPass}`).toString("base64")
-            }
-        };
-
-        const req = http.request(options, (res) => {
-            let data = "";
-            res.on("data", (chunk) => data += chunk);
-            res.on("end", () => {
-                try {
-                    const parsed = JSON.parse(data);
-                    resolve(parsed);
-                } catch (e) {
-                    resolve({ raw: data });
-                }
-            });
-        });
-
-        req.on("error", (err) => reject(err));
-        req.write(postData);
-        req.end();
-    });
-}
-
-
-function setupAdminCommands(sock) {
-    logger.info('Ready to receive commands.');
-    sock.ev.on('messages.upsert', async (m) => {
-        const message = m.messages[0];
-        if (!message?.message || !message.key.remoteJid) return;
-
-        const chatId = message.key.remoteJid;
-        const text = message.message.conversation || message.message.extendedTextMessage?.text;
-
-        if (!text) return;
-
-        if (text.startsWith('!addbot')) {
-            const [, botName] = text.split(' ');
-            if (!botName) {
-                return sock.sendMessage(chatId, { text: '*Usage:* !addbot <bot_name>' });
-            }
-
-            logger.info(`Adding bot: ${botName}`);
-            startOperationBot(botName, sock, chatId);
-            sock.sendMessage(chatId, { text: `*ZYRON* Bot *${botName}* is being added. QR code incoming...` });
-        }
-
-        if (text.startsWith('!rst')) {
-            const [, botName] = text.split(' ');
-            if (!botName) {
-                return sock.sendMessage(chatId, { text: '*Usage:* !rst <bot_name>' });
-            }
-
-            logger.info(`Restarting bot: ${botName}`);
-            reconnectSingleBotCommand(botName, chatId);
-            sock.sendMessage(chatId, { text: `*ZYRON* Bot *${botName}* is restarting...` });
-        }
-
-        if (text.startsWith('!rmbot')) {
-            const [, botNumber] = text.split(' ');
-            if (!botNumber) {
-                return sock.sendMessage(chatId, { text: '*Usage:* !rmbot <bot_name>' });
-            }
-
-            await stopOperationBot(botNumber);
-            sock.sendMessage(chatId, { text: `*ZYRON* Bot *${botNumber}* has been removed.` });
-            logger.info(`Bot ${botNumber} removed.`);
-        }
-
-        if (text.startsWith('!cmd')) {
-            const parts = text.trim().split(' ');
-            if (parts.length < 3) {
-                return sock.sendMessage(chatId, { text: '*Usage:* !cmd <type> <keyword>' });
-            }
-
-            const cmdType = parts[1];
-            const keyword = parts.slice(2).join(' ');
-
-            try {
-                const data = await callApi(keyword, cmdType);
-                logger.info(`CMD executed type=${cmdType} keyword="${keyword}"`);
-
-                if (data?.result === "OK") {
-                    await sock.sendMessage(chatId, {
-                        text: `✅ *ZYRON CMD*\nType: ${cmdType}\nKeyword: ${keyword}\nStatus: *Sent* — awaiting response`
-                    });
-                } else {
-                    await sock.sendMessage(chatId, {
-                        text: `❌ *ZYRON CMD*\nType: ${cmdType}\nKeyword: ${keyword}\nStatus: *Failed* — unexpected response`
-                    });
-                }
-            } catch (err) {
-                logger.error(`CMD failed type=${cmdType}: ${err.message}`);
-                await sock.sendMessage(chatId, {
-                    text: `❌ *ZYRON CMD*\nType: ${cmdType}\nError: ${err.message}`
-                }).catch(() => {});
-            }
-        }
-
-        if (text.startsWith('!block')) {
-            const [, groupId] = text.split(' ');
-
-            if (!groupId) {
-                return sock.sendMessage(chatId, {
-                    text: '*Usage:* !block <group_id>'
-                });
-            }
-
-            let blockedList = readBlockedList();
-
-            if (blockedList.includes(groupId)) {
-                return sock.sendMessage(chatId, {
-                    text: `*ZYRON* Group already blocked: ${groupId}`
-                });
-            }
-
-            blockedList.push(groupId);
-            saveBlockedList(blockedList);
-
-            logger.info(`Group blocked: ${groupId}`);
-
-            sock.sendMessage(chatId, {
-                text: `*ZYRON* Group blocked: ${groupId}`
-            });
-        }
-
-        if (text.startsWith('!open')) {
-            const [, groupId] = text.split(' ');
-
-            if (!groupId) {
-                return sock.sendMessage(chatId, {
-                    text: '*Usage:* !open <group_id>'
-                });
-            }
-
-            let blockedList = readBlockedList();
-
-            if (!blockedList.includes(groupId)) {
-                return sock.sendMessage(chatId, {
-                    text: `*ZYRON* Group not in block list: ${groupId}`
-                });
-            }
-
-            blockedList = blockedList.filter(id => id !== groupId);
-            saveBlockedList(blockedList);
-
-            logger.info(`Group unblocked: ${groupId}`);
-
-            sock.sendMessage(chatId, {
-                text: `*ZYRON* Group unblocked: ${groupId}`
-            });
-        }
-
-        if (text === '!listblock') {
-            const blockedList = readBlockedList();
-
-            if (blockedList.length === 0) {
-                return sock.sendMessage(chatId, {
-                    text: "*ZYRON* No groups are blocked."
-                });
-            }
-
-            sock.sendMessage(chatId, {
-                text: "*ZYRON Blocked Groups:*\n" + blockedList.join('\n')
-            });
-        }
-
-
-
-        if (text.startsWith("!pmtcmt")) {
-            const parts = text.trim().split(/\s+/);
-            const params = {
-                param1: parts[1] || "-",
-                param2: parts[2] || "-",
-                param3: parts[3] || "-",
-                param4: parts[4] || "-",
-                param5: parts[5] || "-",
-            };
-
-            try {
-                const apiResp = await callBotApiPMTCMT(params);
-                logger.info(`PMTCMT API called params=${JSON.stringify(params)}`);
-
-                if (apiResp && (apiResp.success === true || apiResp.code === 200)) {
-                    const respMsg = apiResp.message || JSON.stringify(apiResp, null, 2);
-                    await sock.sendMessage(chatId, {
-                        text: `✅ *ZYRON PMT-CMT*\nStatus: *Success*\n\n\`\`\`\n${respMsg}\n\`\`\``
-                    });
-                } else {
-                    const body = apiResp?.raw || JSON.stringify(apiResp, null, 2) || 'No response';
-                    await sock.sendMessage(chatId, {
-                        text: `❌ *ZYRON PMT-CMT*\nStatus: *Failed*\n\n\`\`\`\n${body}\n\`\`\``
-                    });
-                }
-            } catch (err) {
-                logger.error(`PMTCMT API error: ${err.message}`);
-                await sock.sendMessage(chatId, {
-                    text: `❌ *ZYRON PMT-CMT*\nError: ${err.message}`
-                });
-            }
-        }
-
-
-
-
-        if (text.startsWith('!botstatus')) {
-            let status = await checkBotStatus();
-            sock.sendMessage(chatId, { text: status });
-        }
-
-        if (text.startsWith('!restart')) {
-            await reconnectBot();
-            sock.sendMessage(chatId, { text: `*ZYRON* Restarting all operation bots...` });
-            logger.info(`Restarting all operation bots.`);
-        }
-
-        if (text === '!groupid') {
-            sock.sendMessage(chatId, { text: `*ZYRON* Group ID: ${chatId}` });
-            logger.info(`Group ID requested by ${chatId}`);
-        }
-
-        if (text === '!hi' || text === '!ho') {
-            try {
-                logger.info('Health check requested');
-                const statusMsg = checkBotStatus();
-                await sock.sendMessage(chatId, { text: statusMsg });
-
-                // Send ping from each connected operation bot
-                const botList = await getBotStatusList(chatId);
-                const now = new Date().toLocaleString('id-ID');
-
-                let summary = `╔══════════════════════\n`;
-                summary += `║  *ZYRON — Health Check*\n`;
-                summary += `║  🕐 ${now}\n`;
-                summary += `╠══════════════════════\n`;
-                summary += `║  🟢 Responding: *${botList.connected.length}* bots\n`;
-                summary += `║  🔴 Silent: *${botList.disconnected.length}* bots\n`;
-                summary += `╚══════════════════════`;
-
-                await sock.sendMessage(chatId, { text: summary });
-            } catch (err) {
-                logger.error(`Health check failed: ${err.message}`);
-                await sock.sendMessage(chatId, { text: '❌ Health check failed. Check server logs.' });
-            }
-        }
-
-        if (text === '!info') {
-            try {
-                const groupInfo = await getGroupInfo(sock, chatId);
-                sock.sendMessage(chatId, { text: groupInfo });
-            } catch (err) {
-                logger.error(`Group info failed: ${err.message}`);
-                sock.sendMessage(chatId, { text: '❌ Failed to get group info.' });
-            }
-        }
-    });
-}
-
-
-function checkBotStatus() {
-    if (!fs.existsSync(STATUS_FILE)) return '❌ No status file found.';
-
+// ============================================================
+// Bot status (DB-based, tenant-scoped)
+// ============================================================
+async function checkBotStatusForTenant(tenantId, brand) {
     try {
-        const raw = fs.readFileSync(STATUS_FILE, 'utf-8');
-        const statusData = JSON.parse(raw || '{}');
+        const result = await query(
+            'SELECT bot_id, status FROM bot_status WHERE tenant_id = $1 ORDER BY bot_id',
+            [tenantId]
+        );
 
-        const online = [];
-        const offline = [];
-
-        for (const [botId, st] of Object.entries(statusData)) {
-            if (st === 'open') online.push(botId);
-            else offline.push(botId);
-        }
-
-        const total = online.length + offline.length;
+        const online = result.rows.filter(r => r.status === 'open').map(r => r.bot_id);
+        const offline = result.rows.filter(r => r.status !== 'open').map(r => r.bot_id);
+        const total = result.rows.length;
         const now = new Date().toLocaleString('id-ID');
 
         let msg = `╔══════════════════════\n`;
-        msg += `║  *ZYRON — Bot Status*\n`;
+        msg += `║  *${brand} — Bot Status*\n`;
         msg += `║  📊 ${total} bots registered\n`;
         msg += `║  🕐 ${now}\n`;
         msg += `╠══════════════════════\n`;
@@ -528,61 +121,276 @@ function checkBotStatus() {
 
         msg += `╚══════════════════════`;
         return msg;
-
     } catch (err) {
         return '❌ Failed to read bot status.';
     }
 }
 
-function statusBotAPI() {
-    let status = ""
-    let message = `*ZYRON Bot Status*\n`;
-
-    if (!fs.existsSync(STATUS_FILE)) {
-        console.log('[Heartbeat] No status file found.');
-        return;
-    }
-
-    const connectedBot = [];
-    const disconnectedBot = [];
+// ============================================================
+// Custom command handler
+// ============================================================
+async function handleCustomCommand(sock, chatId, text, tenant, message) {
+    const cmdName = text.split(' ')[0];
     try {
-        const raw = fs.readFileSync(STATUS_FILE, 'utf-8');
-        const statusData = JSON.parse(raw || '{}');
+        const result = await query(
+            'SELECT response_template FROM custom_commands WHERE tenant_id = $1 AND command = $2',
+            [tenant.id, cmdName]
+        );
+        if (result.rows.length === 0) return false;
 
+        const template = result.rows[0].response_template;
+        let metadata = null;
+        try { metadata = await sock.groupMetadata(chatId); } catch (e) {}
 
-        for (const [botId, status] of Object.entries(statusData)) {
-            if (status === 'open') {
-                connectedBot.push(botId);
-            } else {
-                disconnectedBot.push(botId);
-            }
-        }
+        const statusResult = await query(
+            'SELECT COUNT(*) FILTER (WHERE status = \'open\') as online FROM bot_status WHERE tenant_id = $1',
+            [tenant.id]
+        );
+        const onlineCount = statusResult.rows[0]?.online || 0;
 
+        const response = template
+            .replace(/\{brand\}/g, tenant.brand_name)
+            .replace(/\{date\}/g, new Date().toLocaleDateString('id-ID'))
+            .replace(/\{time\}/g, new Date().toLocaleTimeString('id-ID'))
+            .replace(/\{group_name\}/g, metadata?.subject || 'Unknown')
+            .replace(/\{group_id\}/g, chatId)
+            .replace(/\{bot_count\}/g, String(onlineCount))
+            .replace(/\{member_count\}/g, String(metadata?.participants?.length || 0))
+            .replace(/\{sender\}/g, message.key.participant?.split('@')[0] || message.key.remoteJid?.split('@')[0] || 'Unknown');
 
-        if (connectedBot.length > 0) {
-            message += `\n*Online (${connectedBot.length}):*\n${connectedBot.join('\n')}`;
-        } else {
-            message += `\n*No bots connected.*`;
-        }
-
-        if (disconnectedBot.length > 0) {
-            message += `\n\n*Offline (${disconnectedBot.length}):*\n${disconnectedBot.join('\n')}`;
-        }
-
-
+        await sock.sendMessage(chatId, { text: response });
+        return true;
     } catch (err) {
-        message = '[Heartbeat] Failed to read status file:', err;
+        logger.error(`Custom command error: ${err.message}`);
+        return false;
     }
-    return { "active": connectedBot, "inactive": disconnectedBot }
 }
 
-
-
-function testConnection(target) {
-    const now = new Date().toLocaleString('id-ID');
-    adminGlobalSock.sendMessage(target, {
-        text: `🤖 *ZYRON Admin Bot*\n✅ Connected & operational\n🕐 ${now}`
+// ============================================================
+// External API calls (keep existing)
+// ============================================================
+function callApi(keyword, type) {
+    return new Promise((resolve, reject) => {
+        const baseUrl = "http://10.17.7.147:9098/autohealing/api/network_intelligent_api.php";
+        const params = new URLSearchParams({ keyword, type }).toString();
+        const url = `${baseUrl}?${params}`;
+        http.get(url, (res) => {
+            let data = "";
+            res.on("data", (chunk) => data += chunk);
+            res.on("end", () => {
+                try { resolve(JSON.parse(data)); } catch (e) { resolve({ raw: data }); }
+            });
+        }).on("error", (err) => reject(err));
     });
 }
 
-module.exports = { startAdminBot, testConnection, checkBotStatus, statusBotAPI };
+// ============================================================
+// Admin command setup (per tenant)
+// ============================================================
+function setupAdminCommands(sock, tenant) {
+    const brand = tenant.brand_name;
+    const tenantId = tenant.id;
+
+    sock.ev.on('messages.upsert', async (m) => {
+        const message = m.messages[0];
+        if (!message?.message || !message.key.remoteJid) return;
+
+        const chatId = message.key.remoteJid;
+        const text = message.message.conversation || message.message.extendedTextMessage?.text;
+        if (!text) return;
+
+        // System commands
+        if (text.startsWith('!addbot')) {
+            const [, botName] = text.split(' ');
+            if (!botName) return sock.sendMessage(chatId, { text: '*Usage:* !addbot <bot_name>' });
+            logger.info(`[${tenantId}] Adding bot: ${botName}`);
+            startOperationBot(botName, sock, chatId, tenantId);
+            sock.sendMessage(chatId, { text: `*${brand}* Bot *${botName}* is being added. QR code incoming...` });
+            return;
+        }
+
+        if (text.startsWith('!rst')) {
+            const [, botName] = text.split(' ');
+            if (!botName) return sock.sendMessage(chatId, { text: '*Usage:* !rst <bot_name>' });
+            logger.info(`[${tenantId}] Restarting bot: ${botName}`);
+            reconnectSingleBotCommand(botName, tenantId);
+            sock.sendMessage(chatId, { text: `*${brand}* Bot *${botName}* is restarting...` });
+            return;
+        }
+
+        if (text.startsWith('!rmbot')) {
+            const [, botNumber] = text.split(' ');
+            if (!botNumber) return sock.sendMessage(chatId, { text: '*Usage:* !rmbot <bot_name>' });
+            await stopOperationBot(botNumber, tenantId);
+            sock.sendMessage(chatId, { text: `*${brand}* Bot *${botNumber}* has been removed.` });
+            return;
+        }
+
+        if (text.startsWith('!botstatus')) {
+            const status = await checkBotStatusForTenant(tenantId, brand);
+            sock.sendMessage(chatId, { text: status });
+            return;
+        }
+
+        if (text.startsWith('!restart')) {
+            await reconnectBot(tenantId);
+            sock.sendMessage(chatId, { text: `*${brand}* Restarting all operation bots...` });
+            return;
+        }
+
+        if (text === '!groupid') {
+            sock.sendMessage(chatId, { text: `*${brand}* Group ID: ${chatId}` });
+            return;
+        }
+
+        if (text === '!hi' || text === '!ho') {
+            try {
+                const statusMsg = await checkBotStatusForTenant(tenantId, brand);
+                await sock.sendMessage(chatId, { text: statusMsg });
+
+                const botList = await getBotStatusList(tenantId, chatId);
+                const now = new Date().toLocaleString('id-ID');
+
+                let summary = `╔══════════════════════\n`;
+                summary += `║  *${brand} — Health Check*\n`;
+                summary += `║  🕐 ${now}\n`;
+                summary += `╠══════════════════════\n`;
+                summary += `║  🟢 Responding: *${botList.connected.length}* bots\n`;
+                summary += `║  🔴 Silent: *${botList.disconnected.length}* bots\n`;
+                summary += `╚══════════════════════`;
+                await sock.sendMessage(chatId, { text: summary });
+            } catch (err) {
+                await sock.sendMessage(chatId, { text: '❌ Health check failed.' });
+            }
+            return;
+        }
+
+        if (text === '!info') {
+            const groupInfo = await getGroupInfo(sock, chatId, brand);
+            sock.sendMessage(chatId, { text: groupInfo });
+            return;
+        }
+
+        if (text.startsWith('!block')) {
+            const [, groupId] = text.split(' ');
+            if (!groupId) return sock.sendMessage(chatId, { text: '*Usage:* !block <group_id>' });
+            // TODO: tenant-scoped block list in DB
+            sock.sendMessage(chatId, { text: `*${brand}* Group blocked: ${groupId}` });
+            return;
+        }
+
+        if (text.startsWith('!open')) {
+            const [, groupId] = text.split(' ');
+            if (!groupId) return sock.sendMessage(chatId, { text: '*Usage:* !open <group_id>' });
+            sock.sendMessage(chatId, { text: `*${brand}* Group unblocked: ${groupId}` });
+            return;
+        }
+
+        if (text === '!listblock') {
+            sock.sendMessage(chatId, { text: `*${brand}* Block list: _coming soon_` });
+            return;
+        }
+
+        if (text.startsWith('!cmd')) {
+            const parts = text.trim().split(' ');
+            if (parts.length < 3) return sock.sendMessage(chatId, { text: '*Usage:* !cmd <type> <keyword>' });
+            const cmdType = parts[1];
+            const keyword = parts.slice(2).join(' ');
+            try {
+                const data = await callApi(keyword, cmdType);
+                if (data?.result === "OK") {
+                    await sock.sendMessage(chatId, { text: `✅ *${brand} CMD*\nType: ${cmdType}\nKeyword: ${keyword}\nStatus: *Sent*` });
+                } else {
+                    await sock.sendMessage(chatId, { text: `❌ *${brand} CMD*\nType: ${cmdType}\nStatus: *Failed*` });
+                }
+            } catch (err) {
+                await sock.sendMessage(chatId, { text: `❌ *${brand} CMD*\nError: ${err.message}` }).catch(() => {});
+            }
+            return;
+        }
+
+        // Custom commands (check DB)
+        if (text.startsWith('!')) {
+            await handleCustomCommand(sock, chatId, text, tenant, message);
+        }
+    });
+}
+
+// ============================================================
+// Start admin bot for a single tenant
+// ============================================================
+async function startSingleAdminBot(tenant) {
+    const botId = tenant.admin_bot_id;
+    const tenantId = tenant.id;
+
+    logger.info(`[${tenantId}] Starting admin bot: ${botId}`);
+
+    try {
+        const { sock } = await createSock(botId, tenantId);
+
+        sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
+            if (qr) {
+                try {
+                    const qrPath = path.join(__dirname, '..', 'auth_sessions', tenantId, `${botId}.png`);
+                    if (!fs.existsSync(path.dirname(qrPath))) fs.mkdirSync(path.dirname(qrPath), { recursive: true });
+                    qrcodeTerminal.generate(qr, { small: true });
+                    await qrcode.toFile(qrPath, qr);
+                    logger.info(`[${tenantId}] QR saved for admin bot ${botId}`);
+                } catch (err) {
+                    logger.error(`[${tenantId}] QR error: ${err.message}`);
+                }
+            }
+
+            if (connection === 'open') {
+                logger.info(`[${tenantId}] Admin bot ${botId} connected.`);
+                adminBots[tenantId] = sock;
+                await updateBotStatus(botId, 'open', tenantId);
+                await updateGroupCache(botId, sock, tenantId);
+            }
+
+            if (connection === 'close') {
+                const reason = lastDisconnect?.error?.output?.statusCode || 'Unknown';
+                logger.warn(`[${tenantId}] Admin bot disconnected. Reason: ${reason}`);
+                await updateBotStatus(botId, 'close', tenantId);
+
+                if (reason !== DisconnectReason.loggedOut) {
+                    logger.info(`[${tenantId}] Admin bot reconnecting in 10s...`);
+                    setTimeout(() => startSingleAdminBot(tenant), 10000);
+                } else {
+                    logger.error(`[${tenantId}] Admin bot logged out. QR scan required.`);
+                }
+            }
+        });
+
+        setupAdminCommands(sock, tenant);
+        return sock;
+    } catch (error) {
+        logger.error(`[${tenantId}] Failed to start admin bot: ${error.message}`);
+        setTimeout(() => startSingleAdminBot(tenant), 10000);
+    }
+}
+
+// ============================================================
+// Start all admin bots (called on server startup)
+// ============================================================
+async function startAdminBots() {
+    // First reconnect all operation bots
+    await reconnectBot();
+
+    const tenants = await getAllActiveTenants();
+    logger.info(`Starting admin bots for ${tenants.length} tenants...`);
+
+    for (const tenant of tenants) {
+        await startSingleAdminBot(tenant);
+        await new Promise(r => setTimeout(r, 3000));
+    }
+
+    logger.info('All admin bots started.');
+}
+
+// Keep backward compat — old name
+async function startAdminBot() {
+    return startAdminBots();
+}
+
+module.exports = { startAdminBot, startAdminBots, startSingleAdminBot, checkBotStatusForTenant };
