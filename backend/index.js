@@ -23,8 +23,21 @@ const axios = require('axios');
 const mime = require('mime-types');
 
 
+// Suppress noisy libsignal logs (Bad MAC, Closing session — normal Signal protocol behavior)
+const _origLog = console.log;
+const _origErr = console.error;
+const SIGNAL_NOISE = ['Bad MAC', 'Closing session', 'Closing open session', 'Closing stale open session', 'Failed to decrypt'];
+console.log = (...args) => {
+    if (args.some(a => typeof a === 'string' && SIGNAL_NOISE.some(n => a.includes(n)))) return;
+    _origLog.apply(console, args);
+};
+console.error = (...args) => {
+    if (args.some(a => typeof a === 'string' && SIGNAL_NOISE.some(n => a.includes(n)))) return;
+    _origErr.apply(console, args);
+};
+
 process.on('uncaughtException', (err) => {
-    console.error('Uncaught Exception:', err);
+    _origErr('Uncaught Exception:', err);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
