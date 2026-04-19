@@ -3,7 +3,7 @@ const pino = require('pino');
 const qrcode = require('qrcode');
 const path = require('path');
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('baileys');
-const { globalAgent } = require('./proxyConfig');
+
 const { createSock, updateBotStatus } = require('../utils/createSock');
 
 

@@ -5,7 +5,7 @@ const qrcodeTerminal = require('qrcode-terminal');
 const path = require('path');
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('baileys');
 const { startOperationBot, stopOperationBot, reconnectBot, getOperationSock, getBotStatusList, reconnectSingleBotCommand } = require('./operationBot');
-const { globalAgent } = require('./proxyConfig');
+
 const { createSock, updateBotStatus } = require('../utils/createSock');
 const { connected, disconnect } = require('process');
 const http = require("http");

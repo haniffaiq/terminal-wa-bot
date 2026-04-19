@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { setCredentials, getAuthHeader } from '@/lib/auth';
+import { setCredentials, getAuthHeader, clearCredentials } from '@/lib/auth';
 
 export function Login({ onLogin }: { onLogin: () => void }) {
   const [username, setUsername] = useState('');
@@ -27,11 +27,11 @@ export function Login({ onLogin }: { onLogin: () => void }) {
         onLogin();
       } else {
         setError('Invalid credentials');
-        setCredentials('', '');
+        clearCredentials();
       }
     } catch {
       setError('Connection failed');
-      setCredentials('', '');
+      clearCredentials();
     } finally {
       setLoading(false);
     }

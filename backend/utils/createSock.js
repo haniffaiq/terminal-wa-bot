@@ -63,7 +63,6 @@
 
 
 const { makeWASocket, useMultiFileAuthState, makeCacheableSignalKeyStore, DisconnectReason, fetchLatestBaileysVersion } = require('baileys');
-const { globalAgent } = require('../bots/proxyConfig'); 
 const pino = require('pino');
 const fs = require('fs');
 const path = require('path');
@@ -156,13 +155,6 @@ async function createSock(botId, options = {}) {
 
     if (version) {
         socketOptions.version = version;
-    }
-
-    if (globalAgent) {
-        console.log(`[DEBUG] Menggunakan proxy agent`);
-        // socketOptions.agent = globalAgent;
-    } else {
-        console.log(`[DEBUG] TIDAK menggunakan proxy`);
     }
 
     const sock = makeWASocket(socketOptions);
