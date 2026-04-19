@@ -14,37 +14,43 @@ export function useSocket() {
 
   useEffect(() => {
     const socket = getSocket();
+    if (!socket) return;
 
-    socket.on('connect', () => setConnected(true));
-    socket.on('disconnect', () => setConnected(false));
-
-    socket.on('bot:status', (data: BotStatus) => {
+    const onConnect = () => setConnected(true);
+    const onDisconnect = () => setConnected(false);
+    const onBotStatus = (data: BotStatus) => {
       setBotStatuses(prev => {
         const next = new Map(prev);
         next.set(data.botId, data);
         return next;
       });
-    });
-
-    socket.on('bot:qr', (data: { botId: string; qr: string }) => {
+    };
+    const onBotQr = (data: { botId: string; qr: string }) => {
       setQrCode(data);
-    });
-
-    socket.on('bot:connected', (data: { botId: string }) => {
+    };
+    const onBotConnected = (data: { botId: string }) => {
       setQrCode(null);
       setBotStatuses(prev => {
         const next = new Map(prev);
         next.set(data.botId, { botId: data.botId, status: 'open', timestamp: new Date().toISOString() });
         return next;
       });
-    });
+    };
+
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+    socket.on('bot:status', onBotStatus);
+    socket.on('bot:qr', onBotQr);
+    socket.on('bot:connected', onBotConnected);
+
+    if (socket.connected) setConnected(true);
 
     return () => {
-      socket.off('connect');
-      socket.off('disconnect');
-      socket.off('bot:status');
-      socket.off('bot:qr');
-      socket.off('bot:connected');
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
+      socket.off('bot:status', onBotStatus);
+      socket.off('bot:qr', onBotQr);
+      socket.off('bot:connected', onBotConnected);
     };
   }, []);
 

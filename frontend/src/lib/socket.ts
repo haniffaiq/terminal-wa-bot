@@ -1,9 +1,10 @@
 import { io, Socket } from 'socket.io-client';
-import { getCredentials } from './auth';
+import { getCredentials, isAuthenticated } from './auth';
 
 let socket: Socket | null = null;
 
-export function getSocket(): Socket {
+export function getSocket(): Socket | null {
+  if (!isAuthenticated()) return null;
   if (socket) return socket;
 
   const creds = getCredentials();
@@ -14,6 +15,8 @@ export function getSocket(): Socket {
       password: creds?.password,
     },
     transports: ['websocket'],
+    reconnectionDelay: 5000,
+    reconnectionAttempts: 10,
   });
 
   return socket;

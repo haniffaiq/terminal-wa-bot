@@ -47,6 +47,7 @@ export default function BotManagement() {
   async function handleAddBot() {
     if (!newBotId.trim()) return;
     const socket = getSocket();
+    if (!socket) return;
     socket.emit('bot:add', { botId: newBotId.trim() });
   }
 
