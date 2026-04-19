@@ -20,7 +20,6 @@ import {
 } from '@/components/ui/table';
 import { fetchApi, postApi } from '@/lib/api';
 import { useSocket } from '@/hooks/useSocket';
-import { getSocket } from '@/lib/socket';
 import { Plus, RotateCcw, Power, Trash2 } from 'lucide-react';
 
 interface BotStatusResponse {
@@ -31,6 +30,7 @@ interface BotStatusResponse {
 export default function BotManagement() {
   const [botData, setBotData] = useState<BotStatusResponse | null>(null);
   const [newBotId, setNewBotId] = useState('');
+  const [isAdminBot, setIsAdminBot] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
   const { botStatuses, qrCode, setQrCode } = useSocket();
@@ -46,9 +46,18 @@ export default function BotManagement() {
 
   async function handleAddBot() {
     if (!newBotId.trim()) return;
-    const socket = getSocket();
-    if (!socket) return;
-    socket.emit('bot:add', { botId: newBotId.trim() });
+    try {
+      const data = await postApi<{ success: boolean; qr?: string; is_admin_bot?: boolean }>('/addbot', {
+        botname: newBotId.trim(),
+        is_admin_bot: isAdminBot,
+      });
+      if (data.qr) {
+        setQrCode({ botId: newBotId.trim(), qr: data.qr });
+      }
+      await loadBots();
+    } catch (err) {
+      console.error('Failed to add bot:', err);
+    }
   }
 
   async function handleRestart(botId: string) {
@@ -107,8 +116,16 @@ export default function BotManagement() {
                   placeholder="e.g. bot_03"
                 />
               </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isAdminBot}
+                  onChange={e => setIsAdminBot(e.target.checked)}
+                />
+                <span className="text-sm">Set as Admin Bot (handles WhatsApp commands)</span>
+              </label>
               <Button onClick={handleAddBot} disabled={!newBotId.trim()}>
-                Generate QR
+                {isAdminBot ? 'Add Admin Bot' : 'Add Operation Bot'}
               </Button>
               {qrCode && (
                 <div className="flex flex-col items-center gap-2">
