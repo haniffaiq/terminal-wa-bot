@@ -268,7 +268,7 @@ function setupAdminCommands(sock) {
 
             logger.info(`Menambahkan bot: ${botName}`);
             startOperationBot(botName, sock, chatId);
-            sock.sendMessage(chatId, { text: `[XL]--Bot *${botName}* berhasil ditambahkan!` });
+            sock.sendMessage(chatId, { text: `[PLATFORM]--Bot *${botName}* berhasil ditambahkan!` });
         }
 
         if (text.startsWith('!rst')) {
@@ -279,7 +279,7 @@ function setupAdminCommands(sock) {
 
             logger.info(`Menambahkan bot: ${botName}`);
             reconnectSingleBotCommand(botName, chatId);
-            sock.sendMessage(chatId, { text: `[XL]--Bot *${botName}* Sedang direstart!` });
+            sock.sendMessage(chatId, { text: `[PLATFORM]--Bot *${botName}* Sedang direstart!` });
         }
 
         if (text.startsWith('!rmbot')) {
@@ -289,7 +289,7 @@ function setupAdminCommands(sock) {
             }
 
             await stopOperationBot(botNumber);
-            sock.sendMessage(chatId, { text: `[XL]--Bot ${botNumber} dihapus.` });
+            sock.sendMessage(chatId, { text: `[PLATFORM]--Bot ${botNumber} dihapus.` });
             logger.info(`Bot ${botNumber} dihapus.`);
         }
 
@@ -449,12 +449,12 @@ function setupAdminCommands(sock) {
 
         if (text.startsWith('!restart')) {
             await reconnectBot();
-            sock.sendMessage(chatId, { text: `[XL]--Merestart Semua Bot Operation.` });
+            sock.sendMessage(chatId, { text: `[PLATFORM]--Merestart Semua Bot Operation.` });
             logger.info(`Merestart Semua Bot Operation.`);
         }
 
         if (text === '!groupid') {
-            sock.sendMessage(chatId, { text: `[XL]--*Group ID:* ${chatId}` });
+            sock.sendMessage(chatId, { text: `[PLATFORM]--*Group ID:* ${chatId}` });
             logger.info(`Group ID diminta oleh ${chatId}`);
         }
 
@@ -467,7 +467,7 @@ function setupAdminCommands(sock) {
                 await testConnection(chatId)
                 await getBotStatusList(chatId);
 
-                // sock.sendMessage(chatId, { text: `[XL]--*Data* ${data}` });
+                // sock.sendMessage(chatId, { text: `[PLATFORM]--*Data* ${data}` });
             } catch (err) {
                 logger.error({ err }, 'Gagal Info Operation Bot.');
             }
@@ -484,7 +484,7 @@ function setupAdminCommands(sock) {
                     await getBotStatusList(chatId);
 
                     // Kirim data jika perlu
-                    // await sock.sendMessage(chatId, { text: `[XL]--*Data:* ${JSON.stringify(data)}` });
+                    // await sock.sendMessage(chatId, { text: `[PLATFORM]--*Data:* ${JSON.stringify(data)}` });
                 }
             } catch (err) {
                 logger.error({ err }, 'Gagal Info Operation Bot.');
@@ -494,7 +494,7 @@ function setupAdminCommands(sock) {
             try {
                 let groupInfo = await getGroupInfo(sock, chatId)
                 logger.info(groupInfo);
-                sock.sendMessage(chatId, { text: `[XL]--*Data* ${groupInfo}` });
+                sock.sendMessage(chatId, { text: `[PLATFORM]--*Data* ${groupInfo}` });
             } catch (err) {
                 logger.error({ err }, 'Gagal Info Operation Bot.');
             }
@@ -591,7 +591,7 @@ function statusBotAPI() {
 
 
 function testConnection(target) {
-    adminGlobalSock.sendMessage(target, { text: `[XL]--Bot ADMIN sudah CONNECTED!` });
+    adminGlobalSock.sendMessage(target, { text: `[PLATFORM]--Bot ADMIN sudah CONNECTED!` });
 }
 
 module.exports = { startAdminBot, testConnection, checkBotStatus, statusBotAPI };
