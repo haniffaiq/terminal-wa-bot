@@ -9,6 +9,8 @@ import Groups from '@/pages/Groups';
 import FailedRequests from '@/pages/FailedRequests';
 import Statistics from '@/pages/Statistics';
 import Logs from '@/pages/Logs';
+import TenantManagement from '@/pages/TenantManagement';
+import CustomCommands from '@/pages/CustomCommands';
 
 export default function App() {
   const [, setAuthed] = useState(false);
@@ -25,6 +27,8 @@ export default function App() {
             <Route path="/failed" element={<FailedRequests />} />
             <Route path="/stats" element={<Statistics />} />
             <Route path="/logs" element={<Logs />} />
+            <Route path="/commands" element={<CustomCommands />} />
+            <Route path="/tenants" element={<TenantManagement />} />
           </Routes>
         </Layout>
       </ProtectedRoute>

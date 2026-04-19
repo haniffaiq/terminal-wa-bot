@@ -14,25 +14,32 @@ import {
   X,
   Sun,
   Moon,
+  Terminal,
+  Building2,
 } from 'lucide-react';
-import { clearToken } from '@/lib/auth';
+import { getUser, isSuperAdmin, clearToken } from '@/lib/auth';
 import { disconnectSocket } from '@/lib/socket';
 import { useTheme } from '@/hooks/useTheme';
-
-const navItems = [
-  { path: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { path: '/bots', label: 'Bot Management', icon: Bot },
-  { path: '/send', label: 'Send Message', icon: Send },
-  { path: '/groups', label: 'Groups', icon: Users },
-  { path: '/failed', label: 'Failed Requests', icon: AlertTriangle },
-  { path: '/stats', label: 'Statistics', icon: BarChart3 },
-  { path: '/logs', label: 'Logs', icon: FileText },
-];
 
 export function Layout({ children, onLogout }: { children: React.ReactNode; onLogout: () => void }) {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
+
+  const user = getUser();
+  const brandName = user?.brandName || 'Dashboard';
+
+  const navItems = [
+    { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+    { path: '/bots', label: 'Bot Management', icon: Bot },
+    { path: '/send', label: 'Send Message', icon: Send },
+    { path: '/groups', label: 'Groups', icon: Users },
+    { path: '/failed', label: 'Failed Requests', icon: AlertTriangle },
+    { path: '/stats', label: 'Statistics', icon: BarChart3 },
+    { path: '/logs', label: 'Logs', icon: FileText },
+    ...(user?.tenantId ? [{ path: '/commands', label: 'Custom Commands', icon: Terminal }] : []),
+    ...(isSuperAdmin() ? [{ path: '/tenants', label: 'Tenants', icon: Building2 }] : []),
+  ];
 
   function handleLogout() {
     clearToken();
@@ -51,7 +58,7 @@ export function Layout({ children, onLogout }: { children: React.ReactNode; onLo
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         <div className="flex items-center justify-between h-16 px-4 border-b border-border">
-          <h1 className="text-lg font-bold">ZYRON</h1>
+          <h1 className="text-lg font-bold">{brandName}</h1>
           <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setSidebarOpen(false)}>
             <X className="h-5 w-5" />
           </Button>
