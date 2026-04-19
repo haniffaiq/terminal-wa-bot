@@ -400,26 +400,32 @@ async function stopOperationBot(botId, tenantId) {
         delete reconnectTimers[timerKey];
     }
 
-    const authFolder = path.join(__dirname, '..', 'auth_sessions', tenantId || '', botId);
-    if (fs.existsSync(authFolder)) {
-        fs.rmSync(authFolder, { recursive: true, force: true });
-    }
-
+    // Disconnect socket
     if (operationBots[tenantId]?.[botId]) {
         try { await operationBots[tenantId][botId].end(); } catch (err) {}
         delete operationBots[tenantId][botId];
     }
 
+    // Remove from group cache
     if (groupBots[tenantId]) {
         for (const gId of Object.keys(groupBots[tenantId])) {
             groupBots[tenantId][gId] = groupBots[tenantId][gId].filter(b => b !== botId);
         }
     }
 
-    // Remove from DB
+    // Clear admin_bot_id if this was the admin bot
+    try {
+        await query('UPDATE tenants SET admin_bot_id = NULL WHERE id = $1 AND admin_bot_id = $2', [tenantId, botId]);
+    } catch (err) {}
+
+    // Delete all DB records: bot_status + auth_sessions
     try {
         await query('DELETE FROM bot_status WHERE tenant_id = $1 AND bot_id = $2', [tenantId, botId]);
-    } catch (err) {}
+        await query('DELETE FROM auth_sessions WHERE tenant_id = $1 AND bot_id = $2', [tenantId, botId]);
+        logger.info(`[${botId}] Deleted bot_status + auth_sessions from DB (tenant ${tenantId})`);
+    } catch (err) {
+        logger.error(`[${botId}] DB cleanup error: ${err.message}`);
+    }
 
     return true;
 }
