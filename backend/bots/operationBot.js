@@ -3,60 +3,84 @@ const pino = require('pino');
 const qrcode = require('qrcode');
 const path = require('path');
 const { DisconnectReason } = require('baileys');
-const { createSock, updateBotStatus } = require('../utils/createSock');
+const { createSock } = require('../utils/createSock');
+const { query } = require('../utils/db');
 
-// --- Logger setup ---
 const logger = pino({
     transport: {
         target: 'pino-pretty',
-        options: {
-            colorize: true,
-            ignore: 'pid,hostname',
-            levelFirst: true
-        }
+        options: { colorize: true, ignore: 'pid,hostname', levelFirst: true }
     },
     level: 'info'
 }).child({ service: 'Operation' });
 
+// Tenant-keyed maps: { tenantId: { botId: value } }
 let operationBots = {};
 let groupBots = {};
+let groupCache = {};
 const reconnectTimers = {};
-// Merged group cache: groupId → { id, name, member_count, bots: [botId, ...] }
-const groupCache = new Map();
 const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_DELAY = 10000;
 
-const STATUS_FILE = path.join(__dirname, '../data/bot_status.json');
+// Helper: ensure tenant maps exist
+function ensureTenant(tenantId) {
+    if (!operationBots[tenantId]) operationBots[tenantId] = {};
+    if (!groupBots[tenantId]) groupBots[tenantId] = {};
+    if (!groupCache[tenantId]) groupCache[tenantId] = new Map();
+}
 
-function getBotStatusMap() {
-    if (!fs.existsSync(STATUS_FILE)) return {};
+// DB-based bot status
+async function getBotStatusMap(tenantId) {
     try {
-        return JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'));
+        const result = await query('SELECT bot_id, status FROM bot_status WHERE tenant_id = $1', [tenantId]);
+        const map = {};
+        result.rows.forEach(r => { map[r.bot_id] = r.status; });
+        return map;
     } catch (err) {
         return {};
     }
 }
 
-// ============================================================
+async function updateBotStatus(botId, status, tenantId) {
+    try {
+        await query(
+            `INSERT INTO bot_status (tenant_id, bot_id, status, updated_at)
+             VALUES ($1, $2, $3, NOW())
+             ON CONFLICT (tenant_id, bot_id) DO UPDATE SET status = $3, updated_at = NOW()`,
+            [tenantId, botId, status]
+        );
+    } catch (err) {
+        console.error('Bot status DB error:', err.message);
+    }
+
+    if (status === 'open' || status === 'close') {
+        try {
+            const { io } = require('../index');
+            if (io && tenantId) {
+                io.to(`tenant:${tenantId}`).emit('bot:status', { botId, status, timestamp: new Date().toISOString() });
+                io.to('super_admin').emit('bot:status', { botId, status, tenantId, timestamp: new Date().toISOString() });
+            }
+        } catch (e) {}
+    }
+}
+
 // Group cache management
-// ============================================================
-async function updateGroupCache(botId, sock) {
+async function updateGroupCache(botId, sock, tenantId) {
+    ensureTenant(tenantId);
     try {
         const groups = Object.values(await sock.groupFetchAllParticipating());
         groups.forEach((group) => {
-            // Update groupBots for round-robin
-            if (!groupBots[group.id]) groupBots[group.id] = [];
-            if (!groupBots[group.id].includes(botId)) groupBots[group.id].push(botId);
+            if (!groupBots[tenantId][group.id]) groupBots[tenantId][group.id] = [];
+            if (!groupBots[tenantId][group.id].includes(botId)) groupBots[tenantId][group.id].push(botId);
 
-            // Update merged cache
-            const existing = groupCache.get(group.id);
+            const cache = groupCache[tenantId];
+            const existing = cache.get(group.id);
             if (existing) {
-                // Update info, add bot to list
                 existing.name = group.subject || existing.name;
                 existing.member_count = group.participants.length;
                 if (!existing.bots.includes(botId)) existing.bots.push(botId);
             } else {
-                groupCache.set(group.id, {
+                cache.set(group.id, {
                     id: group.id,
                     name: group.subject || '',
                     member_count: group.participants.length,
@@ -64,102 +88,115 @@ async function updateGroupCache(botId, sock) {
                 });
             }
         });
-        logger.info(`[${botId}] Registered in ${groups.length} groups. Total unique groups: ${groupCache.size}`);
+        logger.info(`[${botId}] Registered in ${groups.length} groups (tenant ${tenantId})`);
     } catch (err) {
-        logger.error(`[${botId}] Gagal fetch groups: ${err.message}`);
+        logger.error(`[${botId}] Failed to fetch groups: ${err.message}`);
     }
 }
 
-function getAllGroups() {
-    return Array.from(groupCache.values());
+function getAllGroups(tenantId) {
+    if (!tenantId || !groupCache[tenantId]) return [];
+    return Array.from(groupCache[tenantId].values());
 }
 
-// ============================================================
-// Core: single connect function used by ALL paths
-// ============================================================
+// Core connect function
 async function connectBot(botId, opts = {}) {
-    const { adminSock, chatId, attempt = 0 } = opts;
+    const { adminSock, chatId, tenantId, attempt = 0 } = opts;
+    const timerKey = `${tenantId}:${botId}`;
 
-    if (reconnectTimers[botId] === 'connecting') {
+    if (!tenantId) {
+        logger.error(`[${botId}] Cannot connect without tenantId`);
+        return null;
+    }
+
+    ensureTenant(tenantId);
+
+    if (reconnectTimers[timerKey] === 'connecting') {
         logger.warn(`[${botId}] Already connecting, skipping.`);
         return null;
     }
 
     if (attempt >= MAX_RECONNECT_ATTEMPTS) {
-        logger.error(`[${botId}] Max reconnect attempts (${MAX_RECONNECT_ATTEMPTS}) reached.`);
-        updateBotStatus(botId, 'close');
+        logger.error(`[${botId}] Max reconnect attempts reached.`);
+        await updateBotStatus(botId, 'close', tenantId);
         return null;
     }
 
-    // Clean up old socket
-    if (operationBots[botId]) {
-        try { await operationBots[botId].end(); } catch (e) {}
-        delete operationBots[botId];
+    if (operationBots[tenantId][botId]) {
+        try { await operationBots[tenantId][botId].end(); } catch (e) {}
+        delete operationBots[tenantId][botId];
     }
 
-    // Clear pending reconnect timer
-    if (reconnectTimers[botId] && reconnectTimers[botId] !== 'connecting') {
-        clearTimeout(reconnectTimers[botId]);
-        delete reconnectTimers[botId];
+    if (reconnectTimers[timerKey] && reconnectTimers[timerKey] !== 'connecting') {
+        clearTimeout(reconnectTimers[timerKey]);
+        delete reconnectTimers[timerKey];
     }
 
-    reconnectTimers[botId] = 'connecting';
+    reconnectTimers[timerKey] = 'connecting';
+
+    // Auth sessions scoped by tenant
+    const authFolder = path.join(__dirname, '..', 'auth_sessions', tenantId, botId);
+    if (!fs.existsSync(authFolder)) {
+        fs.mkdirSync(authFolder, { recursive: true });
+    }
 
     try {
-        logger.info(`[${botId}] Connecting (attempt ${attempt + 1})...`);
-        const { sock } = await createSock(botId);
+        logger.info(`[${botId}] Connecting (attempt ${attempt + 1}, tenant ${tenantId})...`);
+        const { sock } = await createSock(botId, tenantId);
 
         sock.ev.on('connection.update', async ({ connection, qr, lastDisconnect }) => {
             if (qr && adminSock && chatId) {
                 try {
-                    const qrPath = path.join(__dirname, '..', 'auth_sessions', `${botId}.png`);
+                    const qrPath = path.join(__dirname, '..', 'auth_sessions', tenantId, `${botId}.png`);
                     await qrcode.toFile(qrPath, qr);
                     const imageBuffer = fs.readFileSync(qrPath);
                     await adminSock.sendMessage(chatId, {
                         image: imageBuffer,
-                        caption: `Scan QR Code untuk bot ${botId}`
+                        caption: `Scan QR Code for bot ${botId}`
                     });
                 } catch (err) {
-                    logger.error(`[${botId}] Gagal kirim QR: ${err.message}`);
+                    logger.error(`[${botId}] Failed to send QR: ${err.message}`);
                 }
             }
 
             if (connection === 'open') {
-                logger.info(`[${botId}] Connected.`);
-                operationBots[botId] = sock;
-                updateBotStatus(botId, 'open');
-                delete reconnectTimers[botId];
+                logger.info(`[${botId}] Connected (tenant ${tenantId}).`);
+                operationBots[tenantId][botId] = sock;
+                await updateBotStatus(botId, 'open', tenantId);
+                delete reconnectTimers[timerKey];
 
                 if (adminSock && chatId) {
                     try {
-                        await adminSock.sendMessage(chatId, { text: `Bot ${botId} berhasil connect.` });
+                        await adminSock.sendMessage(chatId, { text: `Bot ${botId} connected.` });
                     } catch (e) {}
                 }
 
-                await updateGroupCache(botId, sock);
+                await updateGroupCache(botId, sock, tenantId);
             }
 
             if (connection === 'close') {
                 const statusCode = lastDisconnect?.error?.output?.statusCode;
-                logger.warn(`[${botId}] Disconnected (reason: ${statusCode}).`);
-                updateBotStatus(botId, 'close');
-                delete operationBots[botId];
-                delete reconnectTimers[botId];
+                logger.warn(`[${botId}] Disconnected (reason: ${statusCode}, tenant ${tenantId}).`);
+                await updateBotStatus(botId, 'close', tenantId);
+                if (operationBots[tenantId]) delete operationBots[tenantId][botId];
+                delete reconnectTimers[timerKey];
 
                 if (statusCode === DisconnectReason.loggedOut) {
                     logger.error(`[${botId}] Logged out. Session cleared.`);
-                    const authFolder = path.join(__dirname, '..', 'auth_sessions', botId);
-                    if (fs.existsSync(authFolder)) {
-                        fs.rmSync(authFolder, { recursive: true, force: true });
+                    const sessFolder = path.join(__dirname, '..', 'auth_sessions', tenantId, botId);
+                    if (fs.existsSync(sessFolder)) {
+                        fs.rmSync(sessFolder, { recursive: true, force: true });
                     }
-                    for (const gId of Object.keys(groupBots)) {
-                        groupBots[gId] = groupBots[gId].filter(b => b !== botId);
+                    if (groupBots[tenantId]) {
+                        for (const gId of Object.keys(groupBots[tenantId])) {
+                            groupBots[tenantId][gId] = groupBots[tenantId][gId].filter(b => b !== botId);
+                        }
                     }
                 } else {
                     const delay = RECONNECT_DELAY * (attempt + 1);
                     logger.info(`[${botId}] Will reconnect in ${delay / 1000}s...`);
-                    reconnectTimers[botId] = setTimeout(() => {
-                        connectBot(botId, { adminSock, chatId, attempt: attempt + 1 });
+                    reconnectTimers[timerKey] = setTimeout(() => {
+                        connectBot(botId, { adminSock, chatId, tenantId, attempt: attempt + 1 });
                     }, delay);
                 }
             }
@@ -168,46 +205,46 @@ async function connectBot(botId, opts = {}) {
         return sock;
     } catch (err) {
         logger.error(`[${botId}] Connect error: ${err.message}`);
-        delete reconnectTimers[botId];
+        delete reconnectTimers[timerKey];
 
         const delay = RECONNECT_DELAY * (attempt + 1);
-        reconnectTimers[botId] = setTimeout(() => {
-            connectBot(botId, { adminSock, chatId, attempt: attempt + 1 });
+        reconnectTimers[timerKey] = setTimeout(() => {
+            connectBot(botId, { adminSock, chatId, tenantId, attempt: attempt + 1 });
         }, delay);
         return null;
     }
 }
 
-// ============================================================
-// Public API — all delegate to connectBot
-// ============================================================
-
-async function startOperationBot(botId, adminSock, chatId) {
-    return connectBot(botId, { adminSock, chatId });
+// Public API
+async function startOperationBot(botId, adminSock, chatId, tenantId) {
+    return connectBot(botId, { adminSock, chatId, tenantId });
 }
 
-async function reconnectSingleBot(botId) {
-    return connectBot(botId);
+async function reconnectSingleBot(botId, tenantId) {
+    return connectBot(botId, { tenantId });
 }
 
-async function reconnectSingleBotCommand(botId) {
-    return connectBot(botId);
+async function reconnectSingleBotCommand(botId, tenantId) {
+    return connectBot(botId, { tenantId });
 }
 
-async function reconnectSingleBotAPI(botId) {
-    return connectBot(botId);
+async function reconnectSingleBotAPI(botId, tenantId) {
+    return connectBot(botId, { tenantId });
 }
 
-async function startOperationBotAPI(botId) {
+async function startOperationBotAPI(botId, tenantId) {
+    if (!tenantId) return null;
+    ensureTenant(tenantId);
     let qrBase64 = null;
 
     try {
-        const { sock } = await createSock(botId);
+        const { sock } = await createSock(botId, tenantId);
 
         sock.ev.on('connection.update', async ({ connection, qr, lastDisconnect }) => {
             if (qr) {
                 try {
-                    const qrPath = path.join(__dirname, '..', 'auth_sessions', `${botId}.png`);
+                    const qrPath = path.join(__dirname, '..', 'auth_sessions', tenantId, `${botId}.png`);
+                    if (!fs.existsSync(path.dirname(qrPath))) fs.mkdirSync(path.dirname(qrPath), { recursive: true });
                     await qrcode.toFile(qrPath, qr);
                     const imageBuffer = fs.readFileSync(qrPath);
                     qrBase64 = `data:image/png;base64,${imageBuffer.toString('base64')}`;
@@ -217,34 +254,26 @@ async function startOperationBotAPI(botId) {
             }
 
             if (connection === 'open') {
-                logger.info(`[${botId}] Connected via API.`);
-                operationBots[botId] = sock;
-                updateBotStatus(botId, 'open');
-                await updateGroupCache(botId, sock);
+                logger.info(`[${botId}] Connected via API (tenant ${tenantId}).`);
+                operationBots[tenantId][botId] = sock;
+                await updateBotStatus(botId, 'open', tenantId);
+                await updateGroupCache(botId, sock, tenantId);
             }
 
             if (connection === 'close') {
                 const statusCode = lastDisconnect?.error?.output?.statusCode;
-                updateBotStatus(botId, 'close');
-
+                await updateBotStatus(botId, 'close', tenantId);
                 if (statusCode !== DisconnectReason.loggedOut) {
-                    setTimeout(() => connectBot(botId), RECONNECT_DELAY);
+                    setTimeout(() => connectBot(botId, { tenantId }), RECONNECT_DELAY);
                 }
             }
         });
 
         return new Promise((resolve) => {
             const checkQR = setInterval(() => {
-                if (qrBase64) {
-                    clearInterval(checkQR);
-                    resolve(qrBase64);
-                }
+                if (qrBase64) { clearInterval(checkQR); resolve(qrBase64); }
             }, 500);
-
-            setTimeout(() => {
-                clearInterval(checkQR);
-                resolve(null);
-            }, 15000);
+            setTimeout(() => { clearInterval(checkQR); resolve(null); }, 15000);
         });
     } catch (error) {
         logger.error(`[${botId}] API start error: ${error.message}`);
@@ -252,146 +281,145 @@ async function startOperationBotAPI(botId) {
     }
 }
 
-// Reconnect all existing bots on startup
+// Reconnect all bots for a tenant (or all tenants if tenantId is null)
 let isReconnecting = false;
 
-async function reconnectBot() {
+async function reconnectBot(tenantId) {
     if (isReconnecting) return;
     isReconnecting = true;
 
-    const sessionFolder = path.join(__dirname, '..', 'auth_sessions');
-    if (!fs.existsSync(sessionFolder)) {
-        fs.mkdirSync(sessionFolder, { recursive: true });
-        isReconnecting = false;
-        return;
-    }
+    try {
+        let result;
+        if (tenantId) {
+            result = await query(
+                'SELECT bot_id, tenant_id FROM bot_status WHERE tenant_id = $1 AND is_admin_bot = FALSE',
+                [tenantId]
+            );
+        } else {
+            result = await query('SELECT bot_id, tenant_id FROM bot_status WHERE is_admin_bot = FALSE');
+        }
 
-    const botFolders = fs.readdirSync(sessionFolder).filter((bot) => {
-        const fullPath = path.join(sessionFolder, bot);
-        return fs.statSync(fullPath).isDirectory() && bot !== 'admin_bot';
-    });
+        logger.info(`Reconnecting ${result.rows.length} operation bots...`);
 
-    logger.info(`Reconnecting ${botFolders.length} operation bots...`);
-
-    for (const botId of botFolders) {
-        await connectBot(botId);
-        await new Promise(r => setTimeout(r, 3000));
+        for (const row of result.rows) {
+            await connectBot(row.bot_id, { tenantId: row.tenant_id });
+            await new Promise(r => setTimeout(r, 3000));
+        }
+    } catch (err) {
+        logger.error(`Reconnect failed: ${err.message}`);
     }
 
     isReconnecting = false;
-    logger.info('All operation bots reconnect initiated.');
 }
 
-// ============================================================
-// Bot selection & management
-// ============================================================
-
-function getNextBotForGroup(groupId) {
-    const activeBots = groupBots[groupId] || [];
+// Bot selection
+function getNextBotForGroup(groupId, tenantId) {
+    if (!tenantId || !groupBots[tenantId]) return null;
+    const activeBots = groupBots[tenantId][groupId] || [];
     if (activeBots.length === 0) return null;
 
-    const statusMap = getBotStatusMap();
-    const filteredBots = activeBots.filter(botId =>
-        statusMap[botId] === 'open' && operationBots[botId]
-    );
-    if (filteredBots.length === 0) return null;
+    // Sync filter — use in-memory status
+    const filtered = activeBots.filter(botId => operationBots[tenantId]?.[botId]);
+    if (filtered.length === 0) return null;
 
-    const nextBotId = filteredBots[0];
+    const nextBotId = filtered[0];
     const index = activeBots.indexOf(nextBotId);
     if (index !== -1) {
         activeBots.splice(index, 1);
         activeBots.push(nextBotId);
     }
-    groupBots[groupId] = activeBots;
-    return operationBots[nextBotId];
+    groupBots[tenantId][groupId] = activeBots;
+    return operationBots[tenantId][nextBotId];
 }
 
-function getNextBotForIndividual(number) {
-    const statusMap = getBotStatusMap();
-    const activeBotIds = Object.keys(operationBots).filter(
-        botId => statusMap[botId] === 'open'
-    );
-    if (activeBotIds.length === 0) return null;
-    return operationBots[activeBotIds[0]];
+function getNextBotForIndividual(number, tenantId) {
+    if (!tenantId || !operationBots[tenantId]) return null;
+    const botIds = Object.keys(operationBots[tenantId]);
+    if (botIds.length === 0) return null;
+    return operationBots[tenantId][botIds[0]];
 }
 
-async function disconnectBotForce(botId) {
-    if (!operationBots[botId]) {
-        return { success: false, message: 'Bot tidak aktif' };
+async function disconnectBotForce(botId, tenantId) {
+    if (!tenantId || !operationBots[tenantId]?.[botId]) {
+        return { success: false, message: 'Bot not active' };
     }
 
-    if (reconnectTimers[botId] && reconnectTimers[botId] !== 'connecting') {
-        clearTimeout(reconnectTimers[botId]);
-        delete reconnectTimers[botId];
+    const timerKey = `${tenantId}:${botId}`;
+    if (reconnectTimers[timerKey] && reconnectTimers[timerKey] !== 'connecting') {
+        clearTimeout(reconnectTimers[timerKey]);
+        delete reconnectTimers[timerKey];
     }
 
     try {
-        await operationBots[botId].end();
-        delete operationBots[botId];
-        updateBotStatus(botId, 'close');
-        return { success: true, message: 'Koneksi diputus' };
+        await operationBots[tenantId][botId].end();
+        delete operationBots[tenantId][botId];
+        await updateBotStatus(botId, 'close', tenantId);
+        return { success: true, message: 'Disconnected' };
     } catch (err) {
-        return { success: false, message: 'Gagal disconnect', error: err.toString() };
+        return { success: false, message: 'Failed to disconnect', error: err.toString() };
     }
 }
 
-async function getBotStatusList(target) {
-    const sessionFolder = path.join(__dirname, '..', 'auth_sessions');
-    if (!fs.existsSync(sessionFolder)) return { connected: [], disconnected: [] };
+async function getBotStatusList(tenantId, target) {
+    try {
+        const result = await query(
+            'SELECT bot_id, status FROM bot_status WHERE tenant_id = $1 AND is_admin_bot = FALSE',
+            [tenantId]
+        );
 
-    const botFolders = fs.readdirSync(sessionFolder).filter((bot) =>
-        fs.statSync(path.join(sessionFolder, bot)).isDirectory() && bot !== 'admin_bot'
-    );
+        const connected = [];
+        const disconnected = [];
 
-    const connected = [];
-    const disconnected = [];
-
-    for (const botId of botFolders) {
-        if (operationBots[botId]) {
-            connected.push(botId);
-            if (target) {
-                try {
-                    await operationBots[botId].sendMessage(target, { text: `✅ *${botId}* — responding` });
-                } catch (err) {}
+        for (const row of result.rows) {
+            if (row.status === 'open' && operationBots[tenantId]?.[row.bot_id]) {
+                connected.push(row.bot_id);
+                if (target) {
+                    try {
+                        await operationBots[tenantId][row.bot_id].sendMessage(target, { text: `✅ *${row.bot_id}* — responding` });
+                    } catch (err) {}
+                }
+            } else {
+                disconnected.push(row.bot_id);
             }
-        } else {
-            disconnected.push(botId);
+        }
+        return { connected, disconnected };
+    } catch (err) {
+        return { connected: [], disconnected: [] };
+    }
+}
+
+function getOperationSock(tenantId) {
+    if (!tenantId) return groupBots;
+    return groupBots[tenantId] || null;
+}
+
+async function stopOperationBot(botId, tenantId) {
+    const timerKey = `${tenantId}:${botId}`;
+    if (reconnectTimers[timerKey] && reconnectTimers[timerKey] !== 'connecting') {
+        clearTimeout(reconnectTimers[timerKey]);
+        delete reconnectTimers[timerKey];
+    }
+
+    const authFolder = path.join(__dirname, '..', 'auth_sessions', tenantId || '', botId);
+    if (fs.existsSync(authFolder)) {
+        fs.rmSync(authFolder, { recursive: true, force: true });
+    }
+
+    if (operationBots[tenantId]?.[botId]) {
+        try { await operationBots[tenantId][botId].end(); } catch (err) {}
+        delete operationBots[tenantId][botId];
+    }
+
+    if (groupBots[tenantId]) {
+        for (const gId of Object.keys(groupBots[tenantId])) {
+            groupBots[tenantId][gId] = groupBots[tenantId][gId].filter(b => b !== botId);
         }
     }
-    return { connected, disconnected };
-}
 
-function getOperationSock() {
-    return groupBots || null;
-}
-
-async function stopOperationBot(botId) {
-    if (reconnectTimers[botId] && reconnectTimers[botId] !== 'connecting') {
-        clearTimeout(reconnectTimers[botId]);
-        delete reconnectTimers[botId];
-    }
-
-    const AUTH_FOLDER = path.join(__dirname, '..', 'auth_sessions', botId);
-    if (fs.existsSync(AUTH_FOLDER)) {
-        fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
-    }
-
-    if (operationBots[botId]) {
-        try { await operationBots[botId].end(); } catch (err) {}
-        delete operationBots[botId];
-    }
-
-    for (const gId of Object.keys(groupBots)) {
-        groupBots[gId] = groupBots[gId].filter(b => b !== botId);
-    }
-
-    if (fs.existsSync(STATUS_FILE)) {
-        try {
-            const data = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf-8'));
-            delete data[botId];
-            fs.writeFileSync(STATUS_FILE, JSON.stringify(data, null, 2));
-        } catch (err) {}
-    }
+    // Remove from DB
+    try {
+        await query('DELETE FROM bot_status WHERE tenant_id = $1 AND bot_id = $2', [tenantId, botId]);
+    } catch (err) {}
 
     return true;
 }
@@ -410,5 +438,6 @@ module.exports = {
     disconnectBotForce,
     getNextBotForIndividual,
     getAllGroups,
-    updateGroupCache
+    updateGroupCache,
+    updateBotStatus
 };

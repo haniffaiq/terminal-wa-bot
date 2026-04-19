@@ -4,9 +4,9 @@ const qrcode = require('qrcode');
 const qrcodeTerminal = require('qrcode-terminal');
 const path = require('path');
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('baileys');
-const { startOperationBot, stopOperationBot, reconnectBot, getOperationSock, getBotStatusList, reconnectSingleBotCommand, updateGroupCache } = require('./operationBot');
+const { startOperationBot, stopOperationBot, reconnectBot, getOperationSock, getBotStatusList, reconnectSingleBotCommand, updateGroupCache, updateBotStatus } = require('./operationBot');
 
-const { createSock, updateBotStatus } = require('../utils/createSock');
+const { createSock } = require('../utils/createSock');
 const { connected, disconnect } = require('process');
 const http = require("http");
 const https = require("https");
