@@ -1,35 +1,51 @@
-const STORAGE_KEY = 'wa-bot-auth';
+const TOKEN_KEY = 'wa-bot-token';
 
-function loadCredentials(): { username: string; password: string } | null {
+export interface UserPayload {
+  userId: string;
+  tenantId: string | null;
+  role: 'super_admin' | 'admin';
+  brandName: string;
+  exp: number;
+}
+
+export function setToken(token: string) {
+  sessionStorage.setItem(TOKEN_KEY, token);
+}
+
+export function getToken(): string | null {
+  return sessionStorage.getItem(TOKEN_KEY);
+}
+
+export function clearToken() {
+  sessionStorage.removeItem(TOKEN_KEY);
+}
+
+export function getAuthHeader(): string | null {
+  const token = getToken();
+  if (!token) return null;
+  return `Bearer ${token}`;
+}
+
+export function getUser(): UserPayload | null {
+  const token = getToken();
+  if (!token) return null;
   try {
-    const stored = sessionStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : null;
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    if (payload.exp * 1000 < Date.now()) {
+      clearToken();
+      return null;
+    }
+    return payload;
   } catch {
+    clearToken();
     return null;
   }
 }
 
-let credentials = loadCredentials();
-
-export function setCredentials(username: string, password: string) {
-  credentials = { username, password };
-  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(credentials));
-}
-
-export function getCredentials() {
-  return credentials;
-}
-
-export function clearCredentials() {
-  credentials = null;
-  sessionStorage.removeItem(STORAGE_KEY);
-}
-
-export function getAuthHeader(): string | null {
-  if (!credentials) return null;
-  return 'Basic ' + btoa(`${credentials.username}:${credentials.password}`);
-}
-
 export function isAuthenticated(): boolean {
-  return credentials !== null;
+  return getUser() !== null;
+}
+
+export function isSuperAdmin(): boolean {
+  return getUser()?.role === 'super_admin';
 }

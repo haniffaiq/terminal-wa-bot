@@ -15,7 +15,7 @@ import {
   Sun,
   Moon,
 } from 'lucide-react';
-import { clearCredentials } from '@/lib/auth';
+import { clearToken } from '@/lib/auth';
 import { disconnectSocket } from '@/lib/socket';
 import { useTheme } from '@/hooks/useTheme';
 
@@ -35,7 +35,7 @@ export function Layout({ children, onLogout }: { children: React.ReactNode; onLo
   const { theme, toggleTheme } = useTheme();
 
   function handleLogout() {
-    clearCredentials();
+    clearToken();
     disconnectSocket();
     onLogout();
   }

@@ -1,4 +1,4 @@
-import { getAuthHeader, clearCredentials } from './auth';
+import { getAuthHeader, clearToken } from './auth';
 
 const BASE_URL = '/api';
 
@@ -21,7 +21,7 @@ export async function fetchApi<T = unknown>(
   });
 
   if (res.status === 401) {
-    clearCredentials();
+    clearToken();
     window.location.reload();
     throw new Error('Unauthorized');
   }
