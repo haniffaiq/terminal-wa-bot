@@ -1,0 +1,22 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8008:8008"
+    volumes:
+      - ./backend/auth_sessions:/app/auth_sessions
+      - ./backend/data:/app/data
+      - ./backend/logs:/app/logs
+      - ./backend/stats:/app/stats
+      - ./backend/uploads:/app/uploads
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
