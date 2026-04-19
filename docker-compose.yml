@@ -17,7 +17,6 @@ services:
     ports:
       - "8008:8008"
     volumes:
-      - ./backend/auth_sessions:/app/auth_sessions
       - ./backend/logs:/app/logs
       - ./backend/uploads:/app/uploads
     environment:
