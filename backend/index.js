@@ -3,14 +3,19 @@ const express = require('express');
 const cors = require('cors');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
-const { startAdminBot, testConnection, statusBotAPI } = require('./bots/adminBot');
+const { startAdminBot, testConnection } = require('./bots/adminBot');
 const { checkHeartbeatFromFile } = require('./bots/hertbeat');
 const stats = require("./utils/statmanager");
 const db = require("./utils/db");
 const util = require('util')
 
 const { getOperationSock, getNextBotForGroup, reconnectBot, startOperationBotAPI, getBotStatusList, disconnectBotForce, reconnectSingleBotAPI, getNextBotForIndividual, stopOperationBot, getAllGroups } = require('./bots/operationBot');
-const midleware = require('./utils/midleware');
+const { authMiddleware } = require('./utils/midleware');
+const authRoutes = require('./routes/auth');
+const tenantRoutes = require('./routes/tenants');
+const commandRoutes = require('./routes/commands');
+const { seedSuperAdmin } = require('./utils/seed');
+const { verifyToken } = require('./utils/auth');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
@@ -41,7 +46,11 @@ app.use(cors({
     origin: process.env.NODE_ENV === 'production' ? false : ['http://localhost:5173'],
     credentials: true
 }));
-app.use(midleware);
+app.use(authMiddleware);
+
+app.use('/api/auth', authRoutes);
+app.use('/api/tenants', tenantRoutes);
+app.use('/api/commands', commandRoutes);
 
 function getBlockedList() {
     try {
@@ -69,6 +78,7 @@ function formatDate(date) {
 
 startAdminBot();
 checkHeartbeatFromFile();
+seedSuperAdmin();
 
 let todayDate = getTodayDate();
 let requestCounter = 0;
@@ -146,17 +156,12 @@ function writeLogToFile(filePath, logMessage) {
 }
 
 
-async function saveFailedRequest(data, transactionId) {
+async function saveFailedRequest(data, transactionId, tenantId) {
     try {
         await db.query(
-            `INSERT INTO failed_requests (transaction_id, target_numbers, message, error)
-             VALUES ($1, $2, $3, $4)`,
-            [
-                transactionId,
-                JSON.stringify(data.number || []),
-                data.message || '',
-                data.error || ''
-            ]
+            `INSERT INTO failed_requests (tenant_id, transaction_id, target_numbers, message, error)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [tenantId, transactionId, JSON.stringify(data.number || []), data.message || '', data.error || '']
         );
     } catch (err) {
         console.error('Failed to save failed request:', err.message);
@@ -349,15 +354,18 @@ app.post('/api/hi', async (req, res) => {
 
     } catch (err) {
         logger('error', `[${transactionId}] Error global: ${err.message}`);
-        saveFailedRequest(req.body, transactionId);
+        saveFailedRequest(req.body, transactionId, req.user.tenantId);
         res.status(500).json({ error: 'Failed to send message', transaction_id: transactionId });
     }
 });
 
 app.post('/api/resend-failed', async (req, res) => {
     try {
+        const tenantFilter = req.user.role === 'super_admin' ? '' : 'AND tenant_id = $1';
+        const params = req.user.role === 'super_admin' ? [] : [req.user.tenantId];
         const result = await db.query(
-            `SELECT id, transaction_id, target_numbers, message FROM failed_requests WHERE retried = FALSE ORDER BY created_at`
+            `SELECT id, transaction_id, target_numbers, message FROM failed_requests WHERE retried = FALSE ${tenantFilter} ORDER BY created_at`,
+            params
         );
 
         const allResults = [];
@@ -710,14 +718,17 @@ app.post('/api/restart', async (req, res) => {
 
 app.get('/api/bot-status', async (req, res) => {
     try {
-
-        const status = await statusBotAPI()
-        res.json({
-            success: true,
-            data: status
-        });
+        const tenantId = req.user.tenantId;
+        let result;
+        if (req.user.role === 'super_admin') {
+            result = await db.query('SELECT bot_id, status, tenant_id FROM bot_status ORDER BY bot_id');
+        } else {
+            result = await db.query('SELECT bot_id, status FROM bot_status WHERE tenant_id = $1 ORDER BY bot_id', [tenantId]);
+        }
+        const active = result.rows.filter(r => r.status === 'open').map(r => r.bot_id);
+        const inactive = result.rows.filter(r => r.status !== 'open').map(r => r.bot_id);
+        res.json({ success: true, data: { active, inactive } });
     } catch (err) {
-        logger('error', `Failed to get bot status: ${err.message}`);
         res.status(500).json({ success: false, error: 'Failed to get bot status' });
     }
 });
@@ -942,7 +953,7 @@ app.get('/api/list-my-groups', async (req, res) => {
 app.get('/api/stats/:date', async (req, res) => {
     const { date } = req.params;
     try {
-        const data = await stats.getStatsByDate(date);
+        const data = await stats.getStatsByDate(date, req.user.tenantId);
         res.json({ success: true, date, data });
     } catch (err) {
         res.status(500).json({ error: 'Failed to read stats' });
@@ -1015,8 +1026,7 @@ app.get('/api/logs/:type/:date', (req, res) => {
 
 app.get('/api/groups', (req, res) => {
     try {
-        const groups = getAllGroups();
-        const blockedList = getBlockedList();
+        const groups = getAllGroups(req.user.tenantId);
         res.json({
             success: true,
             group_count: groups.length,
@@ -1025,7 +1035,7 @@ app.get('/api/groups', (req, res) => {
                 name: g.name,
                 member_count: g.member_count,
                 bots: g.bots,
-                is_blocked: blockedList.includes(g.id)
+                is_blocked: false // TODO: tenant-scoped block list
             }))
         });
     } catch (err) {
@@ -1058,11 +1068,25 @@ app.post('/api/groups/unblock', (req, res) => {
     res.json({ success: true, message: `Group ${groupId} unblocked` });
 });
 
+app.put('/api/tenant/profile', async (req, res) => {
+    const { brand_name } = req.body;
+    if (!brand_name) return res.status(400).json({ error: 'brand_name required' });
+    try {
+        await db.query('UPDATE tenants SET brand_name = $1 WHERE id = $2', [brand_name, req.user.tenantId]);
+        res.json({ success: true, message: 'Brand updated' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.get('/api/failed-requests', async (req, res) => {
     try {
+        const tenantFilter = req.user.role === 'super_admin' ? '' : 'AND tenant_id = $1';
+        const params = req.user.role === 'super_admin' ? [] : [req.user.tenantId];
         const result = await db.query(
             `SELECT transaction_id as "transactionId", target_numbers as number, message, created_at as saved_at, retried
-             FROM failed_requests WHERE retried = FALSE ORDER BY created_at DESC`
+             FROM failed_requests WHERE retried = FALSE ${tenantFilter} ORDER BY created_at DESC`,
+            params
         );
         res.json({ success: true, data: result.rows });
     } catch (err) {
@@ -1071,24 +1095,33 @@ app.get('/api/failed-requests', async (req, res) => {
 });
 
 io.use((socket, next) => {
-    const auth = socket.handshake.auth;
-    if (auth && auth.username === 'wa-ops' && auth.password === 'wapass@2021') {
+    const token = socket.handshake.auth.token;
+    if (!token) return next(new Error('No token'));
+    try {
+        const decoded = verifyToken(token);
+        socket.user = decoded;
         next();
-    } else {
-        next(new Error('Authentication failed'));
+    } catch (err) {
+        next(new Error('Invalid token'));
     }
 });
 
 io.on('connection', (socket) => {
-    logger('info', `DASHBOARD connected client=${socket.id}`);
+    const { tenantId, role } = socket.user;
+    if (tenantId) socket.join(`tenant:${tenantId}`);
+    if (role === 'super_admin') socket.join('super_admin');
+
+    logger('info', `DASHBOARD connected client=${socket.id} tenant=${tenantId || 'super_admin'}`);
+
     socket.on('bot:add', async ({ botId }) => {
-        if (!botId) return;
-        logger('info', `DASHBOARD request=addbot bot=${botId}`);
-        const qrBase64 = await startOperationBotAPI(botId);
+        if (!botId || !tenantId) return;
+        logger('info', `DASHBOARD request=addbot bot=${botId} tenant=${tenantId}`);
+        const qrBase64 = await startOperationBotAPI(botId, tenantId);
         if (qrBase64) {
             socket.emit('bot:qr', { botId, qr: qrBase64 });
         }
     });
+
     socket.on('disconnect', () => {
         logger('info', `DASHBOARD disconnected client=${socket.id}`);
     });
