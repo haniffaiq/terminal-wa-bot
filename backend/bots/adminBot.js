@@ -317,29 +317,75 @@ function setupAdminCommands(sock, tenant) {
 }
 
 // ============================================================
-// Start admin bot for a single tenant
+// Admin bot lifecycle
 // ============================================================
 const adminReconnectAttempts = {};
+const adminReconnectTimers = {};
 const MAX_ADMIN_RECONNECT = 5;
+
+// Stop admin bot — clear socket, cancel timers, reset state
+async function stopAdminBot(tenantId) {
+    // Cancel any pending reconnect
+    if (adminReconnectTimers[tenantId]) {
+        clearTimeout(adminReconnectTimers[tenantId]);
+        delete adminReconnectTimers[tenantId];
+    }
+
+    // Close socket
+    if (adminBots[tenantId]) {
+        try { await adminBots[tenantId].end(); } catch (e) {}
+        delete adminBots[tenantId];
+    }
+
+    // Reset attempts
+    delete adminReconnectAttempts[tenantId];
+
+    logger.info(`[${tenantId}] Admin bot stopped and cleaned up.`);
+}
 
 async function startSingleAdminBot(tenant, attempt = 0) {
     const botId = tenant.admin_bot_id;
     const tenantId = tenant.id;
 
+    if (!botId) {
+        logger.warn(`[${tenantId}] No admin_bot_id set, skipping.`);
+        return;
+    }
+
     if (attempt >= MAX_ADMIN_RECONNECT) {
-        logger.error(`[${tenantId}] Admin bot max reconnect attempts (${MAX_ADMIN_RECONNECT}) reached. Stopping.`);
+        logger.error(`[${tenantId}] Admin bot max reconnect attempts (${MAX_ADMIN_RECONNECT}) reached.`);
         await updateBotStatus(botId, 'close', tenantId);
         return;
     }
 
+    // Check if bot still exists in DB before reconnecting
+    try {
+        const check = await query(
+            'SELECT id FROM bot_status WHERE tenant_id = $1 AND bot_id = $2',
+            [tenantId, botId]
+        );
+        if (check.rows.length === 0) {
+            logger.info(`[${tenantId}] Admin bot ${botId} no longer exists in DB, aborting reconnect.`);
+            delete adminReconnectAttempts[tenantId];
+            delete adminReconnectTimers[tenantId];
+            return;
+        }
+    } catch (err) {}
+
     logger.info(`[${tenantId}] Starting admin bot: ${botId} (attempt ${attempt + 1})`);
+
+    // Cancel any pending reconnect timer
+    if (adminReconnectTimers[tenantId]) {
+        clearTimeout(adminReconnectTimers[tenantId]);
+        delete adminReconnectTimers[tenantId];
+    }
 
     let qrResolve = null;
     const qrPromise = new Promise((resolve) => { qrResolve = resolve; });
-    let qrTimeout = setTimeout(() => qrResolve(null), 15000);
+    const qrTimeout = setTimeout(() => { if (qrResolve) { qrResolve(null); qrResolve = null; } }, 15000);
 
     try {
-        // Close old socket if exists
+        // Close old socket
         if (adminBots[tenantId]) {
             try { await adminBots[tenantId].end(); } catch (e) {}
             delete adminBots[tenantId];
@@ -359,7 +405,7 @@ async function startSingleAdminBot(tenant, attempt = 0) {
                         qrResolve(qrBase64);
                         qrResolve = null;
                     }
-                    logger.info(`[${tenantId}] QR generated for admin bot ${botId} — scan with WhatsApp`);
+                    logger.info(`[${tenantId}] QR generated for admin bot ${botId}`);
                 } catch (err) {
                     logger.error(`[${tenantId}] QR error: ${err.message}`);
                 }
@@ -387,19 +433,18 @@ async function startSingleAdminBot(tenant, attempt = 0) {
                     adminReconnectAttempts[tenantId] = nextAttempt;
                     const delay = Math.min(10000 * nextAttempt, 60000);
                     logger.info(`[${tenantId}] Admin bot reconnecting in ${delay / 1000}s (attempt ${nextAttempt})...`);
-                    setTimeout(() => startSingleAdminBot(tenant, nextAttempt), delay);
+                    adminReconnectTimers[tenantId] = setTimeout(() => startSingleAdminBot(tenant, nextAttempt), delay);
                 }
             }
         });
 
         setupAdminCommands(sock, tenant);
-        // Return QR for dashboard (or null if already connected)
         const qr = await qrPromise;
         return { sock, qr };
     } catch (error) {
         logger.error(`[${tenantId}] Failed to start admin bot: ${error.message}`);
         const delay = Math.min(10000 * (attempt + 1), 60000);
-        setTimeout(() => startSingleAdminBot(tenant, attempt + 1), delay);
+        adminReconnectTimers[tenantId] = setTimeout(() => startSingleAdminBot(tenant, attempt + 1), delay);
     }
 }
 
@@ -426,4 +471,4 @@ async function startAdminBot() {
     return startAdminBots();
 }
 
-module.exports = { startAdminBot, startAdminBots, startSingleAdminBot, checkBotStatusForTenant };
+module.exports = { startAdminBot, startAdminBots, startSingleAdminBot, stopAdminBot, checkBotStatusForTenant };

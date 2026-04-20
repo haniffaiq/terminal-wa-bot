@@ -413,9 +413,15 @@ async function stopOperationBot(botId, tenantId) {
         }
     }
 
-    // Clear admin_bot_id if this was the admin bot
+    // If this was the admin bot, stop it properly and clear admin_bot_id
     try {
-        await query('UPDATE tenants SET admin_bot_id = NULL WHERE id = $1 AND admin_bot_id = $2', [tenantId, botId]);
+        const tenantResult = await query('SELECT admin_bot_id FROM tenants WHERE id = $1', [tenantId]);
+        if (tenantResult.rows.length > 0 && tenantResult.rows[0].admin_bot_id === botId) {
+            const { stopAdminBot } = require('./adminBot');
+            await stopAdminBot(tenantId);
+            await query('UPDATE tenants SET admin_bot_id = NULL WHERE id = $1', [tenantId]);
+            logger.info(`[${botId}] Admin bot cleared for tenant ${tenantId}`);
+        }
     } catch (err) {}
 
     // Delete from DB: bot_status + auth_sessions
