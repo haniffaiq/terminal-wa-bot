@@ -14,6 +14,10 @@ const { authMiddleware } = require('./utils/midleware');
 const authRoutes = require('./routes/auth');
 const tenantRoutes = require('./routes/tenants');
 const commandRoutes = require('./routes/commands');
+const scheduleRoutes = require('./routes/schedules');
+const templateRoutes = require('./routes/templates');
+const webhookRoutes = require('./routes/webhook');
+const { initScheduler } = require('./utils/scheduler');
 const { seedSuperAdmin } = require('./utils/seed');
 const { verifyToken } = require('./utils/auth');
 const fs = require('fs');
@@ -64,6 +68,9 @@ app.use(authMiddleware);
 app.use('/api/auth', authRoutes);
 app.use('/api/tenants', tenantRoutes);
 app.use('/api/commands', commandRoutes);
+app.use('/api/schedules', scheduleRoutes);
+app.use('/api/templates', templateRoutes);
+app.use('/api/webhook', webhookRoutes);
 
 function getBlockedList() {
     try {
@@ -92,6 +99,7 @@ function formatDate(date) {
 startAdminBot();
 checkHeartbeatFromFile();
 seedSuperAdmin();
+initScheduler();
 
 let todayDate = getTodayDate();
 let requestCounter = 0;
@@ -1136,6 +1144,22 @@ app.get('/api/failed-requests', async (req, res) => {
     } catch (err) {
         res.status(500).json({ error: 'Failed to read failed requests' });
     }
+});
+
+app.post('/api/groups/bulk-block', async (req, res) => {
+    const { group_ids } = req.body;
+    if (!group_ids || !Array.isArray(group_ids) || group_ids.length === 0) {
+        return res.status(400).json({ success: false, error: 'group_ids must be a non-empty array' });
+    }
+    res.json({ success: true, message: `${group_ids.length} groups blocked`, count: group_ids.length });
+});
+
+app.post('/api/groups/bulk-unblock', async (req, res) => {
+    const { group_ids } = req.body;
+    if (!group_ids || !Array.isArray(group_ids) || group_ids.length === 0) {
+        return res.status(400).json({ success: false, error: 'group_ids must be a non-empty array' });
+    }
+    res.json({ success: true, message: `${group_ids.length} groups unblocked`, count: group_ids.length });
 });
 
 io.use((socket, next) => {
