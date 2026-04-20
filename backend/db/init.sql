@@ -77,6 +77,45 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
 
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_lookup ON auth_sessions(tenant_id, bot_id);
 
+-- Scheduled messages
+CREATE TABLE IF NOT EXISTS scheduled_messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
+    target_numbers JSONB NOT NULL,
+    message TEXT NOT NULL,
+    schedule_type VARCHAR(10) NOT NULL,
+    run_at TIMESTAMP,
+    cron_expression VARCHAR(50),
+    is_active BOOLEAN DEFAULT TRUE,
+    last_run_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Message templates
+CREATE TABLE IF NOT EXISTS message_templates (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
+    content TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(tenant_id, name)
+);
+
+-- Webhook keys
+CREATE TABLE IF NOT EXISTS webhook_keys (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
+    api_key VARCHAR(64) UNIQUE NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_scheduled_tenant ON scheduled_messages(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_scheduled_active ON scheduled_messages(is_active);
+CREATE INDEX IF NOT EXISTS idx_templates_tenant ON message_templates(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_webhook_key ON webhook_keys(api_key);
+CREATE INDEX IF NOT EXISTS idx_webhook_tenant ON webhook_keys(tenant_id);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 CREATE INDEX IF NOT EXISTS idx_users_tenant ON users(tenant_id);
