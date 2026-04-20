@@ -1,7 +1,7 @@
 const { verifyToken } = require('./auth');
 
 function authMiddleware(req, res, next) {
-    if (req.path === '/api/auth/login') return next();
+    if (req.path === '/api/auth/login' || req.path === '/api/webhook/send') return next();
 
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
