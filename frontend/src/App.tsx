@@ -11,6 +11,9 @@ import Statistics from '@/pages/Statistics';
 import Logs from '@/pages/Logs';
 import TenantManagement from '@/pages/TenantManagement';
 import CustomCommands from '@/pages/CustomCommands';
+import ScheduledMessages from '@/pages/ScheduledMessages';
+import MessageTemplates from '@/pages/MessageTemplates';
+import Webhook from '@/pages/Webhook';
 
 export default function App() {
   const [, setAuthed] = useState(false);
@@ -28,6 +31,9 @@ export default function App() {
             <Route path="/stats" element={<Statistics />} />
             <Route path="/logs" element={<Logs />} />
             <Route path="/commands" element={<CustomCommands />} />
+            <Route path="/schedules" element={<ScheduledMessages />} />
+            <Route path="/templates" element={<MessageTemplates />} />
+            <Route path="/webhook" element={<Webhook />} />
             <Route path="/tenants" element={<TenantManagement />} />
           </Routes>
         </Layout>

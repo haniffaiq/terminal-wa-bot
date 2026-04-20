@@ -18,6 +18,9 @@ export default function Groups() {
   const [filter, setFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [bulkIds, setBulkIds] = useState('');
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkResult, setBulkResult] = useState('');
 
   useEffect(() => {
     loadGroups();
@@ -32,6 +35,23 @@ export default function Groups() {
       setGroups([]);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleBulkAction(action: 'block' | 'unblock') {
+    const ids = bulkIds.split('\n').map(s => s.trim()).filter(Boolean);
+    if (ids.length === 0) return;
+    setBulkLoading(true);
+    setBulkResult('');
+    try {
+      const data = await postApi<{ count: number }>(`/groups/bulk-${action}`, { group_ids: ids });
+      setBulkResult(`${data.count} groups ${action}ed`);
+      setBulkIds('');
+      await loadGroups();
+    } catch (err) {
+      setBulkResult(`Failed: ${err}`);
+    } finally {
+      setBulkLoading(false);
     }
   }
 
@@ -60,6 +80,28 @@ export default function Groups() {
         <h1 className="text-2xl font-bold">Groups</h1>
         <span className="text-sm text-muted-foreground">{groups.length} total groups</span>
       </div>
+
+      <details className="border rounded-lg p-4">
+        <summary className="cursor-pointer text-sm font-medium">Bulk Block / Unblock</summary>
+        <div className="mt-3 space-y-3">
+          <textarea
+            value={bulkIds}
+            onChange={e => setBulkIds(e.target.value)}
+            placeholder="Paste group IDs, one per line..."
+            rows={4}
+            className="w-full rounded-md border px-3 py-2 text-sm font-mono bg-background resize-y"
+          />
+          <div className="flex gap-2">
+            <Button size="sm" onClick={() => handleBulkAction('block')} disabled={bulkLoading || !bulkIds.trim()}>
+              Block All
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => handleBulkAction('unblock')} disabled={bulkLoading || !bulkIds.trim()}>
+              Unblock All
+            </Button>
+          </div>
+          {bulkResult && <p className="text-sm text-muted-foreground">{bulkResult}</p>}
+        </div>
+      </details>
 
       <Input
         placeholder="Search groups..."

@@ -16,6 +16,9 @@ import {
   Moon,
   Terminal,
   Building2,
+  Clock,
+  FileStack,
+  Plug,
 } from 'lucide-react';
 import { getUser, isSuperAdmin, clearToken } from '@/lib/auth';
 import { disconnectSocket } from '@/lib/socket';
@@ -37,7 +40,12 @@ export function Layout({ children, onLogout }: { children: React.ReactNode; onLo
     { path: '/failed', label: 'Failed Requests', icon: AlertTriangle },
     { path: '/stats', label: 'Statistics', icon: BarChart3 },
     { path: '/logs', label: 'Logs', icon: FileText },
-    ...(user?.tenantId ? [{ path: '/commands', label: 'Custom Commands', icon: Terminal }] : []),
+    ...(user?.tenantId ? [
+      { path: '/commands', label: 'Custom Commands', icon: Terminal },
+      { path: '/schedules', label: 'Schedules', icon: Clock },
+      { path: '/templates', label: 'Templates', icon: FileStack },
+      { path: '/webhook', label: 'Webhook', icon: Plug },
+    ] : []),
     ...(isSuperAdmin() ? [{ path: '/tenants', label: 'Tenants', icon: Building2 }] : []),
   ];
 

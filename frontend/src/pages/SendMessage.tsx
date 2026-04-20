@@ -33,10 +33,14 @@ export default function SendMessage() {
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<SendResult | null>(null);
   const [groupFilter, setGroupFilter] = useState('');
+  const [templates, setTemplates] = useState<{ id: string; name: string; content: string }[]>([]);
 
   useEffect(() => {
     fetchApi<{ success: boolean; groups: Group[] }>('/groups')
       .then(data => setGroups(data.groups || []))
+      .catch(() => {});
+    fetchApi<{ templates: { id: string; name: string; content: string }[] }>('/templates')
+      .then(data => setTemplates(data.templates || []))
       .catch(() => {});
   }, []);
 
@@ -108,6 +112,26 @@ export default function SendMessage() {
               <option value="url">Media from URL</option>
             </select>
           </div>
+
+          {messageType === 'text' && templates.length > 0 && (
+            <div className="space-y-2">
+              <Label>Load from Template</Label>
+              <select
+                onChange={e => {
+                  const t = templates.find(t => t.id === e.target.value);
+                  if (t) setMessage(t.content);
+                  e.target.value = '';
+                }}
+                className="w-full rounded-md border px-3 py-2 text-sm bg-background"
+                defaultValue=""
+              >
+                <option value="" disabled>Select a template...</option>
+                {templates.map(t => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {messageType === 'text' && (
             <div className="space-y-2">
