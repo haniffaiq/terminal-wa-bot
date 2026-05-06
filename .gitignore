@@ -22,3 +22,4 @@ frontend/dist/
 *.md
 docs/*
 .claude
+.worktrees/
