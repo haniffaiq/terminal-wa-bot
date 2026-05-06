@@ -17,6 +17,31 @@ function normalizeTargets(targets) {
 function createQueueService({ queryFn = query, deliveryQueue, auditService } = {}) {
     const executableQueue = deliveryQueue || createDeliveryQueue();
 
+    function isDuplicateJobError(error) {
+        const message = String(error && error.message ? error.message : '').toLowerCase();
+        return error && (
+            error.code === 'JOB_ALREADY_EXISTS' ||
+            message.includes('already exists') ||
+            message.includes('duplicate') ||
+            message.includes('duplicated')
+        );
+    }
+
+    async function safeAudit(method, payload) {
+        if (!auditService || typeof auditService[method] !== 'function') {
+            return;
+        }
+
+        try {
+            await auditService[method](payload);
+        } catch (error) {
+            console.warn('Queue audit log failed', {
+                method,
+                error: error && error.message ? error.message : error
+            });
+        }
+    }
+
     async function addExecutableJob(row, priority, jobId = row.id) {
         return executableQueue.add(
             'deliver-message',
@@ -28,6 +53,16 @@ function createQueueService({ queryFn = query, deliveryQueue, auditService } = {
                 removeOnFail: false
             }
         );
+    }
+
+    async function reconcileExecutableJob(row) {
+        try {
+            await addExecutableJob(row, row.priority || 5, row.id);
+        } catch (error) {
+            if (!isDuplicateJobError(error)) {
+                throw error;
+            }
+        }
     }
 
     async function enqueueMessageJob({
@@ -59,13 +94,11 @@ function createQueueService({ queryFn = query, deliveryQueue, auditService } = {
 
         await addExecutableJob(row, priority);
 
-        if (auditService && typeof auditService.logJobQueued === 'function') {
-            await auditService.logJobQueued({
-                tenantId,
-                jobId: row.id,
-                metadata: { source, type, targetId }
-            });
-        }
+        await safeAudit('logJobQueued', {
+            tenantId,
+            jobId: row.id,
+            metadata: { source, type, targetId }
+        });
 
         return row;
     }
@@ -144,6 +177,7 @@ function createQueueService({ queryFn = query, deliveryQueue, auditService } = {
                 updated_at = NOW()
             WHERE id = $1
                 AND tenant_id = $2
+                AND status IN ('queued', 'retrying')
             RETURNING *`,
             [jobId, tenantId, workerId]
         );
@@ -170,23 +204,26 @@ function createQueueService({ queryFn = query, deliveryQueue, auditService } = {
                 response_time_seconds,
                 finished_at
             )
-            VALUES (
-                $1,
-                $2,
+            SELECT
+                id,
+                tenant_id,
                 $3,
                 $4,
                 $5,
                 $6,
                 $7,
                 CASE WHEN $5 IN ('sent', 'failed') THEN NOW() ELSE NULL END
-            )
+            FROM message_jobs
+            WHERE id = $1
+                AND tenant_id = $2
             RETURNING *`,
             [jobId, tenantId, attemptNumber, botId, status, error, responseTimeSeconds]
         );
         return result.rows[0] || null;
     }
 
-    async function markJobSent({ jobId, tenantId, botId, responseTimeSeconds }) {
+    async function markJobSent({ jobId, tenantId, botId, responseTimeSeconds, workerId }) {
+        const hasWorkerId = workerId !== undefined && workerId !== null;
         const result = await queryFn(
             `UPDATE message_jobs
             SET
@@ -200,13 +237,17 @@ function createQueueService({ queryFn = query, deliveryQueue, auditService } = {
                 last_error = NULL
             WHERE id = $1
                 AND tenant_id = $2
+                AND status = 'sending'
+                ${hasWorkerId ? 'AND locked_by = $5' : ''}
             RETURNING *`,
-            [jobId, tenantId, botId, responseTimeSeconds]
+            hasWorkerId
+                ? [jobId, tenantId, botId, responseTimeSeconds, workerId]
+                : [jobId, tenantId, botId, responseTimeSeconds]
         );
         const row = result.rows[0] || null;
 
-        if (row && auditService && typeof auditService.logJobSent === 'function') {
-            await auditService.logJobSent({
+        if (row) {
+            await safeAudit('logJobSent', {
                 tenantId,
                 jobId,
                 metadata: { botId, responseTimeSeconds }
@@ -216,7 +257,12 @@ function createQueueService({ queryFn = query, deliveryQueue, auditService } = {
         return row;
     }
 
-    async function markJobFailed({ jobId, tenantId, status, error, delaySeconds = 0 }) {
+    async function markJobFailed({ jobId, tenantId, status, error, delaySeconds = 0, workerId }) {
+        if (!['retrying', 'failed'].includes(status)) {
+            throw new Error('Failed job status must be retrying or failed');
+        }
+
+        const hasWorkerId = workerId !== undefined && workerId !== null;
         const result = await queryFn(
             `UPDATE message_jobs
             SET
@@ -228,13 +274,17 @@ function createQueueService({ queryFn = query, deliveryQueue, auditService } = {
                 updated_at = NOW()
             WHERE id = $1
                 AND tenant_id = $2
+                AND status = 'sending'
+                ${hasWorkerId ? 'AND locked_by = $6' : ''}
             RETURNING *`,
-            [jobId, tenantId, status, error, delaySeconds]
+            hasWorkerId
+                ? [jobId, tenantId, status, error, delaySeconds, workerId]
+                : [jobId, tenantId, status, error, delaySeconds]
         );
         const row = result.rows[0] || null;
 
-        if (row && status === 'failed' && auditService && typeof auditService.logJobFailed === 'function') {
-            await auditService.logJobFailed({
+        if (row && status === 'failed') {
+            await safeAudit('logJobFailed', {
                 tenantId,
                 jobId,
                 error
@@ -244,7 +294,27 @@ function createQueueService({ queryFn = query, deliveryQueue, auditService } = {
         return row;
     }
 
-    async function requeuePendingJobs() {
+    async function recoverStaleSendingJobs({ staleAfterSeconds = 300 } = {}) {
+        const result = await queryFn(
+            `UPDATE message_jobs
+            SET
+                status = 'retrying',
+                locked_at = NULL,
+                locked_by = NULL,
+                next_attempt_at = NOW(),
+                updated_at = NOW()
+            WHERE status = 'sending'
+                AND locked_at IS NOT NULL
+                AND locked_at <= NOW() - ($1 * INTERVAL '1 second')
+            RETURNING id, priority`,
+            [staleAfterSeconds]
+        );
+        return result.rows;
+    }
+
+    async function requeuePendingJobs({ staleAfterSeconds = 300 } = {}) {
+        await recoverStaleSendingJobs({ staleAfterSeconds });
+
         const result = await queryFn(
             `SELECT id, priority
             FROM message_jobs
@@ -254,7 +324,7 @@ function createQueueService({ queryFn = query, deliveryQueue, auditService } = {
         );
 
         for (const row of result.rows) {
-            await addExecutableJob(row, row.priority || 5, `reconcile:${row.id}`);
+            await reconcileExecutableJob(row);
         }
 
         return result.rows;
@@ -270,6 +340,7 @@ function createQueueService({ queryFn = query, deliveryQueue, auditService } = {
         recordAttempt,
         markJobSent,
         markJobFailed,
+        recoverStaleSendingJobs,
         requeuePendingJobs
     };
 }
@@ -294,5 +365,6 @@ module.exports = {
     recordAttempt: (...args) => getDefaultQueueService().recordAttempt(...args),
     markJobSent: (...args) => getDefaultQueueService().markJobSent(...args),
     markJobFailed: (...args) => getDefaultQueueService().markJobFailed(...args),
+    recoverStaleSendingJobs: (...args) => getDefaultQueueService().recoverStaleSendingJobs(...args),
     requeuePendingJobs: (...args) => getDefaultQueueService().requeuePendingJobs(...args)
 };

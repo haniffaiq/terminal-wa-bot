@@ -114,7 +114,7 @@ function createBotHealthService({ queryFn = query } = {}) {
             DO UPDATE SET
                 status = 'reconnecting',
                 last_reconnect_at = NOW(),
-                reconnect_count = bot_health.reconnect_count + 1,
+                reconnect_count = COALESCE(bot_health.reconnect_count, 0) + 1,
                 last_error = EXCLUDED.last_error,
                 updated_at = NOW()
             RETURNING *`,
@@ -137,7 +137,7 @@ function createBotHealthService({ queryFn = query } = {}) {
             ON CONFLICT (tenant_id, bot_id)
             DO UPDATE SET
                 status = EXCLUDED.status,
-                consecutive_failures = bot_health.consecutive_failures + 1,
+                consecutive_failures = COALESCE(bot_health.consecutive_failures, 0) + 1,
                 last_error = EXCLUDED.last_error,
                 updated_at = NOW()
             RETURNING *`,

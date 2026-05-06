@@ -38,10 +38,14 @@ function createMemoryJobQuery() {
         }
 
         if (/INSERT INTO message_job_attempts/i.test(sql)) {
+            const job = jobs.find(row => row.id === params[0] && row.tenant_id === params[1]);
+            if (!job) {
+                return { rows: [] };
+            }
             const row = {
                 id: `attempt-${attempts.length + 1}`,
-                job_id: params[0],
-                tenant_id: params[1],
+                job_id: job.id,
+                tenant_id: job.tenant_id,
                 attempt_number: params[2],
                 bot_id: params[3],
                 status: params[4],
@@ -73,6 +77,10 @@ function createDeliveryQueue({ failAdd = false } = {}) {
             return { id: options.jobId };
         }
     };
+}
+
+function normalizeSql(sql) {
+    return sql.replace(/\s+/g, ' ').trim();
 }
 
 test('normalizes string target and array target', () => {
@@ -194,10 +202,105 @@ test('markJobSending increments attempt count and sets sending', async () => {
     assert.match(store.calls.at(-1).sql, /attempt_count\s*=\s*attempt_count\s*\+\s*1/i);
 });
 
+test('markJobSending returns null for jobs that are no longer queued or retrying', async () => {
+    const terminalJob = {
+        id: 'job-1',
+        tenant_id: 'tenant-1',
+        status: 'sent',
+        attempt_count: 1
+    };
+    const service = createQueueService({
+        queryFn: async (sql) => {
+            assert.match(sql, /status\s+IN\s*\(\s*'queued'\s*,\s*'retrying'\s*\)/i);
+            return { rows: [] };
+        },
+        deliveryQueue: createDeliveryQueue()
+    });
+
+    const job = await service.markJobSending({
+        jobId: terminalJob.id,
+        tenantId: terminalJob.tenant_id,
+        workerId: 'worker-1'
+    });
+
+    assert.equal(job, null);
+});
+
+test('markJobSent only resolves sending jobs locked by the provided worker', async () => {
+    const service = createQueueService({
+        queryFn: async (sql, params = []) => {
+            assert.match(sql, /status\s*=\s*'sending'/i);
+            assert.match(sql, /locked_by\s*=\s*\$5/i);
+            assert.deepEqual(params, ['job-1', 'tenant-1', 'bot-a', 1.25, 'worker-1']);
+            return { rows: [] };
+        },
+        deliveryQueue: createDeliveryQueue()
+    });
+
+    const job = await service.markJobSent({
+        jobId: 'job-1',
+        tenantId: 'tenant-1',
+        botId: 'bot-a',
+        responseTimeSeconds: 1.25,
+        workerId: 'worker-1'
+    });
+
+    assert.equal(job, null);
+});
+
+test('markJobFailed only updates sending jobs locked by the provided worker', async () => {
+    const service = createQueueService({
+        queryFn: async (sql, params = []) => {
+            assert.match(sql, /status\s*=\s*'sending'/i);
+            assert.match(sql, /locked_by\s*=\s*\$6/i);
+            assert.deepEqual(params, ['job-1', 'tenant-1', 'retrying', 'send failed', 60, 'worker-1']);
+            return { rows: [] };
+        },
+        deliveryQueue: createDeliveryQueue()
+    });
+
+    const job = await service.markJobFailed({
+        jobId: 'job-1',
+        tenantId: 'tenant-1',
+        status: 'retrying',
+        error: 'send failed',
+        delaySeconds: 60,
+        workerId: 'worker-1'
+    });
+
+    assert.equal(job, null);
+});
+
+test('markJobFailed rejects terminal status regression', async () => {
+    const service = createQueueService({
+        queryFn: async () => {
+            throw new Error('query should not run');
+        },
+        deliveryQueue: createDeliveryQueue()
+    });
+
+    await assert.rejects(
+        () => service.markJobFailed({
+            jobId: 'job-1',
+            tenantId: 'tenant-1',
+            status: 'sent',
+            error: 'send failed'
+        }),
+        /retrying or failed/
+    );
+});
+
 test('recordAttempt inserts attempt row', async () => {
     const store = createMemoryJobQuery();
     const deliveryQueue = createDeliveryQueue();
     const service = createQueueService({ queryFn: store.queryFn, deliveryQueue });
+    await service.enqueueMessageJob({
+        tenantId: 'tenant-1',
+        source: 'api',
+        type: 'text',
+        targetId: 'group-1',
+        payload: { text: 'hello' }
+    });
 
     const attempt = await service.recordAttempt({
         jobId: 'job-1',
@@ -220,4 +323,125 @@ test('recordAttempt inserts attempt row', async () => {
         error: 'send failed',
         response_time_seconds: 1.25
     }]);
+});
+
+test('recordAttempt returns null for tenant mismatch without direct tenant insert', async () => {
+    const calls = [];
+    const service = createQueueService({
+        queryFn: async (sql, params = []) => {
+            calls.push({ sql, params });
+            assert.match(normalizeSql(sql), /INSERT INTO message_job_attempts .* SELECT id, tenant_id,/i);
+            assert.doesNotMatch(normalizeSql(sql), /VALUES\s*\(\s*\$1\s*,\s*\$2/i);
+            return { rows: [] };
+        },
+        deliveryQueue: createDeliveryQueue()
+    });
+
+    const attempt = await service.recordAttempt({
+        jobId: 'job-1',
+        tenantId: 'tenant-2',
+        attemptNumber: 1,
+        botId: 'bot-a',
+        status: 'failed',
+        error: 'send failed',
+        responseTimeSeconds: 1.25
+    });
+
+    assert.equal(attempt, null);
+    assert.deepEqual(calls[0].params, [
+        'job-1',
+        'tenant-2',
+        1,
+        'bot-a',
+        'failed',
+        'send failed',
+        1.25
+    ]);
+});
+
+test('enqueueMessageJob ignores audit failures after DB insert and queue add succeed', async () => {
+    const store = createMemoryJobQuery();
+    const deliveryQueue = createDeliveryQueue();
+    const service = createQueueService({
+        queryFn: store.queryFn,
+        deliveryQueue,
+        auditService: {
+            async logJobQueued() {
+                throw new Error('audit unavailable');
+            }
+        }
+    });
+
+    const job = await service.enqueueMessageJob({
+        tenantId: 'tenant-1',
+        source: 'api',
+        type: 'text',
+        targetId: 'group-1',
+        payload: { text: 'hello' }
+    });
+
+    assert.equal(job.id, 'job-1');
+    assert.equal(store.jobs.length, 1);
+    assert.equal(deliveryQueue.addCalls.length, 1);
+});
+
+test('requeuePendingJobs uses stable job ids and skips duplicate queue adds', async () => {
+    const addErrors = new Set(['job-1']);
+    const deliveryQueue = {
+        addCalls: [],
+        async add(name, data, options) {
+            this.addCalls.push({ name, data, options });
+            if (addErrors.has(options.jobId)) {
+                const error = new Error('Job job-1 already exists');
+                error.code = 'JOB_ALREADY_EXISTS';
+                throw error;
+            }
+            return { id: options.jobId };
+        }
+    };
+    const service = createQueueService({
+        queryFn: async (sql) => {
+            if (/UPDATE message_jobs/i.test(sql)) {
+                assert.match(sql, /status\s*=\s*'sending'/i);
+                return { rows: [] };
+            }
+            assert.match(sql, /status IN \('queued', 'retrying'\)/i);
+            return {
+                rows: [
+                    { id: 'job-1', priority: 2 },
+                    { id: 'job-2', priority: 4 }
+                ]
+            };
+        },
+        deliveryQueue
+    });
+
+    const rows = await service.requeuePendingJobs();
+
+    assert.deepEqual(rows.map(row => row.id), ['job-1', 'job-2']);
+    assert.deepEqual(deliveryQueue.addCalls.map(call => call.options.jobId), ['job-1', 'job-2']);
+});
+
+test('requeuePendingJobs recovers stale sending jobs before enqueueing pending work', async () => {
+    const calls = [];
+    const deliveryQueue = createDeliveryQueue();
+    const service = createQueueService({
+        queryFn: async (sql, params = []) => {
+            calls.push({ sql, params });
+            if (/UPDATE message_jobs/i.test(sql)) {
+                assert.match(sql, /status\s*=\s*'retrying'/i);
+                assert.match(sql, /WHERE status\s*=\s*'sending'/i);
+                assert.match(sql, /locked_at\s*<=\s*NOW\(\)\s*-\s*\(\$1\s*\*\s*INTERVAL '1 second'\)/i);
+                return { rows: [{ id: 'job-stale', priority: 1 }] };
+            }
+            return { rows: [{ id: 'job-stale', priority: 1 }] };
+        },
+        deliveryQueue
+    });
+
+    await service.requeuePendingJobs({ staleAfterSeconds: 120 });
+
+    assert.equal(calls.length, 2);
+    assert.deepEqual(calls[0].params, [120]);
+    assert.deepEqual(deliveryQueue.addCalls.map(call => call.options.jobId), ['job-stale']);
 });
