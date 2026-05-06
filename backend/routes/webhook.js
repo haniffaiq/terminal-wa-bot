@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const { query } = require('../utils/db');
-const { getNextBotForGroup } = require('../bots/operationBot');
+const queueService = require('../services/queueService');
 
 router.get('/keys', async (req, res) => {
     try {
@@ -61,23 +61,25 @@ router.post('/send', async (req, res) => {
 
         if (!number || !message) return res.status(400).json({ success: false, error: 'number and message are required' });
         if (!Array.isArray(number)) number = [number];
+        number = [...new Set(number)];
         if (number.length > 10) return res.status(400).json({ success: false, error: 'Maximum 10 recipients' });
 
-        const results = [];
-        for (const groupId of number) {
-            const botSock = getNextBotForGroup(groupId, tenantId);
-            if (!botSock || !botSock.sendMessage) {
-                results.push({ number: groupId, success: false, error: 'No active bot' });
-                continue;
-            }
-            try {
-                await botSock.sendMessage(groupId, { text: message });
-                results.push({ number: groupId, success: true });
-            } catch (err) {
-                results.push({ number: groupId, success: false, error: err.message });
-            }
-        }
-        res.json({ success: true, results });
+        const transactionId = `WH-${Date.now()}`;
+        const jobs = await queueService.enqueueBulkMessageJobs({
+            tenantId,
+            source: 'webhook',
+            type: 'text',
+            targets: number,
+            payload: { message, transactionId }
+        });
+
+        res.json({
+            success: true,
+            status: 'queued',
+            job_ids: jobs.map(job => job.id),
+            queued: jobs.length,
+            transaction_id: transactionId
+        });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }

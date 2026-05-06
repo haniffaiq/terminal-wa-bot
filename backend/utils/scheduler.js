@@ -1,6 +1,6 @@
 const cron = require('node-cron');
 const { query } = require('./db');
-const { getNextBotForGroup } = require('../bots/operationBot');
+const queueService = require('../services/queueService');
 
 const jobs = {};
 
@@ -10,12 +10,18 @@ async function sendScheduledMessage(schedule) {
 
     for (const groupId of targets) {
         try {
-            const botSock = getNextBotForGroup(groupId, tenant_id);
-            if (botSock && botSock.sendMessage) {
-                await botSock.sendMessage(groupId, { text: message });
-            }
+            await queueService.enqueueMessageJob({
+                tenantId: tenant_id,
+                source: 'schedule',
+                type: 'text',
+                targetId: groupId,
+                payload: {
+                    message,
+                    transactionId: `SCH-${id}-${Date.now()}`
+                }
+            });
         } catch (err) {
-            console.error(`[Scheduler] Failed to send to ${groupId}:`, err.message);
+            console.error(`[Scheduler] Failed to queue ${groupId}:`, err.message);
         }
     }
 

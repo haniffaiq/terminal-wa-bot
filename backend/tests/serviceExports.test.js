@@ -54,6 +54,12 @@ const serviceExportContracts = [
             'markJobFailed',
             'requeuePendingJobs'
         ]
+    },
+    {
+        modulePath: '../services/schemaService',
+        exports: [
+            'ensureOperationsSchema'
+        ]
     }
 ];
 

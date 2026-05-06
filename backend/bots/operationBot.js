@@ -5,6 +5,7 @@ const path = require('path');
 const { DisconnectReason } = require('baileys');
 const { createSock } = require('../utils/createSock');
 const { query } = require('../utils/db');
+const botHealthService = require('../services/botHealthService');
 
 const logger = pino({
     transport: {
@@ -51,6 +52,16 @@ async function updateBotStatus(botId, status, tenantId) {
         );
     } catch (err) {
         console.error('Bot status DB error:', err.message);
+    }
+
+    try {
+        if (status === 'open') {
+            await botHealthService.markOnline({ tenantId, botId });
+        } else if (status === 'close') {
+            await botHealthService.markOffline({ tenantId, botId });
+        }
+    } catch (err) {
+        console.error('Bot health DB error:', err.message);
     }
 
     if (status === 'open' || status === 'close') {
@@ -332,6 +343,17 @@ function getNextBotForGroup(groupId, tenantId) {
     return operationBots[tenantId][nextBotId];
 }
 
+function getActiveGroupBotIds(tenantId, groupId) {
+    if (!tenantId || !groupBots[tenantId]) return [];
+    const activeBots = groupBots[tenantId][groupId] || [];
+    return activeBots.filter(botId => operationBots[tenantId]?.[botId]);
+}
+
+function getBotSocket(tenantId, botId) {
+    if (!tenantId || !botId) return null;
+    return operationBots[tenantId]?.[botId] || null;
+}
+
 function getNextBotForIndividual(number, tenantId) {
     if (!tenantId || !operationBots[tenantId]) return null;
     const botIds = Object.keys(operationBots[tenantId]);
@@ -442,6 +464,8 @@ module.exports = {
     stopOperationBot,
     reconnectBot,
     getNextBotForGroup,
+    getActiveGroupBotIds,
+    getBotSocket,
     startOperationBotAPI,
     getBotStatusList,
     reconnectSingleBot,

@@ -9,7 +9,8 @@ const stats = require("./utils/statmanager");
 const db = require("./utils/db");
 const util = require('util')
 
-const { getOperationSock, getNextBotForGroup, reconnectBot, startOperationBotAPI, getBotStatusList, disconnectBotForce, reconnectSingleBotAPI, getNextBotForIndividual, stopOperationBot, getAllGroups } = require('./bots/operationBot');
+const operationBot = require('./bots/operationBot');
+const { getOperationSock, getNextBotForGroup, reconnectBot, startOperationBotAPI, getBotStatusList, disconnectBotForce, reconnectSingleBotAPI, getNextBotForIndividual, stopOperationBot, getAllGroups } = operationBot;
 const { authMiddleware } = require('./utils/midleware');
 const authRoutes = require('./routes/auth');
 const tenantRoutes = require('./routes/tenants');
@@ -17,9 +18,14 @@ const commandRoutes = require('./routes/commands');
 const scheduleRoutes = require('./routes/schedules');
 const templateRoutes = require('./routes/templates');
 const webhookRoutes = require('./routes/webhook');
+const operationsRoutes = require('./routes/operations');
 const { initScheduler } = require('./utils/scheduler');
 const { seedSuperAdmin } = require('./utils/seed');
 const { verifyToken } = require('./utils/auth');
+const { ensureOperationsSchema } = require('./services/schemaService');
+const queueService = require('./services/queueService');
+const { startDeliveryWorker } = require('./services/deliveryWorker');
+const { createRoutingService } = require('./services/routingService');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
@@ -71,6 +77,7 @@ app.use('/api/commands', commandRoutes);
 app.use('/api/schedules', scheduleRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/webhook', webhookRoutes);
+app.use('/api', operationsRoutes);
 
 function getBlockedList() {
     try {
@@ -95,11 +102,6 @@ function formatDate(date) {
     return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}:${milliseconds}`;
 }
 
-
-startAdminBot();
-checkHeartbeatFromFile();
-seedSuperAdmin();
-initScheduler();
 
 let todayDate = getTodayDate();
 let requestCounter = 0;
@@ -455,30 +457,64 @@ app.post('/api/send-message', async (req, res) => {
         return res.status(400).json({ error: 'Maximum 10 recipients allowed' });
     }
 
-    const results = [];
+    try {
+        const targets = await normalizeQueuedTargets(number, transactionId);
+        const jobs = await queueService.enqueueBulkMessageJobs({
+            tenantId: req.user.tenantId,
+            source: 'api',
+            type: 'text',
+            targets,
+            payload: { message, caption, transactionId }
+        });
+        const endTime = Date.now();
+        const elapsedSeconds = (endTime - startTime) / 1000;
 
-    for (const rawNumber of number) {
-        const result = await handleSingleTarget(rawNumber, message, caption, transactionId, req.user.tenantId);
-        results.push(result);
+        logger('info', `[${transactionId}] QUEUED type=TEXT targets=${targets.length} total_time=${elapsedSeconds.toFixed(3)}s`);
+        logger('message', `[${transactionId}] REQ target=${targets[0]} message_preview="${(message || '').substring(0, 50)}" status=QUEUED`);
+
+        res.json({
+            success: true,
+            status: 'queued',
+            job_ids: jobs.map(job => job.id),
+            queued: jobs.length,
+            transaction_id: transactionId
+        });
+    } catch (err) {
+        logger('error', `[${transactionId}] QUEUE failed: ${err.message}`);
+        await saveFailedRequest({ number, message, error: err.message }, transactionId, req.user.tenantId);
+        res.status(400).json({ success: false, error: err.message, transaction_id: transactionId });
+    }
+});
+
+
+async function normalizeQueuedTargets(rawTargets, transactionId) {
+    const blockedList = getBlockedList();
+    const targets = [];
+
+    for (const rawTarget of rawTargets) {
+        let targetNumber = String(rawTarget || '').trim();
+        if (!targetNumber) {
+            throw new Error('Target number cannot be empty');
+        }
+        if (!targetNumber.includes('@')) {
+            targetNumber = await phoneNumberFormatter(targetNumber);
+        }
+
+        if (targetNumber.endsWith('@c.us')) {
+            logger('error', `[${transactionId}] REJECTED target=${targetNumber} — personal numbers not allowed`);
+            throw new Error("Please don't send to personal number");
+        }
+
+        if (blockedList.includes(targetNumber)) {
+            logger('warn', `[${transactionId}] BLOCKED target=${targetNumber} — group is on block list`);
+            throw new Error('Group is blocked, please tell to administrator');
+        }
+
+        targets.push(targetNumber);
     }
 
-    const endTime = Date.now();
-    const elapsedSeconds = (endTime - startTime) / 1000;
-
-    logger('info', `[${transactionId}] SEND completed targets=${number.length} success=${results.filter(r => r.success).length} failed=${results.filter(r => !r.success).length} total_time=${elapsedSeconds.toFixed(3)}s`);
-
-    const success_parameter = results[0]?.success;
-    logger('message', `[${transactionId}] REQ target=${results[0].number} message_preview="${(message || '').substring(0, 50)}" status=${success_parameter ? 'OK' : 'FAIL'}`)
-
-    res.json({
-        success: success_parameter,
-        transaction_id: transactionId,
-        response_time_seconds: Number(elapsedSeconds.toFixed(3)),
-        results,
-        req_time: formatDate(startTime),
-        res_time: formatDate(endTime)
-    });
-});
+    return [...new Set(targets)];
+}
 
 
 async function handleSingleTarget(rawNumber, message, caption, transactionId, tenantId) {
@@ -800,7 +836,7 @@ app.post('/api/send-media', upload.single('file'), async (req, res) => {
     const startTime = Date.now();
     const transactionId = generateTransactionId("MSD");
 
-    const { number, message } = req.body;
+    let { number, message, caption } = req.body;
     const file = req.file;
 
     if (!number || !file) {
@@ -808,62 +844,50 @@ app.post('/api/send-media', upload.single('file'), async (req, res) => {
         return res.status(400).json({ success: false, error: 'number and file are required' });
     }
 
-    const filePath = file.path;
-    const mimetype = file.mimetype;
+    if (!Array.isArray(number)) number = [number];
+    number = [...new Set(number)];
+
+    if (number.length > 10) {
+        logger('error', `[${transactionId}] REQ rejected — max 10 recipients allowed`);
+        return res.status(400).json({ error: 'Maximum 10 recipients allowed' });
+    }
 
     try {
-        logger('info', `[${transactionId}] ROUTE target=${number} — finding active bot`);
-        const botSock = getNextBotForGroup(number, req.user.tenantId);
-
-        if (!botSock || !botSock.sendMessage) {
-            logger('warn', `[${transactionId}] NO_BOT target=${number} — no active bot`);
-            return res.status(404).json({ success: false, error: `No active bot for group ${number}` });
-        }
-
-        let mediaType;
-        if (mimetype.startsWith('image/')) mediaType = 'image';
-        else if (mimetype.startsWith('video/')) mediaType = 'video';
-        else if (mimetype.startsWith('audio/')) mediaType = 'audio';
-        else mediaType = 'document';
-
-        logger('info', `[${transactionId}] SENDING type=${mediaType.toUpperCase()} target=${number}`);
-
-        await botSock.sendMessage(number, {
-            [mediaType]: { url: path.resolve(filePath) },
-            caption: message || '',
-            mimetype: mimetype
+        const targets = await normalizeQueuedTargets(number, transactionId);
+        const jobs = await queueService.enqueueBulkMessageJobs({
+            tenantId: req.user.tenantId,
+            source: 'api',
+            type: 'media_upload',
+            targets,
+            payload: {
+                filePath: file.path,
+                mimetype: file.mimetype,
+                caption: caption || message || '',
+                transactionId
+            }
         });
 
         const endTime = Date.now();
         const elapsedSeconds = (endTime - startTime) / 1000;
 
-        logger('info', `[${transactionId}] SEND target=${number} type=${mediaType.toUpperCase()} status=OK time=${elapsedSeconds.toFixed(3)}s`);
+        logger('info', `[${transactionId}] QUEUED type=MEDIA_UPLOAD targets=${targets.length} time=${elapsedSeconds.toFixed(3)}s`);
 
         res.json({
             success: true,
-            transaction_id: transactionId,
-            message: `Media sent to ${number}`,
-            response_time_seconds: Number(elapsedSeconds.toFixed(3)),
-            req_time: formatDate(startTime),
-            res_time: formatDate(endTime)
+            status: 'queued',
+            job_ids: jobs.map(job => job.id),
+            queued: jobs.length,
+            transaction_id: transactionId
         });
 
     } catch (error) {
-        logger('error', `[${transactionId}] SEND target=${number} status=FAIL error="${error.message}"`);
-        res.status(500).json({ success: false, error: `Failed to send media: ${error.message}`, transaction_id: transactionId });
-    } finally {
-        fs.unlink(filePath, (err) => {
-            if (err) {
-                logger('error', `[${transactionId}] Failed to delete temp file: ${err.message}`);
-            } else {
-                logger('info', `[${transactionId}] Temp file deleted: ${filePath}`);
-            }
-        });
+        logger('error', `[${transactionId}] QUEUE media_upload status=FAIL error="${error.message}"`);
+        res.status(400).json({ success: false, error: `Failed to queue media: ${error.message}`, transaction_id: transactionId });
     }
 });
 
 app.post('/api/send-media-from-url', upload.single('file'), async (req, res) => {
-    const { number, url } = req.body;
+    let { number, url, message, caption } = req.body;
     const transactionId = generateTransactionId("MSU");
     const startTime = Date.now();
 
@@ -872,54 +896,44 @@ app.post('/api/send-media-from-url', upload.single('file'), async (req, res) => 
         return res.status(400).json({ success: false, error: 'number and url are required' });
     }
 
+    if (!Array.isArray(number)) number = [number];
+    number = [...new Set(number)];
+
+    if (number.length > 10) {
+        logger('error', `[${transactionId}] REQ rejected — max 10 recipients allowed`);
+        return res.status(400).json({ error: 'Maximum 10 recipients allowed' });
+    }
+
     try {
-        logger('info', `[${transactionId}] Downloading file from URL: ${url}`);
-
-        const response = await axios.get(url, { responseType: 'arraybuffer' });
-        const fileBuffer = response.data;
-        const contentType = response.headers['content-type'];
-
-        if (!contentType.startsWith('image/')) {
-            logger('warn', `[${transactionId}] URL does not point to an image (content-type: ${contentType})`);
-            return res.status(400).json({ success: false, error: `URL does not point to an image (content-type: ${contentType})` });
-        }
-
-        const tempFilePath = path.join(__dirname, 'uploads', `${Date.now()}-image.${contentType.split('/')[1]}`);
-        fs.writeFileSync(tempFilePath, fileBuffer);
-
-        const botSock = getNextBotForGroup(number, req.user.tenantId);
-        if (!botSock || !botSock.sendMessage) {
-            logger('warn', `[${transactionId}] NO_BOT target=${number} — no active bot`);
-            fs.unlinkSync(tempFilePath);
-            return res.status(404).json({ success: false, error: `No active bot for group ${number}` });
-        }
-
-        logger('info', `[${transactionId}] SENDING type=IMAGE target=${number}`);
-
-        await botSock.sendMessage(number, {
-            image: fs.readFileSync(tempFilePath),
-            mimetype: contentType
+        const targets = await normalizeQueuedTargets(number, transactionId);
+        const jobs = await queueService.enqueueBulkMessageJobs({
+            tenantId: req.user.tenantId,
+            source: 'api',
+            type: 'media_url',
+            targets,
+            payload: {
+                url,
+                caption: caption || message || '',
+                transactionId
+            }
         });
-
-        fs.unlinkSync(tempFilePath);
 
         const endTime = Date.now();
         const elapsedSeconds = (endTime - startTime) / 1000;
 
-        logger('info', `[${transactionId}] SEND target=${number} type=IMAGE status=OK time=${elapsedSeconds.toFixed(3)}s`);
+        logger('info', `[${transactionId}] QUEUED type=MEDIA_URL targets=${targets.length} time=${elapsedSeconds.toFixed(3)}s`);
 
         res.json({
             success: true,
-            transaction_id: transactionId,
-            message: `Media sent to ${number}`,
-            response_time_seconds: Number(elapsedSeconds.toFixed(3)),
-            req_time: formatDate(startTime),
-            res_time: formatDate(endTime)
+            status: 'queued',
+            job_ids: jobs.map(job => job.id),
+            queued: jobs.length,
+            transaction_id: transactionId
         });
 
     } catch (error) {
-        logger('error', `[${transactionId}] Failed to download or send media: ${error.message}`);
-        res.status(500).json({ success: false, error: `Failed to send media: ${error.message}`, transaction_id: transactionId });
+        logger('error', `[${transactionId}] QUEUE media_url status=FAIL error="${error.message}"`);
+        res.status(400).json({ success: false, error: `Failed to queue media: ${error.message}`, transaction_id: transactionId });
     }
 });
 
@@ -1198,9 +1212,36 @@ io.on('connection', (socket) => {
 module.exports = { io };
 
 const PORT = 8008;
-server.listen(PORT, () => {
-    logger('info', `ZYRON API server started on port ${PORT}`);
-});
+let deliveryWorker;
+
+async function startServer() {
+    try {
+        await ensureOperationsSchema();
+        await seedSuperAdmin();
+        await startAdminBot();
+        checkHeartbeatFromFile();
+        await initScheduler();
+        await queueService.requeuePendingJobs();
+
+        const routingService = createRoutingService({ socketRegistry: operationBot });
+        deliveryWorker = startDeliveryWorker({
+            queueService,
+            routingService,
+            workerId: `api-${process.pid}`
+        });
+
+        server.listen(PORT, () => {
+            logger('info', `ZYRON API server started on port ${PORT}`);
+        });
+    } catch (error) {
+        logger('error', `Failed to start server: ${error.message}`);
+        process.exit(1);
+    }
+}
+
+if (require.main === module) {
+    startServer();
+}
 
 setInterval(() => {
     stats.flush();
@@ -1209,11 +1250,17 @@ setInterval(() => {
 process.on("SIGINT", () => {
     logger("info", "Flushing stats before shutdown (SIGINT)...");
     stats.flush();
+    if (deliveryWorker && typeof deliveryWorker.close === 'function') {
+        deliveryWorker.close().catch(err => logger("error", `Failed to close delivery worker: ${err.message}`));
+    }
     process.exit();
 });
 
 process.on("SIGTERM", () => {
     logger("info", "Flushing stats before shutdown (SIGTERM)...");
     stats.flush();
+    if (deliveryWorker && typeof deliveryWorker.close === 'function') {
+        deliveryWorker.close().catch(err => logger("error", `Failed to close delivery worker: ${err.message}`));
+    }
     process.exit();
 });
