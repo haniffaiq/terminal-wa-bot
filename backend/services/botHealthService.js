@@ -174,6 +174,19 @@ function createBotHealthService({ queryFn = query } = {}) {
         return result.rows;
     }
 
+    async function markStaleBotsOffline({ staleAfterMs } = {}) {
+        const result = await queryFn(
+            `UPDATE bot_health
+            SET status = 'offline', last_error = 'Bot health stale', updated_at = NOW()
+            WHERE status = 'online'
+              AND last_seen_at IS NOT NULL
+              AND last_seen_at < NOW() - ($1 * INTERVAL '1 millisecond')
+            RETURNING *`,
+            [staleAfterMs]
+        );
+        return result.rows;
+    }
+
     return {
         upsertBotHealth,
         markOnline,
@@ -182,8 +195,36 @@ function createBotHealthService({ queryFn = query } = {}) {
         markFailure,
         markSuccess,
         getBotHealth,
-        listBotHealth
+        listBotHealth,
+        markStaleBotsOffline
     };
+}
+
+function startBotHealthMonitor({
+    queryFn = query,
+    intervalMs = Number(process.env.BOT_HEALTH_MONITOR_INTERVAL_MS || 60000),
+    staleAfterMs = Number(process.env.BOT_HEALTH_STALE_AFTER_MS || 120000)
+} = {}) {
+    if (intervalMs <= 0) {
+        return {
+            stop() {}
+        };
+    }
+
+    const service = createBotHealthService({ queryFn });
+    const run = () => {
+        service.markStaleBotsOffline({ staleAfterMs }).catch(error => {
+            console.error(`[BotHealthMonitor] Failed to mark stale bots offline: ${error.message}`);
+        });
+    };
+    const interval = setInterval(run, intervalMs);
+
+    if (typeof interval.unref === 'function') {
+        interval.unref();
+    }
+
+    interval.stop = () => clearInterval(interval);
+    return interval;
 }
 
 let defaultBotHealthService;
@@ -204,5 +245,7 @@ module.exports = {
     markFailure: (...args) => getDefaultBotHealthService().markFailure(...args),
     markSuccess: (...args) => getDefaultBotHealthService().markSuccess(...args),
     getBotHealth: (...args) => getDefaultBotHealthService().getBotHealth(...args),
-    listBotHealth: (...args) => getDefaultBotHealthService().listBotHealth(...args)
+    listBotHealth: (...args) => getDefaultBotHealthService().listBotHealth(...args),
+    markStaleBotsOffline: (...args) => getDefaultBotHealthService().markStaleBotsOffline(...args),
+    startBotHealthMonitor
 };

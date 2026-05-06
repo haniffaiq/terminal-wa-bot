@@ -25,6 +25,7 @@ const { verifyToken } = require('./utils/auth');
 const { ensureOperationsSchema } = require('./services/schemaService');
 const queueService = require('./services/queueService');
 const { startDeliveryWorker } = require('./services/deliveryWorker');
+const { startBotHealthMonitor } = require('./services/botHealthService');
 const { createRoutingService } = require('./services/routingService');
 const fs = require('fs');
 const path = require('path');
@@ -1292,6 +1293,7 @@ module.exports = { io };
 
 const PORT = 8008;
 let deliveryWorker;
+let botHealthMonitor;
 
 function getDeliveryWorkerStartDelayMs(env = process.env) {
     if (env.DELIVERY_WORKER_START_DELAY_MS !== undefined) {
@@ -1315,6 +1317,9 @@ async function startDeliveryWorkerAfterWarmup({ delayMs, routingService }) {
         workerId: `api-${process.pid}`
     });
     logger('info', '[DeliveryWorker] started');
+
+    botHealthMonitor = startBotHealthMonitor();
+    logger('info', '[BotHealthMonitor] started');
 }
 
 async function startServer() {

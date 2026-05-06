@@ -26,7 +26,9 @@ const serviceExportContracts = [
             'markFailure',
             'markSuccess',
             'getBotHealth',
-            'listBotHealth'
+            'listBotHealth',
+            'markStaleBotsOffline',
+            'startBotHealthMonitor'
         ]
     },
     {

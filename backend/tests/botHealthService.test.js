@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const { createBotHealthService } = require('../services/botHealthService');
+const { createBotHealthService, startBotHealthMonitor } = require('../services/botHealthService');
 
 function normalizeSql(sql) {
     return sql.replace(/\s+/g, ' ').trim();
@@ -41,4 +41,40 @@ test('markFailure increments consecutive_failures from zero when existing value 
     });
 
     assert.equal(row.consecutive_failures, 1);
+});
+
+test('markStaleBotsOffline marks online bots offline after stale interval', async () => {
+    const service = createBotHealthService({
+        queryFn: async (sql, params = []) => {
+            const normalizedSql = normalizeSql(sql);
+            assert.match(normalizedSql, /UPDATE bot_health SET status = 'offline'/i);
+            assert.match(normalizedSql, /last_error = 'Bot health stale'/i);
+            assert.match(normalizedSql, /WHERE status = 'online'/i);
+            assert.match(normalizedSql, /last_seen_at IS NOT NULL/i);
+            assert.match(normalizedSql, /last_seen_at < NOW\(\) - \(\$1 \* INTERVAL '1 millisecond'\)/i);
+            assert.match(normalizedSql, /RETURNING \*/i);
+            assert.deepEqual(params, [120000]);
+            return { rows: [{ tenant_id: 'tenant-1', bot_id: 'bot-a', status: 'offline' }] };
+        }
+    });
+
+    const rows = await service.markStaleBotsOffline({ staleAfterMs: 120000 });
+
+    assert.deepEqual(rows, [{ tenant_id: 'tenant-1', bot_id: 'bot-a', status: 'offline' }]);
+});
+
+test('startBotHealthMonitor returns stoppable no-op handle when interval is disabled', () => {
+    let queryCalls = 0;
+
+    const handle = startBotHealthMonitor({
+        queryFn: async () => {
+            queryCalls += 1;
+            return { rows: [] };
+        },
+        intervalMs: 0
+    });
+
+    assert.equal(typeof handle.stop, 'function');
+    handle.stop();
+    assert.equal(queryCalls, 0);
 });
