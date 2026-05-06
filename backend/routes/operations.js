@@ -11,6 +11,17 @@ const BOT_SUMMARY_STATUSES = ['online', 'offline', 'reconnecting', 'cooldown', '
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DEFAULT_BOT_STALE_SECONDS = 120;
 
+class BadRequestError extends Error {
+    constructor(message) {
+        super(message);
+        this.statusCode = 400;
+    }
+}
+
+function sendRouteError(res, error) {
+    res.status(error.statusCode || 500).json({ success: false, error: error.message });
+}
+
 function isValidUuid(value) {
     return typeof value === 'string' && UUID_PATTERN.test(value);
 }
@@ -37,12 +48,41 @@ function isSuperAdmin(req) {
     return req.user && req.user.role === 'super_admin';
 }
 
+function getActorId(req) {
+    return (req.user && (req.user.userId || req.user.id || req.user.username)) || null;
+}
+
 function getTenantScope(req, params, column = 'tenant_id') {
     if (isSuperAdmin(req)) {
-        return { clause: '', params };
+        const hasTenantQuery = req.query && Object.prototype.hasOwnProperty.call(req.query, 'tenant_id');
+        if (!hasTenantQuery) {
+            return { clause: '', params, tenantId: null };
+        }
+        const requestedTenantId = req.query.tenant_id;
+        if (!isValidUuid(requestedTenantId)) {
+            throw new BadRequestError('tenant_id must be a valid UUID');
+        }
+        params.push(requestedTenantId);
+        return { clause: ` AND ${column} = $${params.length}`, params, tenantId: requestedTenantId };
     }
     params.push(req.user.tenantId);
-    return { clause: ` AND ${column} = $${params.length}`, params };
+    return { clause: ` AND ${column} = $${params.length}`, params, tenantId: req.user.tenantId };
+}
+
+function getReconnectTenantId(req) {
+    if (!isSuperAdmin(req)) {
+        return req.user.tenantId;
+    }
+
+    const requestedTenantId = (req.body && (req.body.tenantId || req.body.tenant_id))
+        || (req.query && (req.query.tenantId || req.query.tenant_id));
+    if (!requestedTenantId) {
+        throw new BadRequestError('tenant_id is required for reconnect');
+    }
+    if (!isValidUuid(requestedTenantId)) {
+        throw new BadRequestError('tenant_id must be a valid UUID');
+    }
+    return requestedTenantId;
 }
 
 function parseLimitOffset(queryParams, defaultLimit = 50, maxLimit = 200) {
@@ -74,22 +114,23 @@ function appendTenantFilter(req, params, column = 'tenant_id') {
     return scope.clause;
 }
 
-function appendScopedTenantFilter(req, params, requestedTenantId, column = 'tenant_id') {
-    const tenantId = isSuperAdmin(req) ? requestedTenantId : req.user.tenantId;
-    if (!tenantId) return '';
-    params.push(tenantId);
-    return ` AND ${column} = $${params.length}`;
-}
-
 function appendEqualsFilter(filters, params, column, value) {
     if (!value) return;
     params.push(value);
     filters.push(` AND ${column} = $${params.length}`);
 }
 
-function appendDateFilter(filters, params, column, operator, value) {
+function parseDateFilter(value, fieldName) {
+    if (!value) return null;
+    if (Number.isNaN(Date.parse(value))) {
+        throw new BadRequestError(`${fieldName} must be a valid date`);
+    }
+    return value;
+}
+
+function appendDateFilter(filters, params, column, operator, value, fieldName) {
     if (!value) return;
-    params.push(value);
+    params.push(parseDateFilter(value, fieldName));
     filters.push(` AND ${column} ${operator} $${params.length}`);
 }
 
@@ -97,7 +138,7 @@ function buildJobsQuery(req) {
     const { limit, offset } = parseLimitOffset(req.query);
     const params = [];
     const filters = [
-        appendScopedTenantFilter(req, params, req.query.tenant_id)
+        appendTenantFilter(req, params)
     ];
     const statuses = parseStatusList(req.query.status);
     const statusClause = appendStatusFilter(statuses, params);
@@ -109,8 +150,8 @@ function buildJobsQuery(req) {
         filters.push(` AND target_id ILIKE $${params.length}`);
     }
     appendEqualsFilter(filters, params, 'selected_bot_id', req.query.bot);
-    appendDateFilter(filters, params, 'created_at', '>=', req.query.date_from);
-    appendDateFilter(filters, params, 'created_at', '<=', req.query.date_to);
+    appendDateFilter(filters, params, 'created_at', '>=', req.query.date_from, 'date_from');
+    appendDateFilter(filters, params, 'created_at', '<=', req.query.date_to, 'date_to');
 
     params.push(limit, offset);
     return {
@@ -123,6 +164,103 @@ function buildJobsQuery(req) {
         params,
         limit,
         offset
+    };
+}
+
+function buildBotHealthQuery(req) {
+    const statuses = parseStatusList(req.query.status);
+    const params = [];
+    const tenantClause = appendTenantFilter(req, params);
+    const statusClause = appendStatusFilter(statuses, params);
+
+    return {
+        sql: `SELECT *
+            FROM bot_health
+            WHERE TRUE
+                ${tenantClause}
+                ${statusClause}
+            ORDER BY tenant_id, bot_id`,
+        params
+    };
+}
+
+function buildOperationalEventsQuery(req) {
+    const { limit, offset } = parseLimitOffset(req.query, 100, 500);
+    const params = [];
+    const filters = [appendTenantFilter(req, params)];
+
+    if (req.query.event_type) {
+        params.push(req.query.event_type);
+        filters.push(` AND event_type = $${params.length}`);
+    }
+    if (req.query.severity) {
+        params.push(req.query.severity);
+        filters.push(` AND severity = $${params.length}`);
+    }
+    if (req.query.entity_id) {
+        params.push(req.query.entity_id);
+        filters.push(` AND entity_id = $${params.length}`);
+    }
+
+    params.push(limit, offset);
+    return {
+        sql: `SELECT *
+            FROM operational_events
+            WHERE TRUE
+                ${filters.join('')}
+            ORDER BY created_at DESC
+            LIMIT $${params.length - 1} OFFSET $${params.length}`,
+        params,
+        limit,
+        offset
+    };
+}
+
+function buildOpsSummaryQueries(req) {
+    const jobParams = [];
+    const jobTenantClause = appendTenantFilter(req, jobParams);
+    const sentTodayParams = [];
+    const sentTodayTenantClause = appendTenantFilter(req, sentTodayParams);
+    const healthParams = [];
+    const healthTenantClause = appendTenantFilter(req, healthParams);
+    const staleParams = [getBotStaleSeconds()];
+    const staleTenantClause = appendTenantFilter(req, staleParams);
+
+    return {
+        jobStatus: {
+            sql: `SELECT status, COUNT(*)::int AS count
+            FROM message_jobs
+            WHERE TRUE
+                ${jobTenantClause}
+            GROUP BY status`,
+            params: jobParams
+        },
+        sentToday: {
+            sql: `SELECT COUNT(*)::int AS count
+            FROM message_jobs
+            WHERE status = 'sent'
+                AND sent_at >= CURRENT_DATE
+                AND sent_at < CURRENT_DATE + INTERVAL '1 day'
+                ${sentTodayTenantClause}`,
+            params: sentTodayParams
+        },
+        botHealth: {
+            sql: `SELECT status, COUNT(*)::int AS count
+            FROM bot_health
+            WHERE TRUE
+                ${healthTenantClause}
+            GROUP BY status`,
+            params: healthParams
+        },
+        stale: {
+            sql: `SELECT COUNT(*)::int AS count
+            FROM bot_health
+            WHERE status = 'online'
+                AND last_seen_at IS NOT NULL
+                AND last_seen_at < NOW() - ($1::int * INTERVAL '1 second')
+                ${staleTenantClause}`,
+            params: staleParams
+        }
     };
 }
 
@@ -215,7 +353,7 @@ async function requeueJobs({ req, jobIds }) {
         for (const job of result.rows) {
             await logOperationalEvent({
                 tenantId: job.tenant_id,
-                actorId: req.user && (req.user.id || req.user.username),
+                actorId: getActorId(req),
                 eventType: 'job_retried',
                 entityType: 'message_job',
                 entityId: job.id,
@@ -235,7 +373,7 @@ router.get('/jobs', async (req, res) => {
 
         res.json({ success: true, jobs: result.rows, limit, offset });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        sendRouteError(res, error);
     }
 });
 
@@ -255,7 +393,7 @@ router.post('/jobs/bulk-retry', async (req, res) => {
             queued: jobs.length
         });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        sendRouteError(res, error);
     }
 });
 
@@ -293,7 +431,7 @@ router.get('/jobs/:id', async (req, res) => {
             }
         });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        sendRouteError(res, error);
     }
 });
 
@@ -313,7 +451,7 @@ router.post('/jobs/:id/retry', async (req, res) => {
             queued: jobs.length
         });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        sendRouteError(res, error);
     }
 });
 
@@ -343,7 +481,7 @@ router.post('/jobs/:id/resolve', async (req, res) => {
 
         await logOperationalEvent({
             tenantId: result.rows[0].tenant_id,
-            actorId: req.user && (req.user.id || req.user.username),
+            actorId: getActorId(req),
             eventType: 'job_resolved',
             entityType: 'message_job',
             entityId: req.params.id,
@@ -352,7 +490,7 @@ router.post('/jobs/:id/resolve', async (req, res) => {
 
         res.json({ success: true, job: result.rows[0] });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        sendRouteError(res, error);
     }
 });
 
@@ -382,7 +520,7 @@ router.post('/jobs/:id/ignore', async (req, res) => {
 
         await logOperationalEvent({
             tenantId: result.rows[0].tenant_id,
-            actorId: req.user && (req.user.id || req.user.username),
+            actorId: getActorId(req),
             eventType: 'job_ignored',
             entityType: 'message_job',
             entityId: req.params.id,
@@ -391,40 +529,24 @@ router.post('/jobs/:id/ignore', async (req, res) => {
 
         res.json({ success: true, job: result.rows[0] });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        sendRouteError(res, error);
     }
 });
 
 router.get('/bot-health', async (req, res) => {
     try {
-        const statuses = parseStatusList(req.query.status);
-        const params = [];
-        const tenantClause = appendTenantFilter(req, params);
-        const statusClause = appendStatusFilter(statuses, params);
-        const result = await query(
-            `SELECT *
-            FROM bot_health
-            WHERE TRUE
-                ${tenantClause}
-                ${statusClause}
-            ORDER BY tenant_id, bot_id`,
-            params
-        );
+        const { sql, params } = buildBotHealthQuery(req);
+        const result = await query(sql, params);
 
         res.json({ success: true, bots: result.rows });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        sendRouteError(res, error);
     }
 });
 
 router.post('/bot-health/:botId/reconnect', async (req, res) => {
     try {
-        const requestedTenantId = req.body.tenantId || req.body.tenant_id || req.query.tenantId || req.query.tenant_id;
-        const tenantId = isSuperAdmin(req) ? requestedTenantId : req.user.tenantId;
-
-        if (!tenantId) {
-            return res.status(400).json({ success: false, error: 'tenant_id is required for reconnect' });
-        }
+        const tenantId = getReconnectTenantId(req);
 
         await botHealthService.markReconnect({ tenantId, botId: req.params.botId });
         reconnectSingleBotAPI(req.params.botId, tenantId).catch(error => {
@@ -433,7 +555,7 @@ router.post('/bot-health/:botId/reconnect', async (req, res) => {
 
         await logOperationalEvent({
             tenantId,
-            actorId: req.user && (req.user.id || req.user.username),
+            actorId: getActorId(req),
             eventType: 'bot_reconnect_requested',
             entityType: 'bot',
             entityId: req.params.botId,
@@ -442,93 +564,28 @@ router.post('/bot-health/:botId/reconnect', async (req, res) => {
 
         res.json({ success: true, status: 'reconnecting', bot_id: req.params.botId, tenant_id: tenantId });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        sendRouteError(res, error);
     }
 });
 
 router.get('/operational-events', async (req, res) => {
     try {
-        const { limit, offset } = parseLimitOffset(req.query, 100, 500);
-        const params = [];
-        const filters = [appendTenantFilter(req, params)];
-
-        if (req.query.event_type) {
-            params.push(req.query.event_type);
-            filters.push(` AND event_type = $${params.length}`);
-        }
-        if (req.query.severity) {
-            params.push(req.query.severity);
-            filters.push(` AND severity = $${params.length}`);
-        }
-        if (req.query.entity_id) {
-            params.push(req.query.entity_id);
-            filters.push(` AND entity_id = $${params.length}`);
-        }
-
-        params.push(limit, offset);
-        const result = await query(
-            `SELECT *
-            FROM operational_events
-            WHERE TRUE
-                ${filters.join('')}
-            ORDER BY created_at DESC
-            LIMIT $${params.length - 1} OFFSET $${params.length}`,
-            params
-        );
+        const { sql, params, limit, offset } = buildOperationalEventsQuery(req);
+        const result = await query(sql, params);
 
         res.json({ success: true, events: result.rows, limit, offset });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        sendRouteError(res, error);
     }
 });
 
 router.get('/ops/summary', async (req, res) => {
     try {
-        const jobParams = [];
-        const jobTenantClause = appendTenantFilter(req, jobParams);
-        const jobStatusResult = await query(
-            `SELECT status, COUNT(*)::int AS count
-            FROM message_jobs
-            WHERE TRUE
-                ${jobTenantClause}
-            GROUP BY status`,
-            jobParams
-        );
-
-        const sentTodayParams = [];
-        const sentTodayTenantClause = appendTenantFilter(req, sentTodayParams);
-        const sentTodayResult = await query(
-            `SELECT COUNT(*)::int AS count
-            FROM message_jobs
-            WHERE status = 'sent'
-                AND sent_at >= CURRENT_DATE
-                AND sent_at < CURRENT_DATE + INTERVAL '1 day'
-                ${sentTodayTenantClause}`,
-            sentTodayParams
-        );
-
-        const healthParams = [];
-        const healthTenantClause = appendTenantFilter(req, healthParams);
-        const botHealthResult = await query(
-            `SELECT status, COUNT(*)::int AS count
-            FROM bot_health
-            WHERE TRUE
-                ${healthTenantClause}
-            GROUP BY status`,
-            healthParams
-        );
-
-        const staleParams = [getBotStaleSeconds()];
-        const staleTenantClause = appendTenantFilter(req, staleParams);
-        const staleResult = await query(
-            `SELECT COUNT(*)::int AS count
-            FROM bot_health
-            WHERE status = 'online'
-                AND last_seen_at IS NOT NULL
-                AND last_seen_at < NOW() - ($1::int * INTERVAL '1 second')
-                ${staleTenantClause}`,
-            staleParams
-        );
+        const queries = buildOpsSummaryQueries(req);
+        const jobStatusResult = await query(queries.jobStatus.sql, queries.jobStatus.params);
+        const sentTodayResult = await query(queries.sentToday.sql, queries.sentToday.params);
+        const botHealthResult = await query(queries.botHealth.sql, queries.botHealth.params);
+        const staleResult = await query(queries.stale.sql, queries.stale.params);
 
         const jobRows = [
             ...jobStatusResult.rows,
@@ -544,7 +601,7 @@ router.get('/ops/summary', async (req, res) => {
             })
         });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        sendRouteError(res, error);
     }
 });
 
@@ -552,5 +609,14 @@ router.__isValidUuidForTests = isValidUuid;
 router.__validateUuidListForTests = validateUuidList;
 router.__buildJobsQueryForTests = buildJobsQuery;
 router.__buildOpsSummaryResponseForTests = buildOpsSummaryResponse;
+router._getActorId = getActorId;
+router._getTenantScope = getTenantScope;
+router._isUuid = isValidUuid;
+router._parseDateFilter = parseDateFilter;
+router._buildJobsQuery = buildJobsQuery;
+router._buildBotHealthQuery = buildBotHealthQuery;
+router._buildOperationalEventsQuery = buildOperationalEventsQuery;
+router._buildOpsSummaryQueries = buildOpsSummaryQueries;
+router._getReconnectTenantId = getReconnectTenantId;
 
 module.exports = router;

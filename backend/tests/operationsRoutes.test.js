@@ -2,6 +2,8 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const operationsRoutes = require('../routes/operations');
+const TENANT_ID = '3f65a22d-b1b8-44db-94c7-1f0c8db68c45';
+const OTHER_TENANT_ID = '4f65a22d-b1b8-44db-94c7-1f0c8db68c46';
 
 function normalizeSql(sql) {
     return sql.replace(/\s+/g, ' ').trim();
@@ -41,18 +43,76 @@ test('validateUuidList rejects missing, empty, and invalid id arrays', () => {
     });
 });
 
+test('getActorId prefers auth userId before legacy fields', () => {
+    assert.equal(operationsRoutes._getActorId({
+        user: {
+            userId: 'auth-user-id',
+            id: 'legacy-id',
+            username: 'operator'
+        }
+    }), 'auth-user-id');
+    assert.equal(operationsRoutes._getActorId({ user: { id: 'legacy-id', username: 'operator' } }), 'legacy-id');
+    assert.equal(operationsRoutes._getActorId({ user: { username: 'operator' } }), 'operator');
+    assert.equal(operationsRoutes._getActorId({ user: {} }), null);
+    assert.equal(operationsRoutes._getActorId({}), null);
+});
+
+test('getTenantScope filters regular users by token tenant and validates super-admin query tenant_id', () => {
+    const tenantParams = ['existing'];
+    assert.deepEqual(
+        operationsRoutes._getTenantScope({
+            user: { role: 'tenant_admin', tenantId: TENANT_ID },
+            query: { tenant_id: OTHER_TENANT_ID }
+        }, tenantParams),
+        { clause: ' AND tenant_id = $2', params: ['existing', TENANT_ID], tenantId: TENANT_ID }
+    );
+
+    const superAllParams = [];
+    assert.deepEqual(
+        operationsRoutes._getTenantScope({
+            user: { role: 'super_admin' },
+            query: {}
+        }, superAllParams),
+        { clause: '', params: [], tenantId: null }
+    );
+
+    const superTenantParams = [];
+    assert.deepEqual(
+        operationsRoutes._getTenantScope({
+            user: { role: 'super_admin' },
+            query: { tenant_id: OTHER_TENANT_ID }
+        }, superTenantParams, 'bh.tenant_id'),
+        { clause: ' AND bh.tenant_id = $1', params: [OTHER_TENANT_ID], tenantId: OTHER_TENANT_ID }
+    );
+
+    assert.throws(
+        () => operationsRoutes._getTenantScope({
+            user: { role: 'super_admin' },
+            query: { tenant_id: 'not-a-uuid' }
+        }, []),
+        /tenant_id must be a valid UUID/
+    );
+    assert.throws(
+        () => operationsRoutes._getTenantScope({
+            user: { role: 'super_admin' },
+            query: { tenant_id: '' }
+        }, []),
+        /tenant_id must be a valid UUID/
+    );
+});
+
 test('buildJobsQuery applies tenant-scoped filters with placeholders', () => {
     const req = {
         user: {
             role: 'tenant_admin',
-            tenantId: 'tenant-1'
+            tenantId: TENANT_ID
         },
         query: {
             status: 'queued,retrying',
             source: 'api',
             target: '62812',
             bot: 'bot-a',
-            tenant_id: 'other-tenant',
+            tenant_id: OTHER_TENANT_ID,
             date_from: '2026-05-01T00:00:00.000Z',
             date_to: '2026-05-06T23:59:59.999Z',
             limit: '25',
@@ -72,7 +132,7 @@ test('buildJobsQuery applies tenant-scoped filters with placeholders', () => {
     assert.match(sql, /created_at <= \$7/);
     assert.match(sql, /LIMIT \$8 OFFSET \$9/);
     assert.deepEqual(built.params, [
-        'tenant-1',
+        TENANT_ID,
         ['queued', 'retrying'],
         'api',
         '%62812%',
@@ -82,14 +142,14 @@ test('buildJobsQuery applies tenant-scoped filters with placeholders', () => {
         25,
         10
     ]);
-    assert.equal(sql.includes('other-tenant'), false);
+    assert.equal(sql.includes(OTHER_TENANT_ID), false);
 });
 
 test('buildJobsQuery honors tenant_id only for super_admin', () => {
     const built = operationsRoutes.__buildJobsQueryForTests({
         user: { role: 'super_admin' },
         query: {
-            tenant_id: 'tenant-2',
+            tenant_id: OTHER_TENANT_ID,
             limit: '999'
         }
     });
@@ -97,7 +157,87 @@ test('buildJobsQuery honors tenant_id only for super_admin', () => {
     const sql = normalizeSql(built.sql);
     assert.match(sql, /tenant_id = \$1/);
     assert.match(sql, /LIMIT \$2 OFFSET \$3/);
-    assert.deepEqual(built.params, ['tenant-2', 200, 0]);
+    assert.deepEqual(built.params, [OTHER_TENANT_ID, 200, 0]);
+});
+
+test('buildJobsQuery rejects invalid super-admin tenant_id and date filters', () => {
+    assert.throws(
+        () => operationsRoutes.__buildJobsQueryForTests({
+            user: { role: 'super_admin' },
+            query: { tenant_id: 'tenant-2' }
+        }),
+        /tenant_id must be a valid UUID/
+    );
+
+    assert.throws(
+        () => operationsRoutes.__buildJobsQueryForTests({
+            user: { role: 'tenant_admin', tenantId: TENANT_ID },
+            query: { date_from: '2026-99-99' }
+        }),
+        /date_from must be a valid date/
+    );
+});
+
+test('buildBotHealthQuery and buildOperationalEventsQuery use consistent super-admin tenant scope', () => {
+    const botHealth = operationsRoutes._buildBotHealthQuery({
+        user: { role: 'super_admin' },
+        query: { tenant_id: OTHER_TENANT_ID, status: 'online,offline' }
+    });
+    assert.match(normalizeSql(botHealth.sql), /tenant_id = \$1/);
+    assert.match(normalizeSql(botHealth.sql), /status = ANY\(\$2::varchar\[\]\)/);
+    assert.deepEqual(botHealth.params, [OTHER_TENANT_ID, ['online', 'offline']]);
+
+    const events = operationsRoutes._buildOperationalEventsQuery({
+        user: { role: 'super_admin' },
+        query: { tenant_id: OTHER_TENANT_ID, event_type: 'job_resolved', limit: '5' }
+    });
+    assert.match(normalizeSql(events.sql), /tenant_id = \$1/);
+    assert.match(normalizeSql(events.sql), /event_type = \$2/);
+    assert.match(normalizeSql(events.sql), /LIMIT \$3 OFFSET \$4/);
+    assert.deepEqual(events.params, [OTHER_TENANT_ID, 'job_resolved', 5, 0]);
+});
+
+test('buildOpsSummaryQueries applies requested tenant_id to every summary query', () => {
+    const queries = operationsRoutes._buildOpsSummaryQueries({
+        user: { role: 'super_admin' },
+        query: { tenant_id: OTHER_TENANT_ID }
+    });
+
+    assert.match(normalizeSql(queries.jobStatus.sql), /tenant_id = \$1/);
+    assert.deepEqual(queries.jobStatus.params, [OTHER_TENANT_ID]);
+    assert.match(normalizeSql(queries.sentToday.sql), /tenant_id = \$1/);
+    assert.deepEqual(queries.sentToday.params, [OTHER_TENANT_ID]);
+    assert.match(normalizeSql(queries.botHealth.sql), /tenant_id = \$1/);
+    assert.deepEqual(queries.botHealth.params, [OTHER_TENANT_ID]);
+    assert.match(normalizeSql(queries.stale.sql), /tenant_id = \$2/);
+    assert.deepEqual(queries.stale.params, [120, OTHER_TENANT_ID]);
+});
+
+test('getReconnectTenantId validates super-admin reconnect tenant input', () => {
+    assert.equal(operationsRoutes._getReconnectTenantId({
+        user: { role: 'tenant_admin', tenantId: TENANT_ID },
+        body: { tenant_id: 'not-a-uuid' },
+        query: {}
+    }), TENANT_ID);
+
+    assert.equal(operationsRoutes._getReconnectTenantId({
+        user: { role: 'super_admin' },
+        body: { tenantId: OTHER_TENANT_ID },
+        query: {}
+    }), OTHER_TENANT_ID);
+
+    assert.throws(
+        () => operationsRoutes._getReconnectTenantId({ user: { role: 'super_admin' }, body: {}, query: {} }),
+        /tenant_id is required for reconnect/
+    );
+    assert.throws(
+        () => operationsRoutes._getReconnectTenantId({
+            user: { role: 'super_admin' },
+            body: {},
+            query: { tenant_id: 'not-a-uuid' }
+        }),
+        /tenant_id must be a valid UUID/
+    );
 });
 
 test('buildOpsSummaryResponse returns dashboard count shape', () => {
