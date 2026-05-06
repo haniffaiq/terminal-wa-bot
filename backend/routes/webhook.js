@@ -4,6 +4,27 @@ const crypto = require('crypto');
 const { query } = require('../utils/db');
 const queueService = require('../services/queueService');
 
+function normalizeWebhookTarget(rawTarget) {
+    let target = String(rawTarget || '').trim();
+    if (!target) {
+        throw new Error('Target number cannot be empty');
+    }
+
+    if (!target.includes('@')) {
+        const digits = target.replace(/[^0-9-]/g, '');
+        target = digits.length >= 18 ? `${digits}@g.us` : `${digits}@c.us`;
+    }
+
+    if (!target.endsWith('@g.us')) {
+        throw new Error("Please don't send to personal number");
+    }
+    if (!/^[0-9-]+@g\.us$/.test(target)) {
+        throw new Error('Target number is malformed');
+    }
+
+    return target;
+}
+
 router.get('/keys', async (req, res) => {
     try {
         const result = await query(
@@ -63,13 +84,19 @@ router.post('/send', async (req, res) => {
         if (!Array.isArray(number)) number = [number];
         number = [...new Set(number)];
         if (number.length > 10) return res.status(400).json({ success: false, error: 'Maximum 10 recipients' });
+        let targets;
+        try {
+            targets = [...new Set(number.map(normalizeWebhookTarget))];
+        } catch (error) {
+            return res.status(400).json({ success: false, error: error.message });
+        }
 
         const transactionId = `WH-${Date.now()}`;
         const jobs = await queueService.enqueueBulkMessageJobs({
             tenantId,
             source: 'webhook',
             type: 'text',
-            targets: number,
+            targets,
             payload: { message, transactionId }
         });
 

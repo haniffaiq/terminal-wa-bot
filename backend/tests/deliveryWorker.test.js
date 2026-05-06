@@ -441,6 +441,119 @@ test('processDeliveryJob send failure with non-retryable policy marks failed wit
     assert.deepEqual(deliveryQueue.addCalls, []);
 });
 
+test('processDeliveryJob cleans up uploaded media when failure is final', async () => {
+    const sock = { id: 'sock-a' };
+    const deliveryQueue = createDeliveryQueue();
+    const retryService = createRetryService({ status: 'failed', delaySeconds: 0, final: true });
+    const sendingJob = {
+        ...baseDbJob,
+        type: 'media_upload',
+        status: 'sending',
+        attempt_count: 1,
+        payload: { filePath: '/app/uploads/photo.jpg' }
+    };
+    const cleanupCalls = [];
+
+    const result = await processDeliveryJob(
+        { data: { jobId: 'job-1', tenantId: 'tenant-1' } },
+        {
+            queueService: {
+                async getMessageJob() {
+                    return baseDbJob;
+                },
+                async markJobSending() {
+                    return sendingJob;
+                },
+                async recordAttempt() {},
+                async markJobFailed(payload) {
+                    return { ...sendingJob, status: payload.status };
+                }
+            },
+            routingService: {
+                async selectBotForGroup() {
+                    return { botId: 'bot-a', sock };
+                },
+                async recordRouteFailure() {}
+            },
+            botHealthService: {
+                async markFailure() {}
+            },
+            messageSender: {
+                async sendJob() {
+                    throw new Error('invalid group');
+                },
+                async cleanupJobPayload(payload) {
+                    cleanupCalls.push(payload);
+                    return { attempted: true, deleted: true };
+                }
+            },
+            deliveryQueue,
+            retryService,
+            workerId: 'worker-1'
+        }
+    );
+
+    assert.deepEqual(result, { status: 'failed', jobId: 'job-1', delaySeconds: 0 });
+    assert.equal(cleanupCalls.length, 1);
+    assert.equal(cleanupCalls[0].job, sendingJob);
+});
+
+test('processDeliveryJob does not clean up uploaded media when failure is retrying', async () => {
+    const sock = { id: 'sock-a' };
+    const deliveryQueue = createDeliveryQueue();
+    const retryService = createRetryService({ status: 'retrying', delaySeconds: 30, final: false });
+    const sendingJob = {
+        ...baseDbJob,
+        type: 'media_upload',
+        status: 'sending',
+        attempt_count: 1,
+        payload: { filePath: '/app/uploads/photo.jpg' }
+    };
+    const cleanupCalls = [];
+
+    const result = await processDeliveryJob(
+        { data: { jobId: 'job-1', tenantId: 'tenant-1' } },
+        {
+            queueService: {
+                async getMessageJob() {
+                    return baseDbJob;
+                },
+                async markJobSending() {
+                    return sendingJob;
+                },
+                async recordAttempt() {},
+                async markJobFailed(payload) {
+                    return { ...sendingJob, status: payload.status };
+                }
+            },
+            routingService: {
+                async selectBotForGroup() {
+                    return { botId: 'bot-a', sock };
+                },
+                async recordRouteFailure() {}
+            },
+            botHealthService: {
+                async markFailure() {}
+            },
+            messageSender: {
+                async sendJob() {
+                    throw new Error('temporary network failure');
+                },
+                async cleanupJobPayload(payload) {
+                    cleanupCalls.push(payload);
+                    return { attempted: true, deleted: true };
+                }
+            },
+            deliveryQueue,
+            retryService,
+            workerId: 'worker-1'
+        }
+    );
+
+    assert.deepEqual(result, { status: 'retrying', jobId: 'job-1', delaySeconds: 30 });
+    assert.deepEqual(cleanupCalls, []);
+});
+
 test('processDeliveryJob schedules delayed retry with tenantId after retryable send failure', async () => {
     const sock = { id: 'sock-a' };
     const deliveryQueue = createDeliveryQueue();

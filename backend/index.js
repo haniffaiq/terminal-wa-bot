@@ -832,6 +832,74 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 
+async function cleanupUploadedRequestFile(file, transactionId) {
+    if (!file || !file.path) return;
+    try {
+        await fs.promises.unlink(file.path);
+        logger('info', `[${transactionId}] CLEANUP uploaded file=${file.path}`);
+    } catch (error) {
+        logger('warn', `[${transactionId}] CLEANUP failed file=${file.path} error="${error.message}"`);
+    }
+}
+
+function createTargetUploadPath(filePath, index) {
+    const parsedPath = path.parse(filePath);
+    return path.join(parsedPath.dir, `${parsedPath.name}-${index}${parsedPath.ext}`);
+}
+
+async function enqueueMediaUploadJobs({ tenantId, targets, file, caption, transactionId }) {
+    if (targets.length === 1) {
+        return queueService.enqueueBulkMessageJobs({
+            tenantId,
+            source: 'api',
+            type: 'media_upload',
+            targets,
+            payload: {
+                filePath: file.path,
+                mimetype: file.mimetype,
+                caption,
+                transactionId
+            }
+        });
+    }
+
+    const jobs = [];
+    const copiedFiles = [];
+    const queuedFiles = new Set();
+
+    try {
+        for (const [index, targetId] of targets.entries()) {
+            const targetFilePath = createTargetUploadPath(file.path, index + 1);
+            await fs.promises.copyFile(file.path, targetFilePath);
+            copiedFiles.push(targetFilePath);
+
+            const job = await queueService.enqueueMessageJob({
+                tenantId,
+                source: 'api',
+                type: 'media_upload',
+                targetId,
+                payload: {
+                    filePath: targetFilePath,
+                    mimetype: file.mimetype,
+                    caption,
+                    transactionId
+                }
+            });
+            queuedFiles.add(targetFilePath);
+            jobs.push(job);
+        }
+    } catch (error) {
+        for (const copiedFile of copiedFiles) {
+            if (queuedFiles.has(copiedFile)) continue;
+            await cleanupUploadedRequestFile({ path: copiedFile }, transactionId);
+        }
+        throw error;
+    }
+
+    await cleanupUploadedRequestFile(file, transactionId);
+    return jobs;
+}
+
 app.post('/api/send-media', upload.single('file'), async (req, res) => {
     const startTime = Date.now();
     const transactionId = generateTransactionId("MSD");
@@ -841,6 +909,7 @@ app.post('/api/send-media', upload.single('file'), async (req, res) => {
 
     if (!number || !file) {
         logger('error', `[${transactionId}] REQ missing required params: number and file`);
+        await cleanupUploadedRequestFile(file, transactionId);
         return res.status(400).json({ success: false, error: 'number and file are required' });
     }
 
@@ -849,22 +918,18 @@ app.post('/api/send-media', upload.single('file'), async (req, res) => {
 
     if (number.length > 10) {
         logger('error', `[${transactionId}] REQ rejected — max 10 recipients allowed`);
+        await cleanupUploadedRequestFile(file, transactionId);
         return res.status(400).json({ error: 'Maximum 10 recipients allowed' });
     }
 
     try {
         const targets = await normalizeQueuedTargets(number, transactionId);
-        const jobs = await queueService.enqueueBulkMessageJobs({
+        const jobs = await enqueueMediaUploadJobs({
             tenantId: req.user.tenantId,
-            source: 'api',
-            type: 'media_upload',
             targets,
-            payload: {
-                filePath: file.path,
-                mimetype: file.mimetype,
-                caption: caption || message || '',
-                transactionId
-            }
+            file,
+            caption: caption || message || '',
+            transactionId
         });
 
         const endTime = Date.now();
@@ -882,6 +947,7 @@ app.post('/api/send-media', upload.single('file'), async (req, res) => {
 
     } catch (error) {
         logger('error', `[${transactionId}] QUEUE media_upload status=FAIL error="${error.message}"`);
+        await cleanupUploadedRequestFile(file, transactionId);
         res.status(400).json({ success: false, error: `Failed to queue media: ${error.message}`, transaction_id: transactionId });
     }
 });
@@ -1214,6 +1280,33 @@ module.exports = { io };
 const PORT = 8008;
 let deliveryWorker;
 
+function getDeliveryWorkerStartDelayMs(env = process.env) {
+    if (env.DELIVERY_WORKER_START_DELAY_MS !== undefined) {
+        const parsed = Number.parseInt(env.DELIVERY_WORKER_START_DELAY_MS, 10);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+    }
+    return env.NODE_ENV === 'production' ? 30000 : 0;
+}
+
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function startDeliveryWorkerAfterWarmup({ delayMs, routingService }) {
+    logger('info', `[DeliveryWorker] startup warm-up delay=${delayMs}ms`);
+    if (delayMs > 0) {
+        await delay(delayMs);
+    }
+
+    await queueService.requeuePendingJobs();
+    deliveryWorker = startDeliveryWorker({
+        queueService,
+        routingService,
+        workerId: `api-${process.pid}`
+    });
+    logger('info', '[DeliveryWorker] started');
+}
+
 async function startServer() {
     try {
         await ensureOperationsSchema();
@@ -1221,17 +1314,20 @@ async function startServer() {
         await startAdminBot();
         checkHeartbeatFromFile();
         await initScheduler();
-        await queueService.requeuePendingJobs();
 
         const routingService = createRoutingService({ socketRegistry: operationBot });
-        deliveryWorker = startDeliveryWorker({
-            queueService,
-            routingService,
-            workerId: `api-${process.pid}`
-        });
+        const workerStartDelayMs = getDeliveryWorkerStartDelayMs();
 
         server.listen(PORT, () => {
             logger('info', `ZYRON API server started on port ${PORT}`);
+        });
+
+        startDeliveryWorkerAfterWarmup({
+            delayMs: workerStartDelayMs,
+            routingService
+        }).catch(error => {
+            logger('error', `[DeliveryWorker] Failed to start: ${error.message}`);
+            process.exit(1);
         });
     } catch (error) {
         logger('error', `Failed to start server: ${error.message}`);
@@ -1264,3 +1360,5 @@ process.on("SIGTERM", () => {
     }
     process.exit();
 });
+
+module.exports.getDeliveryWorkerStartDelayMs = getDeliveryWorkerStartDelayMs;

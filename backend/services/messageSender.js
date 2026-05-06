@@ -77,6 +77,64 @@ function resolveUploadPath({ filePath, uploadRoot, fsModule = fs, pathModule = p
     return resolvedPath;
 }
 
+async function unlinkFile(filePath, fsModule = fs) {
+    if (fsModule.promises && typeof fsModule.promises.unlink === 'function') {
+        await fsModule.promises.unlink(filePath);
+        return;
+    }
+
+    if (typeof fsModule.unlink === 'function') {
+        await new Promise((resolve, reject) => {
+            fsModule.unlink(filePath, error => {
+                if (error) reject(error);
+                else resolve();
+            });
+        });
+        return;
+    }
+
+    throw new Error('fs module does not support unlink');
+}
+
+async function cleanupJobPayload({
+    job,
+    fsModule = fs,
+    pathModule = path,
+    uploadRoot,
+    filePath
+} = {}) {
+    const payload = (job && job.payload) || {};
+    const cleanupPath = filePath || payload.filePath;
+    const result = {
+        attempted: false,
+        deleted: false,
+        filePath: cleanupPath ? pathModule.resolve(cleanupPath) : null,
+        error: null
+    };
+
+    if (!job || job.type !== 'media_upload' || !cleanupPath) {
+        return result;
+    }
+
+    result.attempted = true;
+
+    try {
+        const mediaPath = resolveUploadPath({
+            filePath: cleanupPath,
+            uploadRoot,
+            fsModule,
+            pathModule
+        });
+        result.filePath = mediaPath;
+        await unlinkFile(mediaPath, fsModule);
+        result.deleted = true;
+    } catch (error) {
+        result.error = error.message || String(error);
+    }
+
+    return result;
+}
+
 async function sendJob({
     job,
     sock,
@@ -95,6 +153,7 @@ async function sendJob({
     const startedAt = Date.now();
     const payload = job.payload || {};
     let message;
+    let mediaUploadPath = null;
 
     if (job.type === 'text') {
         message = { text: buildTextPayload(payload) };
@@ -110,6 +169,7 @@ async function sendJob({
             fsModule,
             pathModule
         });
+        mediaUploadPath = mediaPath;
         message = buildMediaMessage({
             mediaKey,
             mediaValue: { url: mediaPath },
@@ -143,11 +203,25 @@ async function sendJob({
 
     await sock.sendMessage(job.target_id, message);
 
+    const cleanup = job.type === 'media_upload' && payload.cleanupAfterSend !== false
+        ? await cleanupJobPayload({
+            job,
+            fsModule,
+            pathModule,
+            uploadRoot,
+            filePath: mediaUploadPath
+        })
+        : job.type === 'media_upload'
+            ? { attempted: false, deleted: false, filePath: mediaUploadPath, error: null }
+            : undefined;
+
     return {
-        responseTimeSeconds: (Date.now() - startedAt) / 1000
+        responseTimeSeconds: (Date.now() - startedAt) / 1000,
+        ...(cleanup ? { cleanup } : {})
     };
 }
 
 module.exports = {
+    cleanupJobPayload,
     sendJob
 };

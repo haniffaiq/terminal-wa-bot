@@ -48,6 +48,7 @@ async function handleFailure({
     queueService,
     routingService,
     botHealthService,
+    messageSender,
     deliveryQueue,
     retryService,
     workerId
@@ -115,6 +116,8 @@ async function handleFailure({
                 removeOnFail: false
             }
         );
+    } else if (status === 'failed' && messageSender && typeof messageSender.cleanupJobPayload === 'function') {
+        await messageSender.cleanupJobPayload({ job: sendingJob });
     }
 
     return { status, jobId, delaySeconds };
@@ -173,6 +176,7 @@ async function processDeliveryJob(bullJob, deps) {
             queueService,
             routingService,
             botHealthService,
+            messageSender,
             deliveryQueue,
             retryService,
             workerId
@@ -227,6 +231,7 @@ async function processDeliveryJob(bullJob, deps) {
             queueService,
             routingService,
             botHealthService,
+            messageSender,
             deliveryQueue,
             retryService,
             workerId

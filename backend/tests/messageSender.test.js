@@ -16,11 +16,16 @@ function createSock() {
 
 function createFs({ exists = true } = {}) {
     return {
+        unlinkCalls: [],
         existsSync() {
             return exists;
         },
         realpathSync(filePath) {
             return filePath;
+        },
+        unlink(filePath, callback) {
+            this.unlinkCalls.push(filePath);
+            callback(null);
         }
     };
 }
@@ -73,6 +78,63 @@ test('sendJob sends uploaded image media based on mimetype', async () => {
             caption: 'Receipt',
             mimetype: 'image/jpeg'
         }
+    });
+});
+
+test('sendJob cleans up uploaded media after successful send by default', async () => {
+    const sock = createSock();
+    const fsModule = createFs();
+    const filePath = '/app/uploads/photo.jpg';
+
+    const result = await sendJob({
+        sock,
+        fsModule,
+        uploadRoot: '/app/uploads',
+        job: {
+            type: 'media_upload',
+            target_id: 'group-1',
+            payload: {
+                filePath,
+                mimetype: 'image/jpeg'
+            }
+        }
+    });
+
+    assert.deepEqual(fsModule.unlinkCalls, [path.resolve(filePath)]);
+    assert.deepEqual(result.cleanup, {
+        attempted: true,
+        deleted: true,
+        filePath: path.resolve(filePath),
+        error: null
+    });
+});
+
+test('sendJob keeps uploaded media after successful send when cleanupAfterSend is false', async () => {
+    const sock = createSock();
+    const fsModule = createFs();
+    const filePath = '/app/uploads/photo.jpg';
+
+    const result = await sendJob({
+        sock,
+        fsModule,
+        uploadRoot: '/app/uploads',
+        job: {
+            type: 'media_upload',
+            target_id: 'group-1',
+            payload: {
+                filePath,
+                mimetype: 'image/jpeg',
+                cleanupAfterSend: false
+            }
+        }
+    });
+
+    assert.deepEqual(fsModule.unlinkCalls, []);
+    assert.deepEqual(result.cleanup, {
+        attempted: false,
+        deleted: false,
+        filePath: path.resolve(filePath),
+        error: null
     });
 });
 

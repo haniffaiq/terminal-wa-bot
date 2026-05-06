@@ -315,14 +315,8 @@ router.get('/bot-health', async (req, res) => {
 
 router.post('/bot-health/:botId/reconnect', async (req, res) => {
     try {
-        let tenantId = isSuperAdmin(req) ? (req.body.tenant_id || req.query.tenant_id) : req.user.tenantId;
-        if (!tenantId && isSuperAdmin(req)) {
-            const lookup = await query(
-                'SELECT tenant_id FROM bot_health WHERE bot_id = $1 ORDER BY updated_at DESC LIMIT 1',
-                [req.params.botId]
-            );
-            tenantId = lookup.rows[0] && lookup.rows[0].tenant_id;
-        }
+        const requestedTenantId = req.body.tenantId || req.body.tenant_id || req.query.tenantId || req.query.tenant_id;
+        const tenantId = isSuperAdmin(req) ? requestedTenantId : req.user.tenantId;
 
         if (!tenantId) {
             return res.status(400).json({ success: false, error: 'tenant_id is required for reconnect' });

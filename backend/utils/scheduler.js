@@ -7,6 +7,7 @@ const jobs = {};
 async function sendScheduledMessage(schedule) {
     const { id, tenant_id, target_numbers, message } = schedule;
     const targets = typeof target_numbers === 'string' ? JSON.parse(target_numbers) : target_numbers;
+    const failures = [];
 
     for (const groupId of targets) {
         try {
@@ -22,7 +23,12 @@ async function sendScheduledMessage(schedule) {
             });
         } catch (err) {
             console.error(`[Scheduler] Failed to queue ${groupId}:`, err.message);
+            failures.push({ groupId, error: err.message });
         }
+    }
+
+    if (failures.length > 0) {
+        throw new Error(`Failed to queue ${failures.length} scheduled target(s)`);
     }
 
     await query('UPDATE scheduled_messages SET last_run_at = NOW() WHERE id = $1', [id]);
@@ -33,6 +39,12 @@ async function sendScheduledMessage(schedule) {
     }
 }
 
+function runScheduledMessage(schedule) {
+    sendScheduledMessage(schedule).catch(err => {
+        console.error(`[Scheduler] Schedule ${schedule.id} failed:`, err.message);
+    });
+}
+
 function registerJob(schedule) {
     cancelJob(schedule.id);
 
@@ -41,16 +53,16 @@ function registerJob(schedule) {
     if (schedule.schedule_type === 'once' && schedule.run_at) {
         const delay = new Date(schedule.run_at).getTime() - Date.now();
         if (delay <= 0) {
-            sendScheduledMessage(schedule);
+            runScheduledMessage(schedule);
             return;
         }
-        jobs[schedule.id] = setTimeout(() => sendScheduledMessage(schedule), delay);
+        jobs[schedule.id] = setTimeout(() => runScheduledMessage(schedule), delay);
     } else if (schedule.schedule_type === 'cron' && schedule.cron_expression) {
         if (!cron.validate(schedule.cron_expression)) {
             console.error(`[Scheduler] Invalid cron: ${schedule.cron_expression}`);
             return;
         }
-        jobs[schedule.id] = cron.schedule(schedule.cron_expression, () => sendScheduledMessage(schedule));
+        jobs[schedule.id] = cron.schedule(schedule.cron_expression, () => runScheduledMessage(schedule));
     }
 }
 
@@ -76,4 +88,4 @@ async function initScheduler() {
     }
 }
 
-module.exports = { registerJob, cancelJob, initScheduler };
+module.exports = { registerJob, cancelJob, initScheduler, sendScheduledMessage };
