@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { PlugZap, Plus, Power, RotateCcw, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -10,6 +9,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Table,
   TableBody,
@@ -20,29 +21,67 @@ import {
 } from '@/components/ui/table';
 import { fetchApi, postApi } from '@/lib/api';
 import { useSocket } from '@/hooks/useSocket';
-import { Plus, RotateCcw, Power, Trash2 } from 'lucide-react';
+import type { ApiResponse, BotHealth } from '@/lib/opsTypes';
 
 interface BotStatusResponse {
   success: boolean;
   data: { active: string[]; inactive: string[] };
 }
 
+function formatDate(value?: string | null) {
+  if (!value) return '-';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString();
+}
+
+function statusVariant(status: string): 'default' | 'destructive' | 'secondary' | 'outline' {
+  const normalized = status.toLowerCase();
+  if (normalized === 'online' || normalized === 'open' || normalized === 'connected') return 'default';
+  if (normalized === 'restarting' || normalized === 'connecting') return 'secondary';
+  if (normalized === 'offline' || normalized === 'closed' || normalized === 'disconnected') return 'destructive';
+  return 'outline';
+}
+
+function legacyHealth(botId: string, online: boolean): BotHealth {
+  return {
+    botId,
+    status: online ? 'online' : 'offline',
+    successCount: 0,
+    failCount: 0,
+    activeJobCount: 0,
+  };
+}
+
 export default function BotManagement() {
-  const [botData, setBotData] = useState<BotStatusResponse | null>(null);
+  const [botHealth, setBotHealth] = useState<BotHealth[]>([]);
+  const [usingFallback, setUsingFallback] = useState(false);
   const [newBotId, setNewBotId] = useState('');
   const [isAdminBot, setIsAdminBot] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
   const { botStatuses, qrCode, setQrCode } = useSocket();
 
-  useEffect(() => {
-    loadBots();
+  const loadBots = useCallback(async () => {
+    try {
+      const data = await fetchApi<ApiResponse<BotHealth[]>>('/bot-health');
+      setBotHealth(data.data || data.bots || []);
+      setUsingFallback(false);
+    } catch (err) {
+      console.error('Failed to load bot health:', err);
+      const fallback = await fetchApi<BotStatusResponse>('/bot-status');
+      setBotHealth([
+        ...(fallback.data?.active || []).map((botId) => legacyHealth(botId, true)),
+        ...(fallback.data?.inactive || []).map((botId) => legacyHealth(botId, false)),
+      ]);
+      setUsingFallback(true);
+    }
   }, []);
 
-  async function loadBots() {
-    const data = await fetchApi<BotStatusResponse>('/bot-status');
-    setBotData(data);
-  }
+  useEffect(() => {
+    queueMicrotask(() => {
+      void loadBots();
+    });
+  }, [loadBots]);
 
   async function handleAddBot() {
     if (!newBotId.trim()) return;
@@ -60,45 +99,68 @@ export default function BotManagement() {
     }
   }
 
-  async function handleRestart(botId: string) {
+  async function runBotAction(botId: string, action: () => Promise<unknown>) {
     setLoading(botId);
     try {
-      await postApi('/restart', { botname: botId });
+      await action();
       await loadBots();
     } finally {
       setLoading(null);
     }
   }
 
+  async function handleRestart(botId: string) {
+    await runBotAction(botId, () => postApi('/restart', { botname: botId }));
+  }
+
+  async function handleReconnect(bot: { botId: string; tenantId: string | null }) {
+    await runBotAction(bot.botId, () => postApi(
+      `/bot-health/${encodeURIComponent(bot.botId)}/reconnect`,
+      bot.tenantId ? { tenant_id: bot.tenantId } : {}
+    ));
+  }
+
   async function handleDisconnect(botId: string) {
-    setLoading(botId);
-    try {
-      await postApi('/disconnect', { botId });
-      await loadBots();
-    } finally {
-      setLoading(null);
-    }
+    await runBotAction(botId, () => postApi('/disconnect', { botId }));
   }
 
   async function handleDelete(botId: string) {
     if (!confirm(`Delete bot "${botId}"? This will remove its session permanently.`)) return;
-    setLoading(botId);
-    try {
-      await postApi('/deletebot', { botId });
-      await loadBots();
-    } finally {
-      setLoading(null);
-    }
+    await runBotAction(botId, () => postApi('/deletebot', { botId }));
   }
 
-  const activeBots = botData?.data?.active || [];
-  const inactiveBots = botData?.data?.inactive || [];
-  const allBots = [...activeBots, ...inactiveBots];
+  const rows = useMemo(() => {
+    return botHealth.map((bot) => {
+      const botId = bot.botId || bot.bot_id || 'unknown';
+      const tenantId = bot.tenantId || bot.tenant_id || null;
+      const realtimeStatus = botStatuses.get(botId);
+      const rawStatus = realtimeStatus?.status || bot.status || bot.state || 'unknown';
+      const normalizedStatus = rawStatus === 'open' ? 'online' : rawStatus;
+      const heartbeat = bot.heartbeatAt || bot.heartbeat_at || bot.lastHeartbeatAt || bot.last_heartbeat_at || null;
+      const lastSeen = bot.lastSeenAt || bot.last_seen_at || bot.updated_at || heartbeat;
+
+      return {
+        ...bot,
+        botId,
+        tenantId,
+        tenantName: bot.tenantName || bot.tenant_name || null,
+        displayStatus: normalizedStatus,
+        heartbeat,
+        lastSeen,
+        successes: bot.successCount ?? bot.success_count ?? 0,
+        failures: bot.failCount ?? bot.fail_count ?? bot.failureCount ?? bot.failure_count ?? bot.consecutive_failures ?? 0,
+        activeJobs: bot.activeJobCount ?? bot.active_job_count ?? bot.activeJobs ?? bot.active_jobs ?? 0,
+      };
+    });
+  }, [botHealth, botStatuses]);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Bot Management</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold">Bot Management</h1>
+          {usingFallback && <Badge variant="secondary">Legacy fallback</Badge>}
+        </div>
         <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setQrCode(null); }}>
           <DialogTrigger render={<Button />}>
             <Plus className="h-4 w-4 mr-2" />Add Bot
@@ -112,7 +174,7 @@ export default function BotManagement() {
                 <Label>Bot ID</Label>
                 <Input
                   value={newBotId}
-                  onChange={e => setNewBotId(e.target.value)}
+                  onChange={(event) => setNewBotId(event.target.value)}
                   placeholder="e.g. bot_03"
                 />
               </div>
@@ -120,7 +182,7 @@ export default function BotManagement() {
                 <input
                   type="checkbox"
                   checked={isAdminBot}
-                  onChange={e => setIsAdminBot(e.target.checked)}
+                  onChange={(event) => setIsAdminBot(event.target.checked)}
                 />
                 <span className="text-sm">Set as Admin Bot (handles WhatsApp commands)</span>
               </label>
@@ -139,70 +201,95 @@ export default function BotManagement() {
       </div>
 
       <div className="rounded-md border bg-accent border-border p-4 text-sm text-accent-foreground">
-        <p><strong>admin_bot</strong> is the admin bot — it starts automatically when the server runs and handles WhatsApp commands (!addbot, !rst, !block, etc.).</p>
-        <p className="mt-1">All other bots are <strong>operation bots</strong> — they handle message delivery via round-robin. Each bot requires a different WhatsApp number.</p>
+        <p><strong>admin_bot</strong> starts with the server and handles WhatsApp commands.</p>
+        <p className="mt-1">Operation bots handle message delivery. Each bot requires a different WhatsApp number.</p>
       </div>
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Bot ID</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {allBots.map(botId => {
-            const realtimeStatus = botStatuses.get(botId);
-            const isOnline = realtimeStatus
-              ? realtimeStatus.status === 'open'
-              : activeBots.includes(botId);
-
-            return (
-              <TableRow key={botId}>
-                <TableCell className="font-medium">{botId}</TableCell>
-                <TableCell>
-                  <Badge variant={isOnline ? 'default' : 'destructive'}>
-                    {isOnline ? 'Online' : 'Offline'}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right space-x-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleRestart(botId)}
-                    disabled={loading === botId}
-                  >
-                    <RotateCcw className="h-3 w-3 mr-1" />Restart
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleDisconnect(botId)}
-                    disabled={loading === botId}
-                  >
-                    <Power className="h-3 w-3 mr-1" />Disconnect
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleDelete(botId)}
-                    disabled={loading === botId}
-                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                  >
-                    <Trash2 className="h-3 w-3 mr-1" />Delete
-                  </Button>
-                </TableCell>
-              </TableRow>
-            );
-          })}
-          {allBots.length === 0 && (
+      <div className="overflow-hidden rounded-lg border">
+        <Table>
+          <TableHeader>
             <TableRow>
-              <TableCell colSpan={3} className="text-center text-muted-foreground">No bots found</TableCell>
+              <TableHead>Bot</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Tenant</TableHead>
+              <TableHead>Heartbeat</TableHead>
+              <TableHead>Last Seen</TableHead>
+              <TableHead className="text-right">Success</TableHead>
+              <TableHead className="text-right">Fail</TableHead>
+              <TableHead className="text-right">Active Jobs</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
-          )}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {rows.map((bot) => {
+              const canReconnect = ['offline', 'closed', 'disconnected', 'unknown'].includes(bot.displayStatus.toLowerCase());
+
+              return (
+                <TableRow key={bot.botId}>
+                  <TableCell className="font-medium">{bot.botId}</TableCell>
+                  <TableCell>
+                    <Badge variant={statusVariant(bot.displayStatus)}>
+                      {bot.displayStatus}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{bot.tenantName || bot.tenantId || '-'}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{formatDate(bot.heartbeat)}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{formatDate(bot.lastSeen)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{bot.successes}</TableCell>
+                  <TableCell className="text-right tabular-nums">{bot.failures}</TableCell>
+                  <TableCell className="text-right tabular-nums">{bot.activeJobs}</TableCell>
+                  <TableCell>
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleReconnect(bot)}
+                        disabled={loading === bot.botId || !canReconnect}
+                        title="Reconnect bot"
+                      >
+                        <PlugZap className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleRestart(bot.botId)}
+                        disabled={loading === bot.botId}
+                        title="Restart bot"
+                      >
+                        <RotateCcw className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDisconnect(bot.botId)}
+                        disabled={loading === bot.botId}
+                        title="Disconnect bot"
+                      >
+                        <Power className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDelete(bot.botId)}
+                        disabled={loading === bot.botId}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        title="Delete bot"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+            {rows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={9} className="text-center text-muted-foreground">No bots found</TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }

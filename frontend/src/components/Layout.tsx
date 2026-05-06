@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   BarChart3,
   FileText,
+  History,
   LogOut,
   Menu,
   X,
@@ -40,6 +41,7 @@ export function Layout({ children, onLogout }: { children: React.ReactNode; onLo
     { path: '/failed', label: 'Failed Requests', icon: AlertTriangle },
     { path: '/stats', label: 'Statistics', icon: BarChart3 },
     { path: '/logs', label: 'Logs', icon: FileText },
+    { path: '/timeline', label: 'Timeline', icon: History },
     ...(user?.tenantId ? [
       { path: '/commands', label: 'Custom Commands', icon: Terminal },
       { path: '/schedules', label: 'Schedules', icon: Clock },

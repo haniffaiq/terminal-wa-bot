@@ -9,6 +9,7 @@ import Groups from '@/pages/Groups';
 import FailedRequests from '@/pages/FailedRequests';
 import Statistics from '@/pages/Statistics';
 import Logs from '@/pages/Logs';
+import Timeline from '@/pages/Timeline';
 import TenantManagement from '@/pages/TenantManagement';
 import CustomCommands from '@/pages/CustomCommands';
 import ScheduledMessages from '@/pages/ScheduledMessages';
@@ -30,6 +31,7 @@ export default function App() {
             <Route path="/failed" element={<FailedRequests />} />
             <Route path="/stats" element={<Statistics />} />
             <Route path="/logs" element={<Logs />} />
+            <Route path="/timeline" element={<Timeline />} />
             <Route path="/commands" element={<CustomCommands />} />
             <Route path="/schedules" element={<ScheduledMessages />} />
             <Route path="/templates" element={<MessageTemplates />} />
