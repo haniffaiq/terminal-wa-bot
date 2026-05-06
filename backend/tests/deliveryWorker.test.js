@@ -196,7 +196,7 @@ test('processDeliveryJob records no-bot failure and schedules delayed retry', as
         name: 'deliver-message',
         data: { jobId: 'job-1', tenantId: 'tenant-1' },
         options: {
-            jobId: 'job-1:2',
+            jobId: 'retry-job-1-2',
             delay: 60000,
             priority: 2,
             removeOnComplete: true,
@@ -488,11 +488,59 @@ test('processDeliveryJob schedules delayed retry with tenantId after retryable s
         name: 'deliver-message',
         data: { jobId: 'job-1', tenantId: 'tenant-1' },
         options: {
-            jobId: 'job-1:1',
+            jobId: 'retry-job-1-1',
             delay: 30000,
             priority: 3,
             removeOnComplete: true,
             removeOnFail: false
         }
     }]);
+});
+
+test('processDeliveryJob schedules retry with BullMQ-safe jobId after retryable send failure', async () => {
+    const sock = { id: 'sock-a' };
+    const deliveryQueue = createDeliveryQueue();
+    const retryService = createRetryService({ status: 'retrying', delaySeconds: 30, final: false });
+    const sendingJob = { ...baseDbJob, status: 'sending', attempt_count: 2, priority: 3 };
+    const queueService = {
+        async getMessageJob() {
+            return baseDbJob;
+        },
+        async markJobSending() {
+            return sendingJob;
+        },
+        async recordAttempt() {},
+        async markJobFailed(payload) {
+            return { ...sendingJob, status: payload.status };
+        }
+    };
+
+    await processDeliveryJob(
+        { data: { jobId: 'job-1', tenantId: 'tenant-1' } },
+        {
+            queueService,
+            routingService: {
+                async selectBotForGroup() {
+                    return { botId: 'bot-a', sock };
+                },
+                async recordRouteFailure() {}
+            },
+            botHealthService: {
+                async markFailure() {}
+            },
+            messageSender: {
+                async sendJob() {
+                    throw new Error('temporary network failure');
+                }
+            },
+            deliveryQueue,
+            retryService,
+            workerId: 'worker-1'
+        }
+    );
+
+    const retryJobId = deliveryQueue.addCalls[0].options.jobId;
+    assert.equal(retryJobId.includes(':'), false);
+    assert.match(retryJobId, /job-1/);
+    assert.match(retryJobId, /2/);
 });

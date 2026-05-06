@@ -18,6 +18,9 @@ function createFs({ exists = true } = {}) {
     return {
         existsSync() {
             return exists;
+        },
+        realpathSync(filePath) {
+            return filePath;
         }
     };
 }
@@ -192,6 +195,42 @@ test('sendJob rejects uploaded media path traversal outside upload root', async 
                 target_id: 'group-1',
                 payload: {
                     filePath: '../secrets/token.txt',
+                    mimetype: 'text/plain'
+                }
+            }
+        }),
+        /outside upload root/
+    );
+    assert.deepEqual(sock.calls, []);
+});
+
+test('sendJob rejects uploaded media when realpath escapes upload root through symlink', async () => {
+    const sock = createSock();
+    const fsModule = {
+        existsSync() {
+            return true;
+        },
+        realpathSync(filePath) {
+            if (filePath === '/app/uploads') {
+                return '/app/uploads';
+            }
+            if (filePath === '/app/uploads/link/token.txt') {
+                return '/app/secrets/token.txt';
+            }
+            return filePath;
+        }
+    };
+
+    await assert.rejects(
+        () => sendJob({
+            sock,
+            fsModule,
+            uploadRoot: '/app/uploads',
+            job: {
+                type: 'media_upload',
+                target_id: 'group-1',
+                payload: {
+                    filePath: '/app/uploads/link/token.txt',
                     mimetype: 'text/plain'
                 }
             }

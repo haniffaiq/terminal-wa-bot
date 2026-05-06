@@ -108,7 +108,7 @@ async function handleFailure({
             'deliver-message',
             { jobId, tenantId },
             {
-                jobId: `${jobId}:${attemptCount}`,
+                jobId: `retry-${jobId}-${attemptCount}`,
                 delay: delaySeconds * 1000,
                 priority: sendingJob.priority ?? 5,
                 removeOnComplete: true,

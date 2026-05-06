@@ -50,15 +50,28 @@ function isPathInside(parentPath, childPath, pathModule = path) {
     );
 }
 
+function realpathIfAvailable(targetPath, fsModule = fs) {
+    if (fsModule && typeof fsModule.realpathSync === 'function') {
+        return fsModule.realpathSync(targetPath);
+    }
+    return targetPath;
+}
+
 function resolveUploadPath({ filePath, uploadRoot, fsModule = fs, pathModule = path }) {
     const rootPath = pathModule.resolve(uploadRoot || getDefaultUploadRoot(pathModule));
     const resolvedPath = pathModule.resolve(filePath);
+    const realRootPath = realpathIfAvailable(rootPath, fsModule);
 
     if (!isPathInside(rootPath, resolvedPath, pathModule)) {
         throw new Error('media_upload payload.filePath is outside upload root');
     }
     if (!fsModule.existsSync(resolvedPath)) {
         throw new Error('media_upload payload.filePath not found');
+    }
+
+    const realFilePath = realpathIfAvailable(resolvedPath, fsModule);
+    if (!isPathInside(realRootPath, realFilePath, pathModule)) {
+        throw new Error('media_upload payload.filePath is outside upload root');
     }
 
     return resolvedPath;
