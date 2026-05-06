@@ -864,16 +864,22 @@ async function enqueueMediaUploadJobs({ tenantId, targets, file, caption, transa
     }
 
     const jobs = [];
-    const copiedFiles = [];
-    const enqueueAttemptedFiles = new Set();
+    const createdFiles = new Set();
+    const durableFiles = new Set();
+    let originalCleanupAttempted = false;
 
     try {
         for (const [index, targetId] of targets.entries()) {
             const targetFilePath = createTargetUploadPath(file.path, index + 1);
             await fs.promises.copyFile(file.path, targetFilePath);
-            copiedFiles.push(targetFilePath);
+            createdFiles.add(targetFilePath);
+        }
 
-            enqueueAttemptedFiles.add(targetFilePath);
+        await cleanupUploadedRequestFile(file, transactionId);
+        originalCleanupAttempted = true;
+
+        for (const [index, targetId] of targets.entries()) {
+            const targetFilePath = createTargetUploadPath(file.path, index + 1);
             const job = await queueService.enqueueMessageJob({
                 tenantId,
                 source: 'api',
@@ -886,17 +892,20 @@ async function enqueueMediaUploadJobs({ tenantId, targets, file, caption, transa
                     transactionId
                 }
             });
+            durableFiles.add(targetFilePath);
             jobs.push(job);
         }
     } catch (error) {
-        for (const copiedFile of copiedFiles) {
-            if (enqueueAttemptedFiles.has(copiedFile)) continue;
-            await cleanupUploadedRequestFile({ path: copiedFile }, transactionId);
+        for (const createdFile of createdFiles) {
+            if (durableFiles.has(createdFile)) continue;
+            await cleanupUploadedRequestFile({ path: createdFile }, transactionId);
+        }
+        if (!originalCleanupAttempted) {
+            await cleanupUploadedRequestFile(file, transactionId);
         }
         throw error;
     }
 
-    await cleanupUploadedRequestFile(file, transactionId);
     return jobs;
 }
 

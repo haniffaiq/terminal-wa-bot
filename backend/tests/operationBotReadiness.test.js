@@ -34,6 +34,48 @@ test('waitForRoutingReady waits for a connecting tenant until group cache is upd
     assert.equal(operationBot.isRoutingReady('tenant-1'), true);
 });
 
+test('routing readiness waits for all expected bots in a tenant to cache groups', async () => {
+    operationBot.__markRoutingExpectedForTests('tenant-1', 'bot-1');
+    operationBot.__markRoutingExpectedForTests('tenant-1', 'bot-2');
+
+    const readiness = operationBot.waitForRoutingReady({
+        tenantId: 'tenant-1',
+        timeoutMs: 100
+    });
+
+    assert.equal(operationBot.isRoutingReady('tenant-1'), false);
+
+    await operationBot.updateGroupCache('bot-1', {
+        async groupFetchAllParticipating() {
+            return {
+                'group-1@g.us': {
+                    id: 'group-1@g.us',
+                    subject: 'Ops 1',
+                    participants: [{ id: 'user-1@s.whatsapp.net' }]
+                }
+            };
+        }
+    }, 'tenant-1');
+
+    assert.equal(operationBot.isRoutingReady('tenant-1'), false);
+
+    await operationBot.updateGroupCache('bot-2', {
+        async groupFetchAllParticipating() {
+            return {
+                'group-2@g.us': {
+                    id: 'group-2@g.us',
+                    subject: 'Ops 2',
+                    participants: [{ id: 'user-2@s.whatsapp.net' }]
+                }
+            };
+        }
+    }, 'tenant-1');
+
+    const result = await readiness;
+    assert.deepEqual(result, { ready: true, timedOut: false });
+    assert.equal(operationBot.isRoutingReady('tenant-1'), true);
+});
+
 test('routing readiness is true when no operation bots are expected', async () => {
     assert.equal(operationBot.isRoutingReady('tenant-empty'), true);
     assert.deepEqual(

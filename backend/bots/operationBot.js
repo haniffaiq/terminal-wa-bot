@@ -52,16 +52,12 @@ function getRoutingTenantIds() {
 
 function hasExpectedRoutingBot(tenantId) {
     if (!tenantId) return false;
-    if (Object.keys(operationBots[tenantId] || {}).length > 0) return true;
-    if (routingExpectedBots[tenantId] && routingExpectedBots[tenantId].size > 0) return true;
-
-    return Object.keys(reconnectTimers).some(key => key.startsWith(`${tenantId}:`) && reconnectTimers[key]);
+    return Boolean(routingExpectedBots[tenantId] && routingExpectedBots[tenantId].size > 0);
 }
 
 function isRoutingReady(tenantId = null) {
     if (tenantId) {
-        if (!hasExpectedRoutingBot(tenantId)) return true;
-        return Boolean(routingReadyAt[tenantId]);
+        return !hasExpectedRoutingBot(tenantId);
     }
 
     const tenantIds = getRoutingTenantIds();
@@ -86,17 +82,23 @@ function markRoutingExpected(tenantId, botId) {
     if (!tenantId || !botId) return;
     ensureTenant(tenantId);
     routingExpectedBots[tenantId].add(botId);
+    delete routingReadyAt[tenantId];
     resolveRoutingWaiters();
 }
 
 function clearRoutingExpected(tenantId, botId) {
     if (!tenantId || !botId || !routingExpectedBots[tenantId]) return;
     routingExpectedBots[tenantId].delete(botId);
+    if (routingExpectedBots[tenantId].size === 0) {
+        markRoutingReady(tenantId);
+        return;
+    }
     resolveRoutingWaiters();
 }
 
 function markRoutingReady(tenantId) {
     if (!tenantId) return;
+    if (hasExpectedRoutingBot(tenantId)) return;
     routingReadyAt[tenantId] = Date.now();
     resolveRoutingWaiters();
 }
@@ -190,8 +192,8 @@ async function updateGroupCache(botId, sock, tenantId) {
         });
         logger.info(`[${botId}] Registered in ${groups.length} groups (tenant ${tenantId})`);
         if (operationBots[tenantId]?.[botId] || routingExpectedBots[tenantId]?.has(botId)) {
-            markRoutingReady(tenantId);
             clearRoutingExpected(tenantId, botId);
+            markRoutingReady(tenantId);
         }
     } catch (err) {
         logger.error(`[${botId}] Failed to fetch groups: ${err.message}`);

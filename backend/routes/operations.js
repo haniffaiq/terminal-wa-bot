@@ -6,6 +6,29 @@ const { reconnectSingleBotAPI } = require('../bots/operationBot');
 
 const router = express.Router();
 const RETRYABLE_TERMINAL_STATUSES = ['failed', 'resolved', 'ignored'];
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isValidUuid(value) {
+    return typeof value === 'string' && UUID_PATTERN.test(value);
+}
+
+function validateUuidList(values, fieldName) {
+    if (!Array.isArray(values) || values.length === 0) {
+        return { ok: false, error: `${fieldName} must be a non-empty array` };
+    }
+
+    if (!values.every(isValidUuid)) {
+        return { ok: false, error: `${fieldName} contains invalid UUID values` };
+    }
+
+    return { ok: true };
+}
+
+function rejectInvalidUuidParam(req, res, fieldName = 'id') {
+    if (isValidUuid(req.params[fieldName])) return false;
+    res.status(400).json({ success: false, error: `${fieldName} must be a valid UUID` });
+    return true;
+}
 
 function isSuperAdmin(req) {
     return req.user && req.user.role === 'super_admin';
@@ -147,8 +170,9 @@ router.get('/jobs', async (req, res) => {
 router.post('/jobs/bulk-retry', async (req, res) => {
     try {
         const jobIds = req.body.job_ids || req.body.ids;
-        if (!Array.isArray(jobIds) || jobIds.length === 0) {
-            return res.status(400).json({ success: false, error: 'job_ids must be a non-empty array' });
+        const validation = validateUuidList(jobIds, 'job_ids');
+        if (!validation.ok) {
+            return res.status(400).json({ success: false, error: validation.error });
         }
 
         const jobs = await requeueJobs({ req, jobIds });
@@ -165,6 +189,8 @@ router.post('/jobs/bulk-retry', async (req, res) => {
 
 router.get('/jobs/:id', async (req, res) => {
     try {
+        if (rejectInvalidUuidParam(req, res)) return;
+
         const params = [req.params.id];
         const tenantClause = appendTenantFilter(req, params, 'mj.tenant_id');
         const jobResult = await query(
@@ -201,6 +227,8 @@ router.get('/jobs/:id', async (req, res) => {
 
 router.post('/jobs/:id/retry', async (req, res) => {
     try {
+        if (rejectInvalidUuidParam(req, res)) return;
+
         const jobs = await requeueJobs({ req, jobIds: [req.params.id] });
         if (jobs.length === 0) {
             return res.status(404).json({ success: false, error: 'Retryable job not found' });
@@ -219,6 +247,8 @@ router.post('/jobs/:id/retry', async (req, res) => {
 
 router.post('/jobs/:id/resolve', async (req, res) => {
     try {
+        if (rejectInvalidUuidParam(req, res)) return;
+
         const params = [req.params.id];
         const tenantClause = appendTenantFilter(req, params);
         const result = await query(
@@ -256,6 +286,8 @@ router.post('/jobs/:id/resolve', async (req, res) => {
 
 router.post('/jobs/:id/ignore', async (req, res) => {
     try {
+        if (rejectInvalidUuidParam(req, res)) return;
+
         const params = [req.params.id];
         const tenantClause = appendTenantFilter(req, params);
         const result = await query(
@@ -423,5 +455,8 @@ router.get('/ops/summary', async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
+
+router.__isValidUuidForTests = isValidUuid;
+router.__validateUuidListForTests = validateUuidList;
 
 module.exports = router;
