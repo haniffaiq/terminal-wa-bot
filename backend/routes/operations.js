@@ -6,7 +6,10 @@ const { reconnectSingleBotAPI } = require('../bots/operationBot');
 
 const router = express.Router();
 const RETRYABLE_TERMINAL_STATUSES = ['failed', 'resolved', 'ignored'];
+const JOB_SUMMARY_STATUSES = ['queued', 'sending', 'retrying', 'failed', 'resolved', 'ignored'];
+const BOT_SUMMARY_STATUSES = ['online', 'offline', 'reconnecting', 'cooldown', 'qr_required', 'unknown'];
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const DEFAULT_BOT_STALE_SECONDS = 120;
 
 function isValidUuid(value) {
     return typeof value === 'string' && UUID_PATTERN.test(value);
@@ -69,6 +72,90 @@ function appendStatusFilter(statuses, params) {
 function appendTenantFilter(req, params, column = 'tenant_id') {
     const scope = getTenantScope(req, params, column);
     return scope.clause;
+}
+
+function appendScopedTenantFilter(req, params, requestedTenantId, column = 'tenant_id') {
+    const tenantId = isSuperAdmin(req) ? requestedTenantId : req.user.tenantId;
+    if (!tenantId) return '';
+    params.push(tenantId);
+    return ` AND ${column} = $${params.length}`;
+}
+
+function appendEqualsFilter(filters, params, column, value) {
+    if (!value) return;
+    params.push(value);
+    filters.push(` AND ${column} = $${params.length}`);
+}
+
+function appendDateFilter(filters, params, column, operator, value) {
+    if (!value) return;
+    params.push(value);
+    filters.push(` AND ${column} ${operator} $${params.length}`);
+}
+
+function buildJobsQuery(req) {
+    const { limit, offset } = parseLimitOffset(req.query);
+    const params = [];
+    const filters = [
+        appendScopedTenantFilter(req, params, req.query.tenant_id)
+    ];
+    const statuses = parseStatusList(req.query.status);
+    const statusClause = appendStatusFilter(statuses, params);
+    if (statusClause) filters.push(statusClause);
+
+    appendEqualsFilter(filters, params, 'source', req.query.source);
+    if (req.query.target) {
+        params.push(`%${req.query.target}%`);
+        filters.push(` AND target_id ILIKE $${params.length}`);
+    }
+    appendEqualsFilter(filters, params, 'selected_bot_id', req.query.bot);
+    appendDateFilter(filters, params, 'created_at', '>=', req.query.date_from);
+    appendDateFilter(filters, params, 'created_at', '<=', req.query.date_to);
+
+    params.push(limit, offset);
+    return {
+        sql: `SELECT *
+            FROM message_jobs
+            WHERE TRUE
+                ${filters.join('')}
+            ORDER BY created_at DESC
+            LIMIT $${params.length - 1} OFFSET $${params.length}`,
+        params,
+        limit,
+        offset
+    };
+}
+
+function rowsToCounts(rows, statuses) {
+    const counts = Object.fromEntries(statuses.map(status => [status, 0]));
+    for (const row of rows) {
+        if (Object.prototype.hasOwnProperty.call(counts, row.status)) {
+            counts[row.status] = Number.parseInt(row.count, 10) || 0;
+        }
+    }
+    return counts;
+}
+
+function buildOpsSummaryResponse({ jobRows, botRows, staleCount = 0, generatedAt = new Date().toISOString() }) {
+    const jobs = rowsToCounts(jobRows, JOB_SUMMARY_STATUSES);
+    const sentTodayRow = jobRows.find(row => row.status === 'sent_today');
+    jobs.sent_today = sentTodayRow ? Number.parseInt(sentTodayRow.count, 10) || 0 : 0;
+    jobs.queue_depth = jobs.queued + jobs.retrying;
+
+    const bots = rowsToCounts(botRows, BOT_SUMMARY_STATUSES);
+    bots.total = BOT_SUMMARY_STATUSES.reduce((sum, status) => sum + bots[status], 0);
+    bots.stale = Number.parseInt(staleCount, 10) || 0;
+
+    return {
+        jobs,
+        bots,
+        generated_at: generatedAt
+    };
+}
+
+function getBotStaleSeconds() {
+    const configured = Number.parseInt(process.env.BOT_HEALTH_STALE_SECONDS, 10);
+    return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_BOT_STALE_SECONDS;
 }
 
 async function logOperationalEvent({
@@ -143,23 +230,8 @@ async function requeueJobs({ req, jobIds }) {
 
 router.get('/jobs', async (req, res) => {
     try {
-        const { limit, offset } = parseLimitOffset(req.query);
-        const statuses = parseStatusList(req.query.status);
-        const params = [];
-        const tenantClause = appendTenantFilter(req, params);
-        const statusClause = appendStatusFilter(statuses, params);
-        params.push(limit, offset);
-
-        const result = await query(
-            `SELECT *
-            FROM message_jobs
-            WHERE TRUE
-                ${tenantClause}
-                ${statusClause}
-            ORDER BY created_at DESC
-            LIMIT $${params.length - 1} OFFSET $${params.length}`,
-            params
-        );
+        const { sql, params, limit, offset } = buildJobsQuery(req);
+        const result = await query(sql, params);
 
         res.json({ success: true, jobs: result.rows, limit, offset });
     } catch (error) {
@@ -423,6 +495,18 @@ router.get('/ops/summary', async (req, res) => {
             jobParams
         );
 
+        const sentTodayParams = [];
+        const sentTodayTenantClause = appendTenantFilter(req, sentTodayParams);
+        const sentTodayResult = await query(
+            `SELECT COUNT(*)::int AS count
+            FROM message_jobs
+            WHERE status = 'sent'
+                AND sent_at >= CURRENT_DATE
+                AND sent_at < CURRENT_DATE + INTERVAL '1 day'
+                ${sentTodayTenantClause}`,
+            sentTodayParams
+        );
+
         const healthParams = [];
         const healthTenantClause = appendTenantFilter(req, healthParams);
         const botHealthResult = await query(
@@ -434,22 +518,30 @@ router.get('/ops/summary', async (req, res) => {
             healthParams
         );
 
-        const eventParams = [];
-        const eventTenantClause = appendTenantFilter(req, eventParams);
-        const eventResult = await query(
-            `SELECT severity, COUNT(*)::int AS count
-            FROM operational_events
-            WHERE created_at >= NOW() - INTERVAL '24 hours'
-                ${eventTenantClause}
-            GROUP BY severity`,
-            eventParams
+        const staleParams = [getBotStaleSeconds()];
+        const staleTenantClause = appendTenantFilter(req, staleParams);
+        const staleResult = await query(
+            `SELECT COUNT(*)::int AS count
+            FROM bot_health
+            WHERE status = 'online'
+                AND last_seen_at IS NOT NULL
+                AND last_seen_at < NOW() - ($1::int * INTERVAL '1 second')
+                ${staleTenantClause}`,
+            staleParams
         );
+
+        const jobRows = [
+            ...jobStatusResult.rows,
+            { status: 'sent_today', count: sentTodayResult.rows[0] ? sentTodayResult.rows[0].count : 0 }
+        ];
 
         res.json({
             success: true,
-            jobs_by_status: jobStatusResult.rows,
-            bots_by_status: botHealthResult.rows,
-            events_24h_by_severity: eventResult.rows
+            data: buildOpsSummaryResponse({
+                jobRows,
+                botRows: botHealthResult.rows,
+                staleCount: staleResult.rows[0] ? staleResult.rows[0].count : 0
+            })
         });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
@@ -458,5 +550,7 @@ router.get('/ops/summary', async (req, res) => {
 
 router.__isValidUuidForTests = isValidUuid;
 router.__validateUuidListForTests = validateUuidList;
+router.__buildJobsQueryForTests = buildJobsQuery;
+router.__buildOpsSummaryResponseForTests = buildOpsSummaryResponse;
 
 module.exports = router;
