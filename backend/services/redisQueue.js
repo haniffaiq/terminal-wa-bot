@@ -5,11 +5,22 @@ const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 
 function buildConnectionOptions(redisUrl = REDIS_URL) {
     const url = new URL(redisUrl);
-    return {
+    if (url.protocol !== 'redis:' && url.protocol !== 'rediss:') {
+        throw new Error('Redis URL must use redis:// or rediss://');
+    }
+
+    const options = {
         host: url.hostname,
-        port: Number(url.port || 6379),
-        password: url.password || undefined
+        port: Number(url.port || 6379)
     };
+    if (url.username) options.username = decodeURIComponent(url.username);
+    if (url.password) options.password = decodeURIComponent(url.password);
+
+    const db = url.pathname && url.pathname !== '/' ? Number(url.pathname.slice(1)) : undefined;
+    if (Number.isInteger(db) && db >= 0) options.db = db;
+    if (url.protocol === 'rediss:') options.tls = {};
+
+    return options;
 }
 
 function createDeliveryQueue(options = {}) {
