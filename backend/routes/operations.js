@@ -122,10 +122,25 @@ function appendEqualsFilter(filters, params, column, value) {
 
 function parseDateFilter(value, fieldName) {
     if (!value) return null;
-    if (Number.isNaN(Date.parse(value))) {
+    if (typeof value !== 'string') {
         throw new BadRequestError(`${fieldName} must be a valid date`);
     }
-    return value;
+
+    const trimmed = value.trim();
+    const prefixMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})(?:$|[T\s])/);
+    if (!prefixMatch) {
+        throw new BadRequestError(`${fieldName} must be a valid date`);
+    }
+
+    const [, yearValue, monthValue, dayValue] = prefixMatch;
+    const year = Number.parseInt(yearValue, 10);
+    const month = Number.parseInt(monthValue, 10);
+    const day = Number.parseInt(dayValue, 10);
+    const maxDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    if (month < 1 || month > 12 || day < 1 || day > maxDay || Number.isNaN(Date.parse(trimmed))) {
+        throw new BadRequestError(`${fieldName} must be a valid date`);
+    }
+    return trimmed;
 }
 
 function appendDateFilter(filters, params, column, operator, value, fieldName) {

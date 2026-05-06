@@ -176,6 +176,14 @@ test('buildJobsQuery rejects invalid super-admin tenant_id and date filters', ()
         }),
         /date_from must be a valid date/
     );
+
+    assert.throws(
+        () => operationsRoutes.__buildJobsQueryForTests({
+            user: { role: 'tenant_admin', tenantId: TENANT_ID },
+            query: { date_from: '2026-02-31' }
+        }),
+        /date_from must be a valid date/
+    );
 });
 
 test('buildBotHealthQuery and buildOperationalEventsQuery use consistent super-admin tenant scope', () => {
