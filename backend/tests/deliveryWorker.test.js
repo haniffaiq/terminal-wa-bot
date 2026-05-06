@@ -78,7 +78,7 @@ test('processDeliveryJob marks sending, sends, records success, and marks sent',
     };
 
     const result = await processDeliveryJob(
-        { data: { jobId: 'job-1' } },
+        { data: { jobId: 'job-1', tenantId: 'tenant-1' } },
         {
             queueService,
             routingService,
@@ -91,7 +91,7 @@ test('processDeliveryJob marks sending, sends, records success, and marks sent',
 
     assert.deepEqual(result, { status: 'sent', jobId: 'job-1' });
     assert.deepEqual(calls, [
-        ['getMessageJob', { jobId: 'job-1' }],
+        ['getMessageJob', { jobId: 'job-1', tenantId: 'tenant-1' }],
         ['markJobSending', { jobId: 'job-1', tenantId: 'tenant-1', workerId: 'worker-1' }],
         ['selectBotForGroup', { tenantId: 'tenant-1', groupId: 'group-1' }],
         ['sendJob', { job: sendingJob, sock }],
@@ -154,7 +154,7 @@ test('processDeliveryJob records no-bot failure and schedules delayed retry', as
     };
 
     const result = await processDeliveryJob(
-        { data: { jobId: 'job-1' } },
+        { data: { jobId: 'job-1', tenantId: 'tenant-1' } },
         {
             queueService,
             routingService,
@@ -194,7 +194,7 @@ test('processDeliveryJob records no-bot failure and schedules delayed retry', as
     }]);
     assert.deepEqual(deliveryQueue.addCalls, [{
         name: 'deliver-message',
-        data: { jobId: 'job-1' },
+        data: { jobId: 'job-1', tenantId: 'tenant-1' },
         options: {
             jobId: 'job-1:2',
             delay: 60000,
@@ -205,12 +205,118 @@ test('processDeliveryJob records no-bot failure and schedules delayed retry', as
     }]);
 });
 
+test('processDeliveryJob requires tenantId from BullMQ data before DB lookup', async () => {
+    const queueService = {
+        async getMessageJob() {
+            throw new Error('getMessageJob should not run without tenantId');
+        }
+    };
+
+    await assert.rejects(
+        () => processDeliveryJob(
+            { data: { jobId: 'job-1' } },
+            {
+                queueService,
+                routingService: {},
+                botHealthService: {},
+                messageSender: {},
+                deliveryQueue: createDeliveryQueue()
+            }
+        ),
+        /data\.tenantId is required/
+    );
+});
+
+test('processDeliveryJob requires jobId from BullMQ data before DB lookup', async () => {
+    const queueService = {
+        async getMessageJob() {
+            throw new Error('getMessageJob should not run without jobId');
+        }
+    };
+
+    await assert.rejects(
+        () => processDeliveryJob(
+            { data: { tenantId: 'tenant-1' } },
+            {
+                queueService,
+                routingService: {},
+                botHealthService: {},
+                messageSender: {},
+                deliveryQueue: createDeliveryQueue()
+            }
+        ),
+        /data\.jobId is required/
+    );
+});
+
+test('processDeliveryJob rejects blank jobId before DB lookup', async () => {
+    const queueService = {
+        async getMessageJob() {
+            throw new Error('getMessageJob should not run with invalid jobId');
+        }
+    };
+
+    await assert.rejects(
+        () => processDeliveryJob(
+            { data: { jobId: '   ', tenantId: 'tenant-1' } },
+            {
+                queueService,
+                routingService: {},
+                botHealthService: {},
+                messageSender: {},
+                deliveryQueue: createDeliveryQueue()
+            }
+        ),
+        /data\.jobId must be a non-empty string/
+    );
+});
+
+test('processDeliveryJob skips retrying job that is not due before marking sending', async () => {
+    const calls = [];
+    const dbJob = {
+        ...baseDbJob,
+        status: 'retrying',
+        next_attempt_at: new Date(Date.now() + 60000).toISOString()
+    };
+    const queueService = {
+        async getMessageJob(payload) {
+            calls.push(['getMessageJob', payload]);
+            return dbJob;
+        },
+        async markJobSending() {
+            calls.push(['markJobSending']);
+            throw new Error('markJobSending should not run before next_attempt_at');
+        }
+    };
+
+    const result = await processDeliveryJob(
+        { data: { jobId: 'job-1', tenantId: 'tenant-1' } },
+        {
+            queueService,
+            routingService: {},
+            botHealthService: {},
+            messageSender: {
+                async sendJob() {
+                    throw new Error('sendJob should not run before next_attempt_at');
+                }
+            },
+            deliveryQueue: createDeliveryQueue(),
+            workerId: 'worker-1'
+        }
+    );
+
+    assert.deepEqual(result, { status: 'skipped', reason: 'not_due', jobId: 'job-1' });
+    assert.deepEqual(calls, [
+        ['getMessageJob', { jobId: 'job-1', tenantId: 'tenant-1' }]
+    ]);
+});
+
 test('processDeliveryJob skips missing and terminal DB jobs without sending', async () => {
     const sendCalls = [];
     const terminalStatuses = ['sent', 'failed', 'resolved', 'ignored'];
 
     const missingResult = await processDeliveryJob(
-        { data: { jobId: 'missing-job' } },
+        { data: { jobId: 'missing-job', tenantId: 'tenant-1' } },
         {
             queueService: {
                 async getMessageJob() {
@@ -232,7 +338,7 @@ test('processDeliveryJob skips missing and terminal DB jobs without sending', as
 
     for (const status of terminalStatuses) {
         const result = await processDeliveryJob(
-            { data: { jobId: `job-${status}` } },
+            { data: { jobId: `job-${status}`, tenantId: 'tenant-1' } },
             {
                 queueService: {
                     async getMessageJob() {
@@ -298,7 +404,7 @@ test('processDeliveryJob send failure with non-retryable policy marks failed wit
     };
 
     const result = await processDeliveryJob(
-        { data: { jobId: 'job-1' } },
+        { data: { jobId: 'job-1', tenantId: 'tenant-1' } },
         {
             queueService,
             routingService,
@@ -333,4 +439,60 @@ test('processDeliveryJob send failure with non-retryable policy marks failed wit
         }]
     ]);
     assert.deepEqual(deliveryQueue.addCalls, []);
+});
+
+test('processDeliveryJob schedules delayed retry with tenantId after retryable send failure', async () => {
+    const sock = { id: 'sock-a' };
+    const deliveryQueue = createDeliveryQueue();
+    const retryService = createRetryService({ status: 'retrying', delaySeconds: 30, final: false });
+    const sendingJob = { ...baseDbJob, status: 'sending', attempt_count: 1, priority: 3 };
+    const queueService = {
+        async getMessageJob() {
+            return baseDbJob;
+        },
+        async markJobSending() {
+            return sendingJob;
+        },
+        async recordAttempt() {},
+        async markJobFailed(payload) {
+            return { ...sendingJob, status: payload.status };
+        }
+    };
+
+    const result = await processDeliveryJob(
+        { data: { jobId: 'job-1', tenantId: 'tenant-1' } },
+        {
+            queueService,
+            routingService: {
+                async selectBotForGroup() {
+                    return { botId: 'bot-a', sock };
+                },
+                async recordRouteFailure() {}
+            },
+            botHealthService: {
+                async markFailure() {}
+            },
+            messageSender: {
+                async sendJob() {
+                    throw new Error('temporary network failure');
+                }
+            },
+            deliveryQueue,
+            retryService,
+            workerId: 'worker-1'
+        }
+    );
+
+    assert.deepEqual(result, { status: 'retrying', jobId: 'job-1', delaySeconds: 30 });
+    assert.deepEqual(deliveryQueue.addCalls, [{
+        name: 'deliver-message',
+        data: { jobId: 'job-1', tenantId: 'tenant-1' },
+        options: {
+            jobId: 'job-1:1',
+            delay: 30000,
+            priority: 3,
+            removeOnComplete: true,
+            removeOnFail: false
+        }
+    }]);
 });

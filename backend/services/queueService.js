@@ -43,9 +43,13 @@ function createQueueService({ queryFn = query, deliveryQueue, auditService } = {
     }
 
     async function addExecutableJob(row, priority, jobId = row.id) {
+        if (!row.tenant_id) {
+            throw new Error('Message job tenant_id is required to enqueue delivery job');
+        }
+
         const addJob = () => executableQueue.add(
             'deliver-message',
-            { jobId: row.id },
+            { jobId: row.id, tenantId: row.tenant_id },
             {
                 jobId,
                 priority,
@@ -199,7 +203,10 @@ function createQueueService({ queryFn = query, deliveryQueue, auditService } = {
                 updated_at = NOW()
             WHERE id = $1
                 AND tenant_id = $2
-                AND status IN ('queued', 'retrying')
+                AND (
+                    status = 'queued'
+                    OR (status = 'retrying' AND next_attempt_at <= NOW())
+                )
             RETURNING *`,
             [jobId, tenantId, workerId]
         );
@@ -328,7 +335,7 @@ function createQueueService({ queryFn = query, deliveryQueue, auditService } = {
             WHERE status = 'sending'
                 AND locked_at IS NOT NULL
                 AND locked_at <= NOW() - ($1 * INTERVAL '1 second')
-            RETURNING id, priority`,
+            RETURNING id, tenant_id, priority`,
             [staleAfterSeconds]
         );
         return result.rows;
@@ -338,7 +345,7 @@ function createQueueService({ queryFn = query, deliveryQueue, auditService } = {
         await recoverStaleSendingJobs({ staleAfterSeconds });
 
         const result = await queryFn(
-            `SELECT id, priority
+            `SELECT id, tenant_id, priority
             FROM message_jobs
             WHERE status IN ('queued', 'retrying')
                 AND next_attempt_at <= NOW()

@@ -2,6 +2,8 @@ const axios = require('axios');
 const fs = require('node:fs');
 const path = require('node:path');
 
+const MEDIA_URL_LIMIT_BYTES = 25 * 1024 * 1024;
+
 function getMediaKey(mimetype = '') {
     if (mimetype.startsWith('image/')) return 'image';
     if (mimetype.startsWith('video/')) return 'video';
@@ -35,7 +37,41 @@ function buildMediaMessage({ mediaKey, mediaValue, caption, mimetype }) {
     return message;
 }
 
-async function sendJob({ job, sock, axiosClient = axios, fsModule = fs, pathModule = path }) {
+function getDefaultUploadRoot(pathModule = path) {
+    return process.env.UPLOAD_DIR || pathModule.join(__dirname, '..', 'uploads');
+}
+
+function isPathInside(parentPath, childPath, pathModule = path) {
+    const relativePath = pathModule.relative(parentPath, childPath);
+    return relativePath === '' || (
+        relativePath &&
+        !relativePath.startsWith('..') &&
+        !pathModule.isAbsolute(relativePath)
+    );
+}
+
+function resolveUploadPath({ filePath, uploadRoot, fsModule = fs, pathModule = path }) {
+    const rootPath = pathModule.resolve(uploadRoot || getDefaultUploadRoot(pathModule));
+    const resolvedPath = pathModule.resolve(filePath);
+
+    if (!isPathInside(rootPath, resolvedPath, pathModule)) {
+        throw new Error('media_upload payload.filePath is outside upload root');
+    }
+    if (!fsModule.existsSync(resolvedPath)) {
+        throw new Error('media_upload payload.filePath not found');
+    }
+
+    return resolvedPath;
+}
+
+async function sendJob({
+    job,
+    sock,
+    axiosClient = axios,
+    fsModule = fs,
+    pathModule = path,
+    uploadRoot
+}) {
     if (!job || !job.type) {
         throw new Error('Message job type is required');
     }
@@ -55,9 +91,15 @@ async function sendJob({ job, sock, axiosClient = axios, fsModule = fs, pathModu
         }
         const mimetype = payload.mimetype || 'application/octet-stream';
         const mediaKey = getMediaKey(mimetype);
+        const mediaPath = resolveUploadPath({
+            filePath: payload.filePath,
+            uploadRoot,
+            fsModule,
+            pathModule
+        });
         message = buildMediaMessage({
             mediaKey,
-            mediaValue: { url: pathModule.resolve(payload.filePath) },
+            mediaValue: { url: mediaPath },
             caption: payload.caption,
             mimetype
         });
@@ -65,7 +107,12 @@ async function sendJob({ job, sock, axiosClient = axios, fsModule = fs, pathModu
         if (!payload.url) {
             throw new Error('media_url payload.url is required');
         }
-        const response = await axiosClient.get(payload.url, { responseType: 'arraybuffer' });
+        const response = await axiosClient.get(payload.url, {
+            responseType: 'arraybuffer',
+            timeout: 15000,
+            maxContentLength: MEDIA_URL_LIMIT_BYTES,
+            maxBodyLength: MEDIA_URL_LIMIT_BYTES
+        });
         const mimetype = normalizeContentType(response.headers) || 'application/octet-stream';
         const mediaKey = getMediaKey(mimetype);
         const mediaBuffer = Buffer.isBuffer(response.data)

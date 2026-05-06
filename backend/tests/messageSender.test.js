@@ -14,6 +14,14 @@ function createSock() {
     };
 }
 
+function createFs({ exists = true } = {}) {
+    return {
+        existsSync() {
+            return exists;
+        }
+    };
+}
+
 test('sendJob sends text payload with transaction id prefix', async () => {
     const sock = createSock();
 
@@ -43,6 +51,7 @@ test('sendJob sends uploaded image media based on mimetype', async () => {
 
     await sendJob({
         sock,
+        fsModule: createFs(),
         job: {
             type: 'media_upload',
             target_id: 'group-1',
@@ -70,6 +79,7 @@ test('sendJob sends uploaded document media based on mimetype', async () => {
 
     await sendJob({
         sock,
+        fsModule: createFs(),
         job: {
             type: 'media_upload',
             target_id: 'group-1',
@@ -89,6 +99,128 @@ test('sendJob sends uploaded document media based on mimetype', async () => {
             mimetype: 'application/pdf'
         }
     });
+});
+
+test('sendJob sends uploaded video media under upload root', async () => {
+    const sock = createSock();
+    const filePath = '/app/uploads/clips/demo.mp4';
+
+    await sendJob({
+        sock,
+        fsModule: createFs(),
+        uploadRoot: '/app/uploads',
+        job: {
+            type: 'media_upload',
+            target_id: 'group-1',
+            payload: {
+                filePath,
+                mimetype: 'video/mp4',
+                caption: 'Demo'
+            }
+        }
+    });
+
+    assert.deepEqual(sock.calls[0], {
+        targetId: 'group-1',
+        message: {
+            video: { url: path.resolve(filePath) },
+            caption: 'Demo',
+            mimetype: 'video/mp4'
+        }
+    });
+});
+
+test('sendJob sends uploaded audio media under upload root', async () => {
+    const sock = createSock();
+    const filePath = path.join(process.cwd(), 'uploads/voice.ogg');
+
+    await sendJob({
+        sock,
+        fsModule: createFs(),
+        uploadRoot: path.join(process.cwd(), 'uploads'),
+        job: {
+            type: 'media_upload',
+            target_id: 'group-1',
+            payload: {
+                filePath,
+                mimetype: 'audio/ogg; codecs=opus'
+            }
+        }
+    });
+
+    assert.deepEqual(sock.calls[0], {
+        targetId: 'group-1',
+        message: {
+            audio: { url: path.resolve(filePath) },
+            mimetype: 'audio/ogg; codecs=opus'
+        }
+    });
+});
+
+test('sendJob rejects uploaded media outside configured upload root', async () => {
+    const sock = createSock();
+
+    await assert.rejects(
+        () => sendJob({
+            sock,
+            fsModule: createFs(),
+            uploadRoot: '/app/uploads',
+            job: {
+                type: 'media_upload',
+                target_id: 'group-1',
+                payload: {
+                    filePath: '/app/secrets/token.txt',
+                    mimetype: 'text/plain'
+                }
+            }
+        }),
+        /outside upload root/
+    );
+    assert.deepEqual(sock.calls, []);
+});
+
+test('sendJob rejects uploaded media path traversal outside upload root', async () => {
+    const sock = createSock();
+
+    await assert.rejects(
+        () => sendJob({
+            sock,
+            fsModule: createFs(),
+            uploadRoot: '/app/uploads',
+            job: {
+                type: 'media_upload',
+                target_id: 'group-1',
+                payload: {
+                    filePath: '../secrets/token.txt',
+                    mimetype: 'text/plain'
+                }
+            }
+        }),
+        /outside upload root/
+    );
+    assert.deepEqual(sock.calls, []);
+});
+
+test('sendJob rejects uploaded media when file is missing', async () => {
+    const sock = createSock();
+
+    await assert.rejects(
+        () => sendJob({
+            sock,
+            fsModule: createFs({ exists: false }),
+            uploadRoot: '/app/uploads',
+            job: {
+                type: 'media_upload',
+                target_id: 'group-1',
+                payload: {
+                    filePath: '/app/uploads/missing.pdf',
+                    mimetype: 'application/pdf'
+                }
+            }
+        }),
+        /not found/
+    );
+    assert.deepEqual(sock.calls, []);
 });
 
 test('sendJob sends URL media using downloaded buffer and content type', async () => {
@@ -120,7 +252,12 @@ test('sendJob sends URL media using downloaded buffer and content type', async (
 
     assert.deepEqual(axiosClient.calls, [{
         url: 'https://example.test/video.mp4',
-        options: { responseType: 'arraybuffer' }
+        options: {
+            responseType: 'arraybuffer',
+            timeout: 15000,
+            maxContentLength: 25 * 1024 * 1024,
+            maxBodyLength: 25 * 1024 * 1024
+        }
     }]);
     assert.deepEqual(sock.calls[0], {
         targetId: 'group-1',

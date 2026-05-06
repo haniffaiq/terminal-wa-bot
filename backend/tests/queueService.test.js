@@ -130,7 +130,7 @@ test('enqueueMessageJob inserts into DB and calls injected deliveryQueue.add wit
     assert.equal(store.jobs.length, 1);
     assert.deepEqual(deliveryQueue.addCalls, [{
         name: 'deliver-message',
-        data: { jobId: 'job-1' },
+        data: { jobId: 'job-1', tenantId: 'tenant-1' },
         options: {
             jobId: 'job-1',
             priority: 2,
@@ -175,7 +175,10 @@ test('enqueueBulkMessageJobs creates one DB row and one queue add per target', a
 
     assert.deepEqual(jobs.map(job => job.id), ['job-1', 'job-2']);
     assert.deepEqual(store.jobs.map(job => job.target_id), ['group-1', 'group-2']);
-    assert.deepEqual(deliveryQueue.addCalls.map(call => call.data), [{ jobId: 'job-1' }, { jobId: 'job-2' }]);
+    assert.deepEqual(deliveryQueue.addCalls.map(call => call.data), [
+        { jobId: 'job-1', tenantId: 'tenant-1' },
+        { jobId: 'job-2', tenantId: 'tenant-1' }
+    ]);
 });
 
 test('markJobSending increments attempt count and sets sending', async () => {
@@ -211,7 +214,8 @@ test('markJobSending returns null for jobs that are no longer queued or retrying
     };
     const service = createQueueService({
         queryFn: async (sql) => {
-            assert.match(sql, /status\s+IN\s*\(\s*'queued'\s*,\s*'retrying'\s*\)/i);
+            assert.match(sql, /status\s*=\s*'queued'/i);
+            assert.match(sql, /status\s*=\s*'retrying'\s+AND\s+next_attempt_at\s*<=\s*NOW\(\)/i);
             return { rows: [] };
         },
         deliveryQueue: createDeliveryQueue()
@@ -408,8 +412,8 @@ test('requeuePendingJobs uses stable job ids and skips duplicate queue adds', as
             assert.match(sql, /status IN \('queued', 'retrying'\)/i);
             return {
                 rows: [
-                    { id: 'job-1', priority: 2 },
-                    { id: 'job-2', priority: 4 }
+                    { id: 'job-1', tenant_id: 'tenant-1', priority: 2 },
+                    { id: 'job-2', tenant_id: 'tenant-1', priority: 4 }
                 ]
             };
         },
@@ -420,6 +424,10 @@ test('requeuePendingJobs uses stable job ids and skips duplicate queue adds', as
 
     assert.deepEqual(rows.map(row => row.id), ['job-1', 'job-2']);
     assert.deepEqual(deliveryQueue.addCalls.map(call => call.options.jobId), ['job-1', 'job-2']);
+    assert.deepEqual(deliveryQueue.addCalls.map(call => call.data), [
+        { jobId: 'job-1', tenantId: 'tenant-1' },
+        { jobId: 'job-2', tenantId: 'tenant-1' }
+    ]);
 });
 
 test('requeuePendingJobs preserves priority 0 when reconciling executable jobs', async () => {
@@ -429,7 +437,7 @@ test('requeuePendingJobs preserves priority 0 when reconciling executable jobs',
             if (/UPDATE message_jobs/i.test(sql)) {
                 return { rows: [] };
             }
-            return { rows: [{ id: 'job-1', priority: 0 }] };
+            return { rows: [{ id: 'job-1', tenant_id: 'tenant-1', priority: 0 }] };
         },
         deliveryQueue
     });
@@ -470,7 +478,7 @@ test('requeuePendingJobs removes retained failed BullMQ duplicate and retries ad
             if (/UPDATE message_jobs/i.test(sql)) {
                 return { rows: [] };
             }
-            return { rows: [{ id: 'job-1', priority: 2 }] };
+            return { rows: [{ id: 'job-1', tenant_id: 'tenant-1', priority: 2 }] };
         },
         deliveryQueue
     });
@@ -510,7 +518,7 @@ test('requeuePendingJobs treats waiting BullMQ duplicate as already queued', asy
             if (/UPDATE message_jobs/i.test(sql)) {
                 return { rows: [] };
             }
-            return { rows: [{ id: 'job-1', priority: 2 }] };
+            return { rows: [{ id: 'job-1', tenant_id: 'tenant-1', priority: 2 }] };
         },
         deliveryQueue
     });
@@ -532,9 +540,9 @@ test('requeuePendingJobs recovers stale sending jobs before enqueueing pending w
                 assert.match(sql, /status\s*=\s*'retrying'/i);
                 assert.match(sql, /WHERE status\s*=\s*'sending'/i);
                 assert.match(sql, /locked_at\s*<=\s*NOW\(\)\s*-\s*\(\$1\s*\*\s*INTERVAL '1 second'\)/i);
-                return { rows: [{ id: 'job-stale', priority: 1 }] };
+                return { rows: [{ id: 'job-stale', tenant_id: 'tenant-1', priority: 1 }] };
             }
-            return { rows: [{ id: 'job-stale', priority: 1 }] };
+            return { rows: [{ id: 'job-stale', tenant_id: 'tenant-1', priority: 1 }] };
         },
         deliveryQueue
     });

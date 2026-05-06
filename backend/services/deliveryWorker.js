@@ -11,6 +11,29 @@ function getJobId(bullJob) {
     return bullJob && bullJob.data && bullJob.data.jobId;
 }
 
+function getTenantId(bullJob) {
+    return bullJob && bullJob.data && bullJob.data.tenantId;
+}
+
+function validateStringField(value, fieldName) {
+    if (value === undefined || value === null) {
+        throw new Error(`Delivery job data.${fieldName} is required`);
+    }
+    if (typeof value !== 'string' || value.trim() === '') {
+        throw new Error(`Delivery job data.${fieldName} must be a non-empty string`);
+    }
+    return value;
+}
+
+function isRetryNotDue(dbJob, now = new Date()) {
+    if (!dbJob || dbJob.status !== 'retrying' || !dbJob.next_attempt_at) {
+        return false;
+    }
+
+    const nextAttemptAt = new Date(dbJob.next_attempt_at).getTime();
+    return Number.isFinite(nextAttemptAt) && nextAttemptAt > now.getTime();
+}
+
 async function maybeCall(service, method, payload) {
     if (service && typeof service[method] === 'function') {
         return service[method](payload);
@@ -83,7 +106,7 @@ async function handleFailure({
     if (status === 'retrying') {
         await deliveryQueue.add(
             'deliver-message',
-            { jobId },
+            { jobId, tenantId },
             {
                 jobId: `${jobId}:${attemptCount}`,
                 delay: delaySeconds * 1000,
@@ -98,10 +121,8 @@ async function handleFailure({
 }
 
 async function processDeliveryJob(bullJob, deps) {
-    const jobId = getJobId(bullJob);
-    if (!jobId) {
-        throw new Error('Delivery job data.jobId is required');
-    }
+    const jobId = validateStringField(getJobId(bullJob), 'jobId');
+    const tenantId = validateStringField(getTenantId(bullJob), 'tenantId');
 
     const {
         queueService,
@@ -117,10 +138,7 @@ async function processDeliveryJob(bullJob, deps) {
         throw new Error('Delivery worker dependencies are required');
     }
 
-    const getJobPayload = bullJob.data.tenantId
-        ? { jobId, tenantId: bullJob.data.tenantId }
-        : { jobId };
-    const dbJob = await queueService.getMessageJob(getJobPayload);
+    const dbJob = await queueService.getMessageJob({ jobId, tenantId });
 
     if (!dbJob) {
         return { status: 'skipped', reason: 'missing', jobId };
@@ -128,10 +146,13 @@ async function processDeliveryJob(bullJob, deps) {
     if (TERMINAL_STATUSES.has(dbJob.status)) {
         return { status: 'skipped', reason: 'terminal', jobId };
     }
+    if (isRetryNotDue(dbJob)) {
+        return { status: 'skipped', reason: 'not_due', jobId };
+    }
 
     const sendingJob = await queueService.markJobSending({
         jobId,
-        tenantId: dbJob.tenant_id,
+        tenantId,
         workerId
     });
 
