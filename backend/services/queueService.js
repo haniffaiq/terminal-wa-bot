@@ -43,7 +43,7 @@ function createQueueService({ queryFn = query, deliveryQueue, auditService } = {
     }
 
     async function addExecutableJob(row, priority, jobId = row.id) {
-        return executableQueue.add(
+        const addJob = () => executableQueue.add(
             'deliver-message',
             { jobId: row.id },
             {
@@ -53,16 +53,38 @@ function createQueueService({ queryFn = query, deliveryQueue, auditService } = {
                 removeOnFail: false
             }
         );
-    }
 
-    async function reconcileExecutableJob(row) {
         try {
-            await addExecutableJob(row, row.priority || 5, row.id);
+            return await addJob();
         } catch (error) {
             if (!isDuplicateJobError(error)) {
                 throw error;
             }
+
+            if (typeof executableQueue.getJob !== 'function') {
+                return null;
+            }
+
+            const existingJob = await executableQueue.getJob(jobId);
+            const state = existingJob && typeof existingJob.getState === 'function'
+                ? await existingJob.getState()
+                : 'unknown';
+
+            if (!['failed', 'completed'].includes(state)) {
+                return null;
+            }
+
+            if (existingJob && typeof existingJob.remove === 'function') {
+                await existingJob.remove();
+                return addJob();
+            }
+
+            return null;
         }
+    }
+
+    async function reconcileExecutableJob(row) {
+        await addExecutableJob(row, row.priority ?? 5, row.id);
     }
 
     async function enqueueMessageJob({

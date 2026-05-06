@@ -422,6 +422,106 @@ test('requeuePendingJobs uses stable job ids and skips duplicate queue adds', as
     assert.deepEqual(deliveryQueue.addCalls.map(call => call.options.jobId), ['job-1', 'job-2']);
 });
 
+test('requeuePendingJobs preserves priority 0 when reconciling executable jobs', async () => {
+    const deliveryQueue = createDeliveryQueue();
+    const service = createQueueService({
+        queryFn: async (sql) => {
+            if (/UPDATE message_jobs/i.test(sql)) {
+                return { rows: [] };
+            }
+            return { rows: [{ id: 'job-1', priority: 0 }] };
+        },
+        deliveryQueue
+    });
+
+    await service.requeuePendingJobs();
+
+    assert.equal(deliveryQueue.addCalls[0].options.priority, 0);
+});
+
+test('requeuePendingJobs removes retained failed BullMQ duplicate and retries add once', async () => {
+    const removed = [];
+    const deliveryQueue = {
+        addCalls: [],
+        getJobCalls: [],
+        async add(name, data, options) {
+            this.addCalls.push({ name, data, options });
+            if (this.addCalls.length === 1) {
+                const error = new Error('Job job-1 already exists');
+                error.code = 'JOB_ALREADY_EXISTS';
+                throw error;
+            }
+            return { id: options.jobId };
+        },
+        async getJob(jobId) {
+            this.getJobCalls.push(jobId);
+            return {
+                async getState() {
+                    return 'failed';
+                },
+                async remove() {
+                    removed.push(jobId);
+                }
+            };
+        }
+    };
+    const service = createQueueService({
+        queryFn: async (sql) => {
+            if (/UPDATE message_jobs/i.test(sql)) {
+                return { rows: [] };
+            }
+            return { rows: [{ id: 'job-1', priority: 2 }] };
+        },
+        deliveryQueue
+    });
+
+    await service.requeuePendingJobs();
+
+    assert.deepEqual(deliveryQueue.getJobCalls, ['job-1']);
+    assert.deepEqual(removed, ['job-1']);
+    assert.equal(deliveryQueue.addCalls.length, 2);
+});
+
+test('requeuePendingJobs treats waiting BullMQ duplicate as already queued', async () => {
+    const removed = [];
+    const deliveryQueue = {
+        addCalls: [],
+        getJobCalls: [],
+        async add(name, data, options) {
+            this.addCalls.push({ name, data, options });
+            const error = new Error('Job job-1 already exists');
+            error.code = 'JOB_ALREADY_EXISTS';
+            throw error;
+        },
+        async getJob(jobId) {
+            this.getJobCalls.push(jobId);
+            return {
+                async getState() {
+                    return 'waiting';
+                },
+                async remove() {
+                    removed.push(jobId);
+                }
+            };
+        }
+    };
+    const service = createQueueService({
+        queryFn: async (sql) => {
+            if (/UPDATE message_jobs/i.test(sql)) {
+                return { rows: [] };
+            }
+            return { rows: [{ id: 'job-1', priority: 2 }] };
+        },
+        deliveryQueue
+    });
+
+    await service.requeuePendingJobs();
+
+    assert.deepEqual(deliveryQueue.getJobCalls, ['job-1']);
+    assert.deepEqual(removed, []);
+    assert.equal(deliveryQueue.addCalls.length, 1);
+});
+
 test('requeuePendingJobs recovers stale sending jobs before enqueueing pending work', async () => {
     const calls = [];
     const deliveryQueue = createDeliveryQueue();
