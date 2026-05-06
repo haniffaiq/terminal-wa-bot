@@ -48,6 +48,7 @@ export interface BotHealth {
   heartbeat_at?: string | null;
   lastHeartbeatAt?: string | null;
   last_heartbeat_at?: string | null;
+  last_reconnect_at?: string | null;
   successCount?: number | null;
   success_count?: number | null;
   failCount?: number | null;
@@ -55,6 +56,7 @@ export interface BotHealth {
   failureCount?: number | null;
   failure_count?: number | null;
   consecutive_failures?: number | null;
+  reconnect_count?: number | null;
   activeJobCount?: number | null;
   active_job_count?: number | null;
   activeJobs?: number | null;

@@ -20,6 +20,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { fetchApi, postApi } from '@/lib/api';
+import { getUser } from '@/lib/auth';
 import { useSocket } from '@/hooks/useSocket';
 import type { ApiResponse, BotHealth } from '@/lib/opsTypes';
 
@@ -53,6 +54,7 @@ function legacyHealth(botId: string, online: boolean): BotHealth {
 }
 
 export default function BotManagement() {
+  const user = getUser();
   const [botHealth, setBotHealth] = useState<BotHealth[]>([]);
   const [usingFallback, setUsingFallback] = useState(false);
   const [newBotId, setNewBotId] = useState('');
@@ -138,6 +140,7 @@ export default function BotManagement() {
       const normalizedStatus = rawStatus === 'open' ? 'online' : rawStatus;
       const heartbeat = bot.heartbeatAt || bot.heartbeat_at || bot.lastHeartbeatAt || bot.last_heartbeat_at || null;
       const lastSeen = bot.lastSeenAt || bot.last_seen_at || bot.updated_at || heartbeat;
+      const lastReconnect = bot.last_reconnect_at || null;
 
       return {
         ...bot,
@@ -147,9 +150,9 @@ export default function BotManagement() {
         displayStatus: normalizedStatus,
         heartbeat,
         lastSeen,
-        successes: bot.successCount ?? bot.success_count ?? 0,
-        failures: bot.failCount ?? bot.fail_count ?? bot.failureCount ?? bot.failure_count ?? bot.consecutive_failures ?? 0,
-        activeJobs: bot.activeJobCount ?? bot.active_job_count ?? bot.activeJobs ?? bot.active_jobs ?? 0,
+        lastReconnect,
+        reconnects: bot.reconnect_count ?? 0,
+        consecutiveFailures: bot.consecutive_failures ?? bot.failCount ?? bot.fail_count ?? bot.failureCount ?? bot.failure_count ?? 0,
       };
     });
   }, [botHealth, botStatuses]);
@@ -214,15 +217,16 @@ export default function BotManagement() {
               <TableHead>Tenant</TableHead>
               <TableHead>Heartbeat</TableHead>
               <TableHead>Last Seen</TableHead>
-              <TableHead className="text-right">Success</TableHead>
-              <TableHead className="text-right">Fail</TableHead>
-              <TableHead className="text-right">Active Jobs</TableHead>
+              <TableHead>Last Reconnect</TableHead>
+              <TableHead className="text-right">Reconnects</TableHead>
+              <TableHead className="text-right">Failures</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.map((bot) => {
               const canReconnect = ['offline', 'closed', 'disconnected', 'unknown'].includes(bot.displayStatus.toLowerCase());
+              const canUseLegacyActions = Boolean(user?.tenantId && (!bot.tenantId || bot.tenantId === user.tenantId));
 
               return (
                 <TableRow key={bot.botId}>
@@ -235,9 +239,9 @@ export default function BotManagement() {
                   <TableCell className="text-muted-foreground">{bot.tenantName || bot.tenantId || '-'}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">{formatDate(bot.heartbeat)}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">{formatDate(bot.lastSeen)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{bot.successes}</TableCell>
-                  <TableCell className="text-right tabular-nums">{bot.failures}</TableCell>
-                  <TableCell className="text-right tabular-nums">{bot.activeJobs}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{formatDate(bot.lastReconnect)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{bot.reconnects}</TableCell>
+                  <TableCell className="text-right tabular-nums">{bot.consecutiveFailures}</TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-2">
                       <Button
@@ -253,8 +257,8 @@ export default function BotManagement() {
                         variant="outline"
                         size="sm"
                         onClick={() => handleRestart(bot.botId)}
-                        disabled={loading === bot.botId}
-                        title="Restart bot"
+                        disabled={loading === bot.botId || !canUseLegacyActions}
+                        title={canUseLegacyActions ? 'Restart bot' : 'Use tenant context to restart this bot'}
                       >
                         <RotateCcw className="h-3 w-3" />
                       </Button>
@@ -262,8 +266,8 @@ export default function BotManagement() {
                         variant="outline"
                         size="sm"
                         onClick={() => handleDisconnect(bot.botId)}
-                        disabled={loading === bot.botId}
-                        title="Disconnect bot"
+                        disabled={loading === bot.botId || !canUseLegacyActions}
+                        title={canUseLegacyActions ? 'Disconnect bot' : 'Use tenant context to disconnect this bot'}
                       >
                         <Power className="h-3 w-3" />
                       </Button>
@@ -271,9 +275,9 @@ export default function BotManagement() {
                         variant="outline"
                         size="sm"
                         onClick={() => handleDelete(bot.botId)}
-                        disabled={loading === bot.botId}
+                        disabled={loading === bot.botId || !canUseLegacyActions}
                         className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                        title="Delete bot"
+                        title={canUseLegacyActions ? 'Delete bot' : 'Use tenant context to delete this bot'}
                       >
                         <Trash2 className="h-3 w-3" />
                       </Button>

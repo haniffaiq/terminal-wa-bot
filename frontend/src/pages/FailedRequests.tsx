@@ -52,6 +52,10 @@ function statusVariant(status: string): 'default' | 'destructive' | 'secondary' 
   return 'outline';
 }
 
+function isRetryableRow(row: FailedRow) {
+  return !row.legacy && ['failed', 'resolved', 'ignored'].includes(row.status.toLowerCase());
+}
+
 function normalizeJob(job: MessageJob): FailedRow {
   return {
     id: job.id,
@@ -143,8 +147,9 @@ export default function FailedRequests() {
       return;
     }
 
-    const ids = Array.from(selectedIds);
-    await runAction('bulk-retry', () => postApi('/jobs/bulk-retry', ids.length > 0 ? { ids } : {}));
+    const retryableIds = rows.filter(isRetryableRow).map((row) => row.id);
+    const ids = Array.from(selectedIds).filter((id) => retryableIds.includes(id));
+    await runAction('bulk-retry', () => postApi('/jobs/bulk-retry', { ids: ids.length > 0 ? ids : retryableIds }));
   }
 
   function toggleSelected(id: string, checked: boolean) {
@@ -156,13 +161,15 @@ export default function FailedRequests() {
     });
   }
 
-  const selectableRows = useMemo(() => rows.filter((row) => !row.legacy), [rows]);
+  const selectableRows = useMemo(() => rows.filter(isRetryableRow), [rows]);
   const allSelected = selectableRows.length > 0 && selectableRows.every((row) => selectedIds.has(row.id));
   const bulkLabel = usingFallback
     ? 'Retry All'
     : selectedIds.size > 0
       ? `Retry Selected (${selectedIds.size})`
       : 'Retry Failed';
+  const bulkDisabled = actionLoading === 'bulk-retry'
+    || (usingFallback ? rows.length === 0 : selectableRows.length === 0);
 
   return (
     <div className="space-y-6">
@@ -175,7 +182,7 @@ export default function FailedRequests() {
           <Button variant="outline" onClick={loadRequests} disabled={loading}>
             <RefreshCw className="h-4 w-4 mr-2" />Refresh
           </Button>
-          <Button onClick={handleBulkRetry} disabled={actionLoading === 'bulk-retry' || rows.length === 0}>
+          <Button onClick={handleBulkRetry} disabled={bulkDisabled}>
             <RotateCcw className="h-4 w-4 mr-2" />{bulkLabel}
           </Button>
         </div>
@@ -218,7 +225,7 @@ export default function FailedRequests() {
                     <input
                       type="checkbox"
                       checked={selectedIds.has(row.id)}
-                      disabled={row.legacy}
+                      disabled={!isRetryableRow(row)}
                       onChange={(event) => toggleSelected(row.id, event.target.checked)}
                       aria-label={`Select job ${row.id}`}
                     />
@@ -246,8 +253,8 @@ export default function FailedRequests() {
                         variant="outline"
                         size="sm"
                         onClick={() => handleRetry(row.id)}
-                        disabled={row.legacy || actionLoading === `retry:${row.id}`}
-                        title="Retry job"
+                        disabled={!isRetryableRow(row) || actionLoading === `retry:${row.id}`}
+                        title={isRetryableRow(row) ? 'Retry job' : 'Already scheduled for retry'}
                       >
                         <RotateCcw className="h-3 w-3" />
                       </Button>
