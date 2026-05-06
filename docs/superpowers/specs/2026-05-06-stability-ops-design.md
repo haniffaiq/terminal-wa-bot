@@ -2,13 +2,13 @@
 
 ## Context
 
-The application is a multi-tenant WhatsApp delivery gateway with a React dashboard, Node.js/Express API, PostgreSQL persistence, Baileys-based bot sessions, message templates, schedules, webhooks, tenant management, group tools, logs, statistics, and failed request handling.
+The application is a multi-tenant WhatsApp delivery gateway with a React dashboard, Node.js/Express API, PostgreSQL persistence, Redis queueing, Baileys-based bot sessions, message templates, schedules, webhooks, tenant management, group tools, logs, statistics, and failed request handling.
 
 The current delivery path sends messages directly inside API request handlers. This keeps the first version simple, but makes failures harder to recover from because in-flight requests can be lost on restart, retry behavior is limited, and operational state is spread across logs, bot status, statistics, and failed request rows.
 
 ## Goals
 
-- Make message delivery durable across process restarts.
+- Make message delivery durable across process restarts with PostgreSQL job state and Redis-backed processing.
 - Add automatic retry with attempt history and clear final states.
 - Track bot health with meaningful operational statuses.
 - Route messages through healthy bots using load, cooldown, and group affinity.
@@ -18,8 +18,8 @@ The current delivery path sends messages directly inside API request handlers. T
 
 ## Non-Goals
 
-- No horizontal multi-instance locking beyond PostgreSQL row locking in this phase.
-- No external queue system such as Redis, RabbitMQ, or SQS.
+- No external managed queue service such as SQS or RabbitMQ.
+- No separate worker deployment in this phase; the backend container runs the BullMQ worker.
 - No billing, usage limits, or plan enforcement.
 - No WhatsApp personal-number delivery expansion.
 - No full observability stack integration such as Prometheus or OpenTelemetry.
@@ -28,12 +28,26 @@ The current delivery path sends messages directly inside API request handlers. T
 
 Implement the upgrade as one staged package:
 
-1. Add PostgreSQL schema and backend service foundations.
-2. Move existing send flows onto a durable queue and worker.
+1. Add PostgreSQL schema, Redis container/runtime, and backend service foundations.
+2. Move existing send flows onto a Redis-backed BullMQ queue and worker.
 3. Add health tracking, retry policy, smarter bot routing, and audit events.
 4. Upgrade the dashboard with queue, bot health, failure inbox, and operational timeline views.
 
-This keeps the project on the current Express/PostgreSQL architecture while fixing the core reliability gap first.
+This keeps the project on the current Express/PostgreSQL architecture, adds Redis as a Docker-managed queue dependency, and keeps PostgreSQL as the durable job/audit source of truth.
+
+## Queue Runtime
+
+Redis runs as a Docker Compose service and BullMQ provides delayed jobs, retries, and worker execution inside the backend container.
+
+Runtime requirements:
+
+- `redis` service uses `redis:7-alpine`.
+- Redis persistence is enabled with append-only file mode and a named `redisdata` volume.
+- Backend receives `REDIS_URL=redis://redis:6379`.
+- Local development can use `REDIS_URL=redis://localhost:6379`.
+- PostgreSQL `message_jobs` remains the source of truth for job status.
+- Redis/BullMQ holds executable queue state and delayed retry scheduling.
+- Backend startup reconciles queued/retrying PostgreSQL jobs into Redis so Redis data loss or container recreation does not orphan jobs.
 
 ## Data Model
 
@@ -138,21 +152,24 @@ Important columns:
 Responsibilities:
 
 - Convert incoming send requests into `message_jobs`.
+- Enqueue each PostgreSQL job ID into BullMQ.
 - Normalize one job per target group.
 - Store source metadata such as API, webhook, schedule, or retry.
 - Return job identifiers to callers.
+- Requeue unresolved `queued` and `retrying` jobs during startup reconciliation.
 
 ### `deliveryWorker`
 
 Responsibilities:
 
-- Poll `message_jobs` where status is `queued` or `retrying` and `next_attempt_at <= NOW()`.
-- Lock rows with PostgreSQL `FOR UPDATE SKIP LOCKED`.
+- Process BullMQ jobs containing PostgreSQL `message_jobs.id`.
+- Load the job row from PostgreSQL before sending.
 - Mark jobs as `sending`.
 - Ask `routingService` for the best bot.
 - Send the message using the existing Baileys send path.
 - Write `message_job_attempts`.
 - Mark jobs as `sent`, `retrying`, or `failed`.
+- Schedule retry by adding a delayed BullMQ job when retry policy allows it.
 - Emit `operational_events`.
 
 ### `retryService`
@@ -286,22 +303,25 @@ Add a readable event stream:
 1. API receives a send request.
 2. Auth and tenant scope are validated through existing middleware.
 3. `queueService` creates one `message_jobs` row per target.
-4. API returns queued job IDs.
-5. `deliveryWorker` locks eligible jobs.
-6. `routingService` selects a healthy bot.
-7. Worker sends via the existing bot socket.
-8. Worker records an attempt.
-9. Success marks the job `sent`.
-10. Failure schedules retry or marks the job `failed`.
-11. UI reads job and event state from PostgreSQL.
+4. `queueService` enqueues each job ID into BullMQ.
+5. API returns queued job IDs.
+6. BullMQ worker receives the job ID.
+7. Worker loads the PostgreSQL job row.
+8. `routingService` selects a healthy bot.
+9. Worker sends via the existing bot socket.
+10. Worker records an attempt.
+11. Success marks the PostgreSQL job `sent`.
+12. Failure schedules a delayed BullMQ retry or marks the PostgreSQL job `failed`.
+13. UI reads job and event state from PostgreSQL.
 
 ## Error Handling
 
 - No healthy bot: job becomes `retrying` until max attempts, then `failed`.
 - Send timeout or Baileys error: bot failure count increases, job retries with backoff.
 - Invalid group or rejected target: job fails without repeated retry once the error is classified as non-retryable.
-- Process restart: unlocked queued/retrying jobs remain durable and are picked up after restart.
-- Worker crash while sending: jobs locked too long are unlocked by a stale-lock recovery pass.
+- Process restart: BullMQ resumes queued/delayed jobs from Redis and backend startup requeues PostgreSQL `queued`/`retrying` jobs as reconciliation.
+- Redis container recreation: PostgreSQL startup reconciliation re-adds unresolved jobs to BullMQ.
+- Worker crash while sending: BullMQ retries the queue item; PostgreSQL attempt history records the actual send outcomes that completed far enough to report.
 
 ## Testing Strategy
 
@@ -327,12 +347,14 @@ Frontend tests can be lighter in this phase and focus on:
 ## Rollout Plan
 
 1. Add schema migrations to `backend/db/init.sql`.
-2. Add backend services and tests around queue, worker, retry, routing, health, and audit.
-3. Wire send routes to enqueue jobs.
-4. Start the worker and health monitor from `backend/index.js`.
-5. Add operations APIs.
-6. Update dashboard, bot management, failed requests, and logs/timeline UI.
-7. Run backend and frontend verification.
+2. Add Redis service, Redis volume, and backend `REDIS_URL` in `docker-compose.yml`.
+3. Add BullMQ dependency and Redis queue helper.
+4. Add backend services and tests around queue, worker, retry, routing, health, and audit.
+5. Wire send routes to enqueue jobs.
+6. Start the BullMQ worker, startup reconciliation, and health monitor from `backend/index.js`.
+7. Add operations APIs.
+8. Update dashboard, bot management, failed requests, and logs/timeline UI.
+9. Run backend, frontend, and Docker verification.
 
 ## Compatibility Notes
 

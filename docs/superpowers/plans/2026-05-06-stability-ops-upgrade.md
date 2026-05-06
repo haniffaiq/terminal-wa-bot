@@ -4,20 +4,24 @@
 
 **Goal:** Build durable WhatsApp delivery queueing, retry, bot health, smarter routing, audit timeline, and a support-oriented failure inbox.
 
-**Architecture:** Keep the current Express/PostgreSQL/Baileys architecture. Add focused backend services for queue, retry, health, routing, audit, and delivery worker; then wire existing send routes to enqueue jobs. Update the React dashboard to consume new operations APIs while keeping existing navigation and visual patterns.
+**Architecture:** Keep the current Express/PostgreSQL/Baileys architecture, add Redis as a Docker-managed queue runtime, and use BullMQ for delivery queueing and delayed retry execution. PostgreSQL remains the durable job/audit source of truth; Redis holds executable queue state and delayed jobs. Update the React dashboard to consume new operations APIs while keeping existing navigation and visual patterns.
 
-**Tech Stack:** Node.js, Express, PostgreSQL, Baileys, node:test, React, TypeScript, Vite, Tailwind, lucide-react.
+**Tech Stack:** Node.js, Express, PostgreSQL, Redis, BullMQ, Baileys, node:test, React, TypeScript, Vite, Tailwind, lucide-react.
 
 ---
 
 ## Docker Runtime Notes
 
 - The app runs through `docker-compose.yml`.
+- Redis must run as a Docker Compose service using `redis:7-alpine`.
+- Redis persistence must be enabled with append-only file mode and a named `redisdata` volume.
+- Backend must use `REDIS_URL=redis://redis:6379` in Docker.
 - Backend code must work inside container path `/app`.
 - Durable uploaded media jobs must store paths under mounted `backend/uploads`, because Docker mounts `./backend/uploads:/app/uploads`.
 - Database schema changes go into `backend/db/init.sql`; existing Docker volume `pgdata` will not replay init SQL automatically on an already-created database.
 - Final Docker verification should use `docker compose build backend frontend` and `docker compose up -d` when Docker is available.
 - For an existing deployed database, the same SQL additions from `init.sql` must be applied manually or through a migration before worker routes are used.
+- Backend startup must reconcile PostgreSQL `queued`/`retrying` jobs into Redis so Redis container recreation does not orphan jobs.
 
 ## Baseline State
 
@@ -30,14 +34,17 @@
 ## File Structure
 
 - Modify `backend/db/init.sql`: add operations tables and indexes.
-- Modify `backend/package.json`: add useful test script.
+- Modify `docker-compose.yml`: add Redis container, Redis volume, backend env, and backend dependency on Redis.
+- Modify `backend/package.json` and `backend/package-lock.json`: add useful test script and BullMQ dependency.
 - Create `backend/services/retryService.js`: retry classification and backoff policy.
+- Create `backend/services/redisQueue.js`: BullMQ Queue/Worker connection factory.
 - Create `backend/services/auditService.js`: operational event writer and list helper.
 - Create `backend/services/botHealthService.js`: bot health writes, stale detection, cooldown helpers.
 - Create `backend/services/routingService.js`: sticky route and healthy bot selection.
-- Create `backend/services/queueService.js`: enqueue, claim, status transitions, attempts, job list APIs.
-- Create `backend/services/deliveryWorker.js`: queue polling worker and stale lock recovery.
+- Create `backend/services/queueService.js`: create PostgreSQL job rows, enqueue BullMQ jobs, requeue unresolved jobs, status transitions, attempts, job list APIs.
+- Create `backend/services/deliveryWorker.js`: BullMQ worker, retry scheduling, and send state transitions.
 - Create `backend/services/messageSender.js`: payload-to-Baileys send adapter.
+- Create `backend/services/schemaService.js`: startup-safe operations schema migration for reused Docker `pgdata`.
 - Create `backend/routes/operations.js`: jobs, bot health, events, ops summary routes.
 - Modify `backend/bots/operationBot.js`: export bot socket access, emit health/audit events, integrate health on status changes.
 - Modify `backend/routes/webhook.js`: enqueue webhook sends.
@@ -190,6 +197,109 @@ Run: `rg -n "message_jobs|message_job_attempts|bot_health|operational_events|bot
 
 Expected: each table and indexes appear.
 
+## Task 2A: Redis Queue Runtime
+
+**Files:**
+- Modify: `docker-compose.yml`
+- Modify: `backend/package.json`
+- Modify: `backend/package-lock.json`
+- Create: `backend/services/redisQueue.js`
+
+- [ ] **Step 1: Add Redis Docker service**
+
+Add a `redis` service:
+
+```yaml
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    restart: unless-stopped
+```
+
+Add backend env:
+
+```yaml
+      - REDIS_URL=redis://redis:6379
+```
+
+Add backend `depends_on` entry for `redis`.
+
+Add top-level volume:
+
+```yaml
+  redisdata:
+```
+
+- [ ] **Step 2: Install BullMQ**
+
+Run from `backend/`:
+
+```bash
+npm install bullmq
+```
+
+Expected: `backend/package.json` and `backend/package-lock.json` update.
+
+- [ ] **Step 3: Create Redis queue helper**
+
+Create `backend/services/redisQueue.js` with:
+
+```js
+const { Queue, Worker, QueueEvents } = require('bullmq');
+
+const QUEUE_NAME = 'message-delivery';
+const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+
+function buildConnectionOptions(redisUrl = REDIS_URL) {
+    const url = new URL(redisUrl);
+    return {
+        host: url.hostname,
+        port: Number(url.port || 6379),
+        password: url.password || undefined
+    };
+}
+
+function createDeliveryQueue(options = {}) {
+    return new Queue(options.queueName || QUEUE_NAME, {
+        connection: options.connection || buildConnectionOptions(options.redisUrl)
+    });
+}
+
+function createDeliveryWorker(processor, options = {}) {
+    return new Worker(options.queueName || QUEUE_NAME, processor, {
+        connection: options.connection || buildConnectionOptions(options.redisUrl),
+        concurrency: options.concurrency || 1
+    });
+}
+
+function createDeliveryQueueEvents(options = {}) {
+    return new QueueEvents(options.queueName || QUEUE_NAME, {
+        connection: options.connection || buildConnectionOptions(options.redisUrl)
+    });
+}
+
+module.exports = {
+    QUEUE_NAME,
+    buildConnectionOptions,
+    createDeliveryQueue,
+    createDeliveryWorker,
+    createDeliveryQueueEvents
+};
+```
+
+- [ ] **Step 4: Verify**
+
+Run:
+
+```bash
+node --check services/redisQueue.js
+npm test
+```
+
+Expected: syntax passes and backend tests pass.
+
 ## Task 3: Queue, Audit, Health, Routing Services
 
 **Files:**
@@ -206,11 +316,11 @@ Test healthy sticky route reuse, cooldown exclusion, and lower load preference w
 
 - [ ] **Step 2: Write queue tests**
 
-Test target normalization, max 10 target validation, and text job payload shape with injected query function.
+Test target normalization, max 10 target validation, text job payload shape with injected query function, and that enqueue adds the created PostgreSQL job ID to the injected Redis/BullMQ queue adapter.
 
 - [ ] **Step 3: Implement services**
 
-Use CommonJS modules. Keep database writes behind injected `queryFn` options for unit testing.
+Use CommonJS modules. Keep database writes behind injected `queryFn` options and Redis queue writes behind an injected `deliveryQueue` option for unit testing.
 
 - [ ] **Step 4: Verify**
 
@@ -234,7 +344,7 @@ Support payload types:
 
 - [ ] **Step 2: Implement worker**
 
-Use `queueService.claimNextJob`, `routingService.selectBotForJob`, `messageSender.sendJob`, `queueService.recordAttempt`, and retry policy.
+Use BullMQ `Worker` from `redisQueue.createDeliveryWorker`, `queueService.getJob`, `routingService.selectBotForJob`, `messageSender.sendJob`, `queueService.recordAttempt`, and retry policy. On retryable failure, update PostgreSQL status to `retrying` and enqueue a delayed BullMQ job for the same PostgreSQL job ID.
 
 - [ ] **Step 3: Verify syntax**
 
@@ -246,6 +356,7 @@ Expected: both pass.
 
 **Files:**
 - Create: `backend/routes/operations.js`
+- Create: `backend/services/schemaService.js`
 - Modify: `backend/routes/webhook.js`
 - Modify: `backend/utils/scheduler.js`
 - Modify: `backend/index.js`
@@ -272,7 +383,7 @@ Make `/api/send-message`, `/api/send-media`, `/api/send-media-from-url`, webhook
 
 - [ ] **Step 3: Start worker and health monitor**
 
-Call `startDeliveryWorker()` and `startBotHealthMonitor()` from `backend/index.js`.
+Call `ensureOperationsSchema()`, `requeuePendingJobs()`, `startDeliveryWorker()`, and `startBotHealthMonitor()` from `backend/index.js` in that order.
 
 - [ ] **Step 4: Add startup schema migration**
 
@@ -343,13 +454,13 @@ Expected: PASS.
 
 Run: `docker compose build backend frontend`
 
-Expected: backend and frontend images build without errors.
+Expected: backend and frontend images build without errors. Backend image must include BullMQ dependency.
 
 - [ ] **Step 5: Docker start**
 
 Run: `docker compose up -d`
 
-Expected: `db`, `backend`, and `frontend` services start. Backend startup must apply the operations schema to an existing Docker database; do not rely only on fresh `backend/db/init.sql`, because reused `pgdata` volumes will not replay it.
+Expected: `db`, `redis`, `backend`, and `frontend` services start. Backend startup must apply the operations schema to an existing Docker database; do not rely only on fresh `backend/db/init.sql`, because reused `pgdata` volumes will not replay it. Redis must persist data through the `redisdata` volume.
 
 - [ ] **Step 6: Git review**
 
