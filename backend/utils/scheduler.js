@@ -7,36 +7,49 @@ const jobs = {};
 async function sendScheduledMessage(schedule) {
     const { id, tenant_id, target_numbers, message } = schedule;
     const targets = typeof target_numbers === 'string' ? JSON.parse(target_numbers) : target_numbers;
+    const transactionId = `SCH-${id}-${Date.now()}`;
+    const queuedJobs = [];
     const failures = [];
 
     for (const groupId of targets) {
         try {
-            await queueService.enqueueMessageJob({
+            const job = await queueService.enqueueMessageJob({
                 tenantId: tenant_id,
                 source: 'schedule',
                 type: 'text',
                 targetId: groupId,
                 payload: {
                     message,
-                    transactionId: `SCH-${id}-${Date.now()}`
+                    transactionId
                 }
             });
+            queuedJobs.push(job);
         } catch (err) {
             console.error(`[Scheduler] Failed to queue ${groupId}:`, err.message);
             failures.push({ groupId, error: err.message });
         }
     }
 
-    if (failures.length > 0) {
+    if (queuedJobs.length === 0 && failures.length > 0) {
         throw new Error(`Failed to queue ${failures.length} scheduled target(s)`);
+    }
+
+    if (failures.length > 0) {
+        console.error(`[Scheduler] Schedule ${id} partially queued ${queuedJobs.length}/${targets.length} target(s)`);
     }
 
     await query('UPDATE scheduled_messages SET last_run_at = NOW() WHERE id = $1', [id]);
 
-    if (schedule.schedule_type === 'once') {
+    if (schedule.schedule_type === 'once' && failures.length === 0) {
         await query('UPDATE scheduled_messages SET is_active = FALSE WHERE id = $1', [id]);
         delete jobs[id];
     }
+
+    return {
+        queued: queuedJobs.length,
+        failed: failures.length,
+        failures
+    };
 }
 
 function runScheduledMessage(schedule) {

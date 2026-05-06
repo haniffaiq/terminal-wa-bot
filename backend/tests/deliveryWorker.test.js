@@ -116,6 +116,71 @@ test('processDeliveryJob marks sending, sends, records success, and marks sent',
     ]);
 });
 
+test('processDeliveryJob returns cleanup error reported by successful send', async () => {
+    const sock = { id: 'sock-a' };
+    const sendingJob = {
+        ...baseDbJob,
+        type: 'media_upload',
+        status: 'sending',
+        attempt_count: 1,
+        payload: { filePath: '/app/uploads/photo.jpg' }
+    };
+    const queueService = {
+        async getMessageJob() {
+            return baseDbJob;
+        },
+        async markJobSending() {
+            return sendingJob;
+        },
+        async recordAttempt() {},
+        async markJobSent(payload) {
+            return { ...sendingJob, status: 'sent', selected_bot_id: payload.botId };
+        }
+    };
+
+    const result = await processDeliveryJob(
+        { data: { jobId: 'job-1', tenantId: 'tenant-1' } },
+        {
+            queueService,
+            routingService: {
+                async selectBotForGroup() {
+                    return { botId: 'bot-a', sock };
+                },
+                async recordRouteSuccess() {}
+            },
+            botHealthService: {
+                async markSuccess() {}
+            },
+            messageSender: {
+                async sendJob() {
+                    return {
+                        responseTimeSeconds: 1.25,
+                        cleanup: {
+                            attempted: true,
+                            deleted: false,
+                            filePath: '/app/uploads/photo.jpg',
+                            error: 'permission denied'
+                        }
+                    };
+                }
+            },
+            deliveryQueue: createDeliveryQueue(),
+            workerId: 'worker-1'
+        }
+    );
+
+    assert.deepEqual(result, {
+        status: 'sent',
+        jobId: 'job-1',
+        cleanupError: {
+            attempted: true,
+            deleted: false,
+            filePath: '/app/uploads/photo.jpg',
+            error: 'permission denied'
+        }
+    });
+});
+
 test('processDeliveryJob records no-bot failure and schedules delayed retry', async () => {
     const calls = [];
     const deliveryQueue = createDeliveryQueue();

@@ -19,6 +19,9 @@ const logger = pino({
 let operationBots = {};
 let groupBots = {};
 let groupCache = {};
+let routingReadyAt = {};
+let routingWaiters = [];
+let routingExpectedBots = {};
 const reconnectTimers = {};
 const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_DELAY = 10000;
@@ -28,6 +31,92 @@ function ensureTenant(tenantId) {
     if (!operationBots[tenantId]) operationBots[tenantId] = {};
     if (!groupBots[tenantId]) groupBots[tenantId] = {};
     if (!groupCache[tenantId]) groupCache[tenantId] = new Map();
+    if (!routingExpectedBots[tenantId]) routingExpectedBots[tenantId] = new Set();
+}
+
+function getTimerTenants() {
+    return Object.keys(reconnectTimers)
+        .map(key => key.split(':')[0])
+        .filter(Boolean);
+}
+
+function getRoutingTenantIds() {
+    return [...new Set([
+        ...Object.keys(operationBots),
+        ...Object.keys(groupBots),
+        ...Object.keys(groupCache),
+        ...Object.keys(routingExpectedBots),
+        ...getTimerTenants()
+    ])];
+}
+
+function hasExpectedRoutingBot(tenantId) {
+    if (!tenantId) return false;
+    if (Object.keys(operationBots[tenantId] || {}).length > 0) return true;
+    if (routingExpectedBots[tenantId] && routingExpectedBots[tenantId].size > 0) return true;
+
+    return Object.keys(reconnectTimers).some(key => key.startsWith(`${tenantId}:`) && reconnectTimers[key]);
+}
+
+function isRoutingReady(tenantId = null) {
+    if (tenantId) {
+        if (!hasExpectedRoutingBot(tenantId)) return true;
+        return Boolean(routingReadyAt[tenantId]);
+    }
+
+    const tenantIds = getRoutingTenantIds();
+    if (tenantIds.length === 0) return true;
+    return tenantIds.every(id => isRoutingReady(id));
+}
+
+function resolveRoutingWaiters() {
+    const remaining = [];
+    for (const waiter of routingWaiters) {
+        if (isRoutingReady(waiter.tenantId)) {
+            clearTimeout(waiter.timer);
+            waiter.resolve({ ready: true, timedOut: false });
+        } else {
+            remaining.push(waiter);
+        }
+    }
+    routingWaiters = remaining;
+}
+
+function markRoutingExpected(tenantId, botId) {
+    if (!tenantId || !botId) return;
+    ensureTenant(tenantId);
+    routingExpectedBots[tenantId].add(botId);
+    resolveRoutingWaiters();
+}
+
+function clearRoutingExpected(tenantId, botId) {
+    if (!tenantId || !botId || !routingExpectedBots[tenantId]) return;
+    routingExpectedBots[tenantId].delete(botId);
+    resolveRoutingWaiters();
+}
+
+function markRoutingReady(tenantId) {
+    if (!tenantId) return;
+    routingReadyAt[tenantId] = Date.now();
+    resolveRoutingWaiters();
+}
+
+function waitForRoutingReady({ tenantId = null, timeoutMs = 30000 } = {}) {
+    if (isRoutingReady(tenantId)) {
+        return Promise.resolve({ ready: true, timedOut: false });
+    }
+
+    return new Promise(resolve => {
+        const waiter = {
+            tenantId,
+            resolve,
+            timer: setTimeout(() => {
+                routingWaiters = routingWaiters.filter(item => item !== waiter);
+                resolve({ ready: isRoutingReady(tenantId), timedOut: true });
+            }, Math.max(0, timeoutMs))
+        };
+        routingWaiters.push(waiter);
+    });
 }
 
 // DB-based bot status
@@ -100,6 +189,10 @@ async function updateGroupCache(botId, sock, tenantId) {
             }
         });
         logger.info(`[${botId}] Registered in ${groups.length} groups (tenant ${tenantId})`);
+        if (operationBots[tenantId]?.[botId] || routingExpectedBots[tenantId]?.has(botId)) {
+            markRoutingReady(tenantId);
+            clearRoutingExpected(tenantId, botId);
+        }
     } catch (err) {
         logger.error(`[${botId}] Failed to fetch groups: ${err.message}`);
     }
@@ -121,6 +214,7 @@ async function connectBot(botId, opts = {}) {
     }
 
     ensureTenant(tenantId);
+    markRoutingExpected(tenantId, botId);
 
     if (reconnectTimers[timerKey] === 'connecting') {
         logger.warn(`[${botId}] Already connecting, skipping.`);
@@ -130,6 +224,7 @@ async function connectBot(botId, opts = {}) {
     if (attempt >= MAX_RECONNECT_ATTEMPTS) {
         logger.error(`[${botId}] Max reconnect attempts reached.`);
         await updateBotStatus(botId, 'close', tenantId);
+        clearRoutingExpected(tenantId, botId);
         return null;
     }
 
@@ -194,6 +289,7 @@ async function connectBot(botId, opts = {}) {
 
                 if (statusCode === DisconnectReason.loggedOut) {
                     logger.error(`[${botId}] Logged out. Session cleared.`);
+                    clearRoutingExpected(tenantId, botId);
                     const sessFolder = path.join(__dirname, '..', 'auth_sessions', tenantId, botId);
                     if (fs.existsSync(sessFolder)) {
                         fs.rmSync(sessFolder, { recursive: true, force: true });
@@ -246,6 +342,7 @@ async function reconnectSingleBotAPI(botId, tenantId) {
 async function startOperationBotAPI(botId, tenantId) {
     if (!tenantId) return null;
     ensureTenant(tenantId);
+    markRoutingExpected(tenantId, botId);
     let qrBase64 = null;
 
     try {
@@ -276,6 +373,8 @@ async function startOperationBotAPI(botId, tenantId) {
                 await updateBotStatus(botId, 'close', tenantId);
                 if (statusCode !== DisconnectReason.loggedOut) {
                     setTimeout(() => connectBot(botId, { tenantId }), RECONNECT_DELAY);
+                } else {
+                    clearRoutingExpected(tenantId, botId);
                 }
             }
         });
@@ -288,6 +387,7 @@ async function startOperationBotAPI(botId, tenantId) {
         });
     } catch (error) {
         logger.error(`[${botId}] API start error: ${error.message}`);
+        clearRoutingExpected(tenantId, botId);
         return null;
     }
 }
@@ -376,6 +476,7 @@ async function disconnectBotForce(botId, tenantId) {
         await operationBots[tenantId][botId].end();
         delete operationBots[tenantId][botId];
         await updateBotStatus(botId, 'close', tenantId);
+        clearRoutingExpected(tenantId, botId);
         return { success: true, message: 'Disconnected' };
     } catch (err) {
         return { success: false, message: 'Failed to disconnect', error: err.toString() };
@@ -427,6 +528,7 @@ async function stopOperationBot(botId, tenantId) {
         try { await operationBots[tenantId][botId].end(); } catch (err) {}
         delete operationBots[tenantId][botId];
     }
+    clearRoutingExpected(tenantId, botId);
 
     // Remove from group cache
     if (groupBots[tenantId]) {
@@ -475,5 +577,23 @@ module.exports = {
     getNextBotForIndividual,
     getAllGroups,
     updateGroupCache,
-    updateBotStatus
+    updateBotStatus,
+    waitForRoutingReady,
+    isRoutingReady,
+    __markRoutingExpectedForTests: markRoutingExpected,
+    __resetRoutingReadinessForTests() {
+        operationBots = {};
+        groupBots = {};
+        groupCache = {};
+        routingReadyAt = {};
+        routingWaiters.forEach(waiter => clearTimeout(waiter.timer));
+        routingWaiters = [];
+        routingExpectedBots = {};
+        for (const key of Object.keys(reconnectTimers)) {
+            if (reconnectTimers[key] && reconnectTimers[key] !== 'connecting') {
+                clearTimeout(reconnectTimers[key]);
+            }
+            delete reconnectTimers[key];
+        }
+    }
 };

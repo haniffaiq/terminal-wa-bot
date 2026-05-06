@@ -10,7 +10,7 @@ const db = require("./utils/db");
 const util = require('util')
 
 const operationBot = require('./bots/operationBot');
-const { getOperationSock, getNextBotForGroup, reconnectBot, startOperationBotAPI, getBotStatusList, disconnectBotForce, reconnectSingleBotAPI, getNextBotForIndividual, stopOperationBot, getAllGroups } = operationBot;
+const { getOperationSock, getNextBotForGroup, reconnectBot, startOperationBotAPI, getBotStatusList, disconnectBotForce, reconnectSingleBotAPI, getNextBotForIndividual, stopOperationBot, getAllGroups, waitForRoutingReady } = operationBot;
 const { authMiddleware } = require('./utils/midleware');
 const authRoutes = require('./routes/auth');
 const tenantRoutes = require('./routes/tenants');
@@ -865,7 +865,7 @@ async function enqueueMediaUploadJobs({ tenantId, targets, file, caption, transa
 
     const jobs = [];
     const copiedFiles = [];
-    const queuedFiles = new Set();
+    const enqueueAttemptedFiles = new Set();
 
     try {
         for (const [index, targetId] of targets.entries()) {
@@ -873,6 +873,7 @@ async function enqueueMediaUploadJobs({ tenantId, targets, file, caption, transa
             await fs.promises.copyFile(file.path, targetFilePath);
             copiedFiles.push(targetFilePath);
 
+            enqueueAttemptedFiles.add(targetFilePath);
             const job = await queueService.enqueueMessageJob({
                 tenantId,
                 source: 'api',
@@ -885,12 +886,11 @@ async function enqueueMediaUploadJobs({ tenantId, targets, file, caption, transa
                     transactionId
                 }
             });
-            queuedFiles.add(targetFilePath);
             jobs.push(job);
         }
     } catch (error) {
         for (const copiedFile of copiedFiles) {
-            if (queuedFiles.has(copiedFile)) continue;
+            if (enqueueAttemptedFiles.has(copiedFile)) continue;
             await cleanupUploadedRequestFile({ path: copiedFile }, transactionId);
         }
         throw error;
@@ -906,6 +906,7 @@ app.post('/api/send-media', upload.single('file'), async (req, res) => {
 
     let { number, message, caption } = req.body;
     const file = req.file;
+    let mediaEnqueueStarted = false;
 
     if (!number || !file) {
         logger('error', `[${transactionId}] REQ missing required params: number and file`);
@@ -924,6 +925,7 @@ app.post('/api/send-media', upload.single('file'), async (req, res) => {
 
     try {
         const targets = await normalizeQueuedTargets(number, transactionId);
+        mediaEnqueueStarted = true;
         const jobs = await enqueueMediaUploadJobs({
             tenantId: req.user.tenantId,
             targets,
@@ -947,7 +949,9 @@ app.post('/api/send-media', upload.single('file'), async (req, res) => {
 
     } catch (error) {
         logger('error', `[${transactionId}] QUEUE media_upload status=FAIL error="${error.message}"`);
-        await cleanupUploadedRequestFile(file, transactionId);
+        if (!mediaEnqueueStarted) {
+            await cleanupUploadedRequestFile(file, transactionId);
+        }
         res.status(400).json({ success: false, error: `Failed to queue media: ${error.message}`, transaction_id: transactionId });
     }
 });
@@ -1288,14 +1292,11 @@ function getDeliveryWorkerStartDelayMs(env = process.env) {
     return env.NODE_ENV === 'production' ? 30000 : 0;
 }
 
-function delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
 async function startDeliveryWorkerAfterWarmup({ delayMs, routingService }) {
-    logger('info', `[DeliveryWorker] startup warm-up delay=${delayMs}ms`);
-    if (delayMs > 0) {
-        await delay(delayMs);
+    logger('info', `[DeliveryWorker] waiting for routing readiness timeout=${delayMs}ms`);
+    const readiness = await waitForRoutingReady({ timeoutMs: delayMs });
+    if (readiness.timedOut && !readiness.ready) {
+        logger('warn', `[DeliveryWorker] routing readiness timed out after ${delayMs}ms; starting with current route cache`);
     }
 
     await queueService.requeuePendingJobs();

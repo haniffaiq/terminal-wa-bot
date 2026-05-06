@@ -189,6 +189,7 @@ async function processDeliveryJob(bullJob, deps) {
             sock: route.sock
         });
         const responseTimeSeconds = result.responseTimeSeconds;
+        const cleanupError = result.cleanup && result.cleanup.error ? result.cleanup : null;
 
         await queueService.recordAttempt({
             jobId,
@@ -222,7 +223,20 @@ async function processDeliveryJob(bullJob, deps) {
             botId: route.botId
         });
 
-        return { status: 'sent', jobId };
+        if (cleanupError) {
+            console.warn('Delivery job media cleanup failed', {
+                jobId,
+                tenantId: sendingJob.tenant_id,
+                filePath: cleanupError.filePath,
+                error: cleanupError.error
+            });
+        }
+
+        return {
+            status: 'sent',
+            jobId,
+            ...(cleanupError ? { cleanupError } : {})
+        };
     } catch (error) {
         return handleFailure({
             sendingJob,
