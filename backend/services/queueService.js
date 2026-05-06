@@ -1,21 +1,21 @@
 const { query } = require('../utils/db');
 const { createDeliveryQueue } = require('./redisQueue');
 
+function normalizeTargets(targets) {
+    const normalized = Array.isArray(targets) ? targets : [targets];
+    const targetIds = normalized
+        .map(target => typeof target === 'string' ? target.trim() : target)
+        .filter(target => target);
+
+    if (targetIds.length === 0) {
+        throw new Error('At least one target is required');
+    }
+
+    return targetIds;
+}
+
 function createQueueService({ queryFn = query, deliveryQueue, auditService } = {}) {
     const executableQueue = deliveryQueue || createDeliveryQueue();
-
-    function normalizeTargets(targets) {
-        const normalized = Array.isArray(targets) ? targets : [targets];
-        const targetIds = normalized
-            .map(target => typeof target === 'string' ? target.trim() : target)
-            .filter(target => target);
-
-        if (targetIds.length === 0) {
-            throw new Error('At least one target is required');
-        }
-
-        return targetIds;
-    }
 
     async function addExecutableJob(row, priority, jobId = row.id) {
         return executableQueue.add(
@@ -274,6 +274,25 @@ function createQueueService({ queryFn = query, deliveryQueue, auditService } = {
     };
 }
 
+let defaultQueueService;
+
+function getDefaultQueueService() {
+    if (!defaultQueueService) {
+        defaultQueueService = createQueueService();
+    }
+    return defaultQueueService;
+}
+
 module.exports = {
-    createQueueService
+    createQueueService,
+    normalizeTargets,
+    enqueueMessageJob: (...args) => getDefaultQueueService().enqueueMessageJob(...args),
+    enqueueBulkMessageJobs: (...args) => getDefaultQueueService().enqueueBulkMessageJobs(...args),
+    getMessageJob: (...args) => getDefaultQueueService().getMessageJob(...args),
+    listMessageJobs: (...args) => getDefaultQueueService().listMessageJobs(...args),
+    markJobSending: (...args) => getDefaultQueueService().markJobSending(...args),
+    recordAttempt: (...args) => getDefaultQueueService().recordAttempt(...args),
+    markJobSent: (...args) => getDefaultQueueService().markJobSent(...args),
+    markJobFailed: (...args) => getDefaultQueueService().markJobFailed(...args),
+    requeuePendingJobs: (...args) => getDefaultQueueService().requeuePendingJobs(...args)
 };

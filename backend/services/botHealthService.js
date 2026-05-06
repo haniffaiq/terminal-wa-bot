@@ -186,6 +186,23 @@ function createBotHealthService({ queryFn = query } = {}) {
     };
 }
 
+let defaultBotHealthService;
+
+function getDefaultBotHealthService() {
+    if (!defaultBotHealthService) {
+        defaultBotHealthService = createBotHealthService();
+    }
+    return defaultBotHealthService;
+}
+
 module.exports = {
-    createBotHealthService
+    createBotHealthService,
+    upsertBotHealth: (...args) => getDefaultBotHealthService().upsertBotHealth(...args),
+    markOnline: (...args) => getDefaultBotHealthService().markOnline(...args),
+    markOffline: (...args) => getDefaultBotHealthService().markOffline(...args),
+    markReconnect: (...args) => getDefaultBotHealthService().markReconnect(...args),
+    markFailure: (...args) => getDefaultBotHealthService().markFailure(...args),
+    markSuccess: (...args) => getDefaultBotHealthService().markSuccess(...args),
+    getBotHealth: (...args) => getDefaultBotHealthService().getBotHealth(...args),
+    listBotHealth: (...args) => getDefaultBotHealthService().listBotHealth(...args)
 };

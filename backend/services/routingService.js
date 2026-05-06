@@ -116,6 +116,19 @@ function createRoutingService({ queryFn = query, socketRegistry } = {}) {
     };
 }
 
+let defaultRoutingService;
+
+function getDefaultRoutingService() {
+    if (!defaultRoutingService) {
+        defaultRoutingService = createRoutingService();
+    }
+    return defaultRoutingService;
+}
+
 module.exports = {
-    createRoutingService
+    createRoutingService,
+    selectBotForGroup: (...args) => getDefaultRoutingService().selectBotForGroup(...args),
+    recordRouteSuccess: (...args) => getDefaultRoutingService().recordRouteSuccess(...args),
+    recordRouteFailure: (...args) => getDefaultRoutingService().recordRouteFailure(...args),
+    clearRoute: (...args) => getDefaultRoutingService().clearRoute(...args)
 };

@@ -114,6 +114,20 @@ function createAuditService({ queryFn = query } = {}) {
     };
 }
 
+let defaultAuditService;
+
+function getDefaultAuditService() {
+    if (!defaultAuditService) {
+        defaultAuditService = createAuditService();
+    }
+    return defaultAuditService;
+}
+
 module.exports = {
-    createAuditService
+    createAuditService,
+    logEvent: (...args) => getDefaultAuditService().logEvent(...args),
+    logJobQueued: (...args) => getDefaultAuditService().logJobQueued(...args),
+    logJobSent: (...args) => getDefaultAuditService().logJobSent(...args),
+    logJobFailed: (...args) => getDefaultAuditService().logJobFailed(...args),
+    logBotHealthChanged: (...args) => getDefaultAuditService().logBotHealthChanged(...args)
 };
