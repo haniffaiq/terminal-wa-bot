@@ -113,7 +113,7 @@ CREATE TABLE IF NOT EXISTS webhook_keys (
 -- Message jobs
 CREATE TABLE IF NOT EXISTS message_jobs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     source VARCHAR(30) NOT NULL,
     type VARCHAR(20) NOT NULL,
     target_id VARCHAR(100) NOT NULL,
@@ -130,27 +130,37 @@ CREATE TABLE IF NOT EXISTS message_jobs (
     response_time_seconds NUMERIC,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
-    sent_at TIMESTAMP
+    sent_at TIMESTAMP,
+    CONSTRAINT chk_message_jobs_source CHECK (source IN ('api', 'webhook', 'schedule', 'manual_retry')),
+    CONSTRAINT chk_message_jobs_type CHECK (type IN ('text', 'media_upload', 'media_url')),
+    CONSTRAINT chk_message_jobs_status CHECK (status IN ('queued', 'sending', 'sent', 'retrying', 'failed', 'resolved', 'ignored')),
+    CONSTRAINT chk_message_jobs_priority CHECK (priority >= 0),
+    CONSTRAINT chk_message_jobs_attempt_count CHECK (attempt_count >= 0),
+    CONSTRAINT chk_message_jobs_max_attempts CHECK (max_attempts > 0),
+    CONSTRAINT chk_message_jobs_response_time_seconds CHECK (response_time_seconds IS NULL OR response_time_seconds >= 0)
 );
 
 -- Message job attempts
 CREATE TABLE IF NOT EXISTS message_job_attempts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    job_id UUID REFERENCES message_jobs(id) ON DELETE CASCADE,
-    tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
+    job_id UUID NOT NULL REFERENCES message_jobs(id) ON DELETE CASCADE,
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     attempt_number INTEGER NOT NULL,
     bot_id VARCHAR(100),
     status VARCHAR(20) NOT NULL,
     error TEXT,
     started_at TIMESTAMP DEFAULT NOW(),
     finished_at TIMESTAMP,
-    response_time_seconds NUMERIC
+    response_time_seconds NUMERIC,
+    CONSTRAINT chk_message_job_attempts_attempt_number CHECK (attempt_number > 0),
+    CONSTRAINT chk_message_job_attempts_status CHECK (status IN ('sending', 'sent', 'failed')),
+    CONSTRAINT chk_message_job_attempts_response_time_seconds CHECK (response_time_seconds IS NULL OR response_time_seconds >= 0)
 );
 
 -- Bot health
 CREATE TABLE IF NOT EXISTS bot_health (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     bot_id VARCHAR(100) NOT NULL,
     status VARCHAR(30) NOT NULL DEFAULT 'unknown',
     last_seen_at TIMESTAMP,
@@ -160,13 +170,16 @@ CREATE TABLE IF NOT EXISTS bot_health (
     cooldown_until TIMESTAMP,
     last_error TEXT,
     updated_at TIMESTAMP DEFAULT NOW(),
+    CONSTRAINT chk_bot_health_status CHECK (status IN ('online', 'offline', 'reconnecting', 'qr_required', 'cooldown', 'unknown')),
+    CONSTRAINT chk_bot_health_reconnect_count CHECK (reconnect_count >= 0),
+    CONSTRAINT chk_bot_health_consecutive_failures CHECK (consecutive_failures >= 0),
     UNIQUE(tenant_id, bot_id)
 );
 
 -- Operational events
 CREATE TABLE IF NOT EXISTS operational_events (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     actor_type VARCHAR(30) NOT NULL DEFAULT 'system',
     actor_id VARCHAR(100),
     event_type VARCHAR(60) NOT NULL,
@@ -175,17 +188,20 @@ CREATE TABLE IF NOT EXISTS operational_events (
     entity_id VARCHAR(100),
     message TEXT NOT NULL,
     metadata JSONB,
-    created_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMP DEFAULT NOW(),
+    CONSTRAINT chk_operational_events_actor_type CHECK (actor_type IN ('system', 'user', 'webhook', 'schedule', 'worker')),
+    CONSTRAINT chk_operational_events_severity CHECK (severity IN ('info', 'warning', 'error'))
 );
 
 -- Bot group routes
 CREATE TABLE IF NOT EXISTS bot_group_routes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     group_id VARCHAR(100) NOT NULL,
     bot_id VARCHAR(100) NOT NULL,
     last_used_at TIMESTAMP DEFAULT NOW(),
     failure_count INTEGER DEFAULT 0,
+    CONSTRAINT chk_bot_group_routes_failure_count CHECK (failure_count >= 0),
     UNIQUE(tenant_id, group_id)
 );
 

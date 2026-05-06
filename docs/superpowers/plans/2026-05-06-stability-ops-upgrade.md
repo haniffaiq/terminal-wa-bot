@@ -274,7 +274,11 @@ Make `/api/send-message`, `/api/send-media`, `/api/send-media-from-url`, webhook
 
 Call `startDeliveryWorker()` and `startBotHealthMonitor()` from `backend/index.js`.
 
-- [ ] **Step 4: Verify backend syntax**
+- [ ] **Step 4: Add startup schema migration**
+
+Backend startup must apply the operations schema to existing Docker databases, because reused `pgdata` volumes will not replay `backend/db/init.sql`. Add a startup-safe migration before worker routes depend on the operations tables.
+
+- [ ] **Step 5: Verify backend syntax**
 
 Run: `node --check index.js`, `node --check routes/operations.js`, and `npm test`.
 
@@ -345,7 +349,7 @@ Expected: backend and frontend images build without errors.
 
 Run: `docker compose up -d`
 
-Expected: `db`, `backend`, and `frontend` services start. If an existing `pgdata` volume is reused, schema additions from `backend/db/init.sql` still need to be applied to the running database.
+Expected: `db`, `backend`, and `frontend` services start. Backend startup must apply the operations schema to an existing Docker database; do not rely only on fresh `backend/db/init.sql`, because reused `pgdata` volumes will not replay it.
 
 - [ ] **Step 6: Git review**
 
