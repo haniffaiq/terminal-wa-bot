@@ -8,12 +8,18 @@ async function seedSuperAdmin(retries = 10) {
     for (let i = 0; i < retries; i++) {
         try {
             const existing = await query('SELECT id FROM users WHERE role = $1', ['super_admin']);
+            const hash = await hashPassword(password);
             if (existing.rows.length > 0) {
-                console.log('Super admin already exists.');
+                await query(
+                    `UPDATE users
+                     SET username = $1, password_hash = $2, is_active = true
+                     WHERE id = $3`,
+                    [username, hash, existing.rows[0].id]
+                );
+                console.log(`Super admin updated: ${username}`);
                 return;
             }
 
-            const hash = await hashPassword(password);
             await query(
                 `INSERT INTO users (username, password_hash, role, tenant_id)
                  VALUES ($1, $2, 'super_admin', NULL)`,

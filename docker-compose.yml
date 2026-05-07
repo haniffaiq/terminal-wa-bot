@@ -7,7 +7,7 @@ services:
     environment:
       - POSTGRES_DB=wabot
       - POSTGRES_USER=wabot
-      - POSTGRES_PASSWORD=wabot123
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-wabot123}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./backend/db/init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -33,10 +33,10 @@ services:
       - DB_PORT=5431
       - DB_NAME=wabot
       - DB_USER=wabot
-      - DB_PASSWORD=wabot123
-      - JWT_SECRET=your-secret-here-change-in-production
-      - SUPER_ADMIN_USER=admin
-      - SUPER_ADMIN_PASSWORD=admin123
+      - DB_PASSWORD=${DB_PASSWORD:-wabot123}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set in .env}
+      - SUPER_ADMIN_USER=${SUPER_ADMIN_USER:-admin}
+      - SUPER_ADMIN_PASSWORD=${SUPER_ADMIN_PASSWORD:?SUPER_ADMIN_PASSWORD must be set in .env}
       - REDIS_URL=redis://redis:6379
     depends_on:
       - db
