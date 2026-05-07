@@ -297,7 +297,6 @@ function registerGroupCacheRefreshHandlers(botId, sock, tenantId, scheduleFn = s
     const refresh = (reason) => () => scheduleFn(botId, sock, tenantId, reason);
 
     sock.ev.on('groups.upsert', refresh('groups.upsert'));
-    sock.ev.on('groups.update', refresh('groups.update'));
     sock.ev.on('group-participants.update', refresh('group-participants.update'));
 }
 

@@ -125,7 +125,7 @@ test('updateGroupCache refreshes invited groups and removes stale bot membership
     ]);
 });
 
-test('group event handlers schedule cache refresh after bot is invited or group changes', () => {
+test('group event handlers schedule cache refresh after bot is invited', () => {
     const registered = {};
     const scheduled = [];
     const sock = {
@@ -146,14 +146,12 @@ test('group event handlers schedule cache refresh after bot is invited or group 
     );
 
     registered['groups.upsert']([{ id: 'new@g.us' }]);
-    registered['groups.update']([{ id: 'new@g.us' }]);
     registered['group-participants.update']({ id: 'new@g.us', action: 'add' });
 
     assert.deepEqual(
         scheduled.map(item => [item.botId, item.tenantId, item.reason]),
         [
             ['bot-1', 'tenant-1', 'groups.upsert'],
-            ['bot-1', 'tenant-1', 'groups.update'],
             ['bot-1', 'tenant-1', 'group-participants.update']
         ]
     );
