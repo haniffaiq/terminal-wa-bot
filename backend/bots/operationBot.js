@@ -42,6 +42,7 @@ function createOperationSocketGenerationTracker() {
 }
 
 const operationSocketGenerations = createOperationSocketGenerationTracker();
+const groupRefreshTimers = {};
 
 // Helper: ensure tenant maps exist
 function ensureTenant(tenantId) {
@@ -227,6 +228,22 @@ async function updateGroupCache(botId, sock, tenantId) {
     ensureTenant(tenantId);
     try {
         const groups = Object.values(await sock.groupFetchAllParticipating());
+        const activeGroupIds = new Set(groups.map(group => group.id));
+
+        for (const groupId of Object.keys(groupBots[tenantId])) {
+            groupBots[tenantId][groupId] = groupBots[tenantId][groupId].filter(id => id !== botId);
+            if (groupBots[tenantId][groupId].length === 0) {
+                delete groupBots[tenantId][groupId];
+            }
+        }
+
+        for (const [groupId, cachedGroup] of groupCache[tenantId].entries()) {
+            cachedGroup.bots = (cachedGroup.bots || []).filter(id => id !== botId);
+            if (!activeGroupIds.has(groupId) && cachedGroup.bots.length === 0) {
+                groupCache[tenantId].delete(groupId);
+            }
+        }
+
         groups.forEach((group) => {
             if (!groupBots[tenantId][group.id]) groupBots[tenantId][group.id] = [];
             if (!groupBots[tenantId][group.id].includes(botId)) groupBots[tenantId][group.id].push(botId);
@@ -254,6 +271,45 @@ async function updateGroupCache(botId, sock, tenantId) {
     } catch (err) {
         logger.error(`[${botId}] Failed to fetch groups: ${err.message}`);
     }
+}
+
+function scheduleGroupCacheRefresh(botId, sock, tenantId, reason = 'group-event', delayMs = 1000) {
+    if (!botId || !sock || !tenantId) return;
+    const timerKey = `${tenantId}:${botId}`;
+
+    if (groupRefreshTimers[timerKey]) {
+        clearTimeout(groupRefreshTimers[timerKey]);
+    }
+
+    groupRefreshTimers[timerKey] = setTimeout(async () => {
+        delete groupRefreshTimers[timerKey];
+        logger.info(`[${botId}] Refreshing group cache after ${reason} (tenant ${tenantId})`);
+        await updateGroupCache(botId, sock, tenantId);
+    }, delayMs);
+
+    if (typeof groupRefreshTimers[timerKey].unref === 'function') {
+        groupRefreshTimers[timerKey].unref();
+    }
+}
+
+function registerGroupCacheRefreshHandlers(botId, sock, tenantId, scheduleFn = scheduleGroupCacheRefresh) {
+    if (!sock?.ev?.on) return;
+    const refresh = (reason) => () => scheduleFn(botId, sock, tenantId, reason);
+
+    sock.ev.on('groups.upsert', refresh('groups.upsert'));
+    sock.ev.on('groups.update', refresh('groups.update'));
+    sock.ev.on('group-participants.update', refresh('group-participants.update'));
+}
+
+async function refreshGroupCache(tenantId) {
+    ensureTenant(tenantId);
+    const activeBots = Object.entries(operationBots[tenantId] || {});
+
+    for (const [botId, sock] of activeBots) {
+        await updateGroupCache(botId, sock, tenantId);
+    }
+
+    return getAllGroups(tenantId);
 }
 
 function getAllGroups(tenantId) {
@@ -315,6 +371,7 @@ async function connectBot(botId, opts = {}) {
     try {
         logger.info(`[${botId}] Connecting (attempt ${attempt + 1}, tenant ${tenantId})...`);
         const { sock } = await createSock(botId, tenantId);
+        registerGroupCacheRefreshHandlers(botId, sock, tenantId);
 
         sock.ev.on('connection.update', async ({ connection, qr, lastDisconnect }) => {
             if (!operationSocketGenerations.isCurrent(tenantId, botId, generation)) return;
@@ -426,6 +483,7 @@ async function startOperationBotAPI(botId, tenantId) {
 
     try {
         const { sock } = await createSock(botId, tenantId);
+        registerGroupCacheRefreshHandlers(botId, sock, tenantId);
 
         sock.ev.on('connection.update', async ({ connection, qr, lastDisconnect }) => {
             if (!operationSocketGenerations.isCurrent(tenantId, botId, generation)) return;
@@ -605,6 +663,10 @@ async function stopOperationBot(botId, tenantId) {
         clearTimeout(reconnectTimers[timerKey]);
     }
     delete reconnectTimers[timerKey];
+    if (groupRefreshTimers[timerKey]) {
+        clearTimeout(groupRefreshTimers[timerKey]);
+        delete groupRefreshTimers[timerKey];
+    }
 
     // Disconnect socket
     if (operationBots[tenantId]?.[botId]) {
@@ -660,12 +722,15 @@ module.exports = {
     disconnectBotForce,
     getNextBotForIndividual,
     getAllGroups,
+    refreshGroupCache,
     updateGroupCache,
     updateBotStatus,
+    registerGroupCacheRefreshHandlers,
     waitForRoutingReady,
     isRoutingReady,
     __markRoutingExpectedForTests: markRoutingExpected,
     __isAdminBotRecordForTests: isAdminBotRecord,
+    __registerGroupCacheRefreshHandlersForTests: registerGroupCacheRefreshHandlers,
     __removeAuthSessionFilesForTests: removeAuthSessionFiles,
     __deleteBotRecordsForTests: deleteBotRecords,
     __resetRoutingReadinessForTests() {
@@ -681,6 +746,10 @@ module.exports = {
                 clearTimeout(reconnectTimers[key]);
             }
             delete reconnectTimers[key];
+        }
+        for (const key of Object.keys(groupRefreshTimers)) {
+            clearTimeout(groupRefreshTimers[key]);
+            delete groupRefreshTimers[key];
         }
     }
 };

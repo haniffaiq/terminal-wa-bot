@@ -10,7 +10,7 @@ const db = require("./utils/db");
 const util = require('util')
 
 const operationBot = require('./bots/operationBot');
-const { getOperationSock, getNextBotForGroup, reconnectBot, startOperationBotAPI, getBotStatusList, disconnectBotForce, reconnectSingleBotAPI, getNextBotForIndividual, stopOperationBot, getAllGroups, waitForRoutingReady } = operationBot;
+const { getOperationSock, getNextBotForGroup, reconnectBot, startOperationBotAPI, getBotStatusList, disconnectBotForce, reconnectSingleBotAPI, getNextBotForIndividual, stopOperationBot, getAllGroups, refreshGroupCache, waitForRoutingReady } = operationBot;
 const { authMiddleware } = require('./utils/midleware');
 const authRoutes = require('./routes/auth');
 const tenantRoutes = require('./routes/tenants');
@@ -1170,8 +1170,9 @@ app.get('/api/logs/:type/:date', (req, res) => {
     }
 });
 
-app.get('/api/groups', (req, res) => {
+app.get('/api/groups', async (req, res) => {
     try {
+        await refreshGroupCache(req.user.tenantId);
         const groups = getAllGroups(req.user.tenantId);
         res.json({
             success: true,

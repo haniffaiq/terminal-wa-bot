@@ -87,6 +87,79 @@ test('routing readiness is true when no operation bots are expected', async () =
     );
 });
 
+test('updateGroupCache refreshes invited groups and removes stale bot membership', async () => {
+    await operationBot.updateGroupCache('bot-1', {
+        async groupFetchAllParticipating() {
+            return {
+                'old@g.us': {
+                    id: 'old@g.us',
+                    subject: 'Old',
+                    participants: [{ id: 'user-1@s.whatsapp.net' }]
+                }
+            };
+        }
+    }, 'tenant-1');
+
+    await operationBot.updateGroupCache('bot-1', {
+        async groupFetchAllParticipating() {
+            return {
+                'new@g.us': {
+                    id: 'new@g.us',
+                    subject: 'New Invite',
+                    participants: [
+                        { id: 'user-1@s.whatsapp.net' },
+                        { id: 'user-2@s.whatsapp.net' }
+                    ]
+                }
+            };
+        }
+    }, 'tenant-1');
+
+    assert.deepEqual(operationBot.getAllGroups('tenant-1'), [
+        {
+            id: 'new@g.us',
+            name: 'New Invite',
+            member_count: 2,
+            bots: ['bot-1']
+        }
+    ]);
+});
+
+test('group event handlers schedule cache refresh after bot is invited or group changes', () => {
+    const registered = {};
+    const scheduled = [];
+    const sock = {
+        ev: {
+            on(eventName, handler) {
+                registered[eventName] = handler;
+            }
+        }
+    };
+
+    operationBot.__registerGroupCacheRefreshHandlersForTests(
+        'bot-1',
+        sock,
+        'tenant-1',
+        (botId, eventSock, tenantId, reason) => {
+            scheduled.push({ botId, eventSock, tenantId, reason });
+        }
+    );
+
+    registered['groups.upsert']([{ id: 'new@g.us' }]);
+    registered['groups.update']([{ id: 'new@g.us' }]);
+    registered['group-participants.update']({ id: 'new@g.us', action: 'add' });
+
+    assert.deepEqual(
+        scheduled.map(item => [item.botId, item.tenantId, item.reason]),
+        [
+            ['bot-1', 'tenant-1', 'groups.upsert'],
+            ['bot-1', 'tenant-1', 'groups.update'],
+            ['bot-1', 'tenant-1', 'group-participants.update']
+        ]
+    );
+    assert.equal(scheduled.every(item => item.eventSock === sock), true);
+});
+
 test('admin bot records are skipped by operation bot lifecycle', async () => {
     const queryFn = async (sql, params) => {
         assert.match(sql, /SELECT is_admin_bot FROM bot_status/i);

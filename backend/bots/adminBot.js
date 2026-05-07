@@ -4,7 +4,7 @@ const qrcode = require('qrcode');
 const qrcodeTerminal = require('qrcode-terminal');
 const path = require('path');
 const { DisconnectReason } = require('baileys');
-const { startOperationBot, stopOperationBot, reconnectBot, getBotStatusList, reconnectSingleBotCommand, updateGroupCache, updateBotStatus } = require('./operationBot');
+const { startOperationBot, stopOperationBot, reconnectBot, getBotStatusList, reconnectSingleBotCommand, updateGroupCache, updateBotStatus, registerGroupCacheRefreshHandlers } = require('./operationBot');
 const { createSock } = require('../utils/createSock');
 const { query } = require('../utils/db');
 const http = require("http");
@@ -455,6 +455,7 @@ async function startSingleAdminBot(tenant, attempt = 0) {
         }
 
         const { sock } = await createSock(botId, tenantId);
+        registerGroupCacheRefreshHandlers(botId, sock, tenantId);
 
         sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
             if (!adminSocketGenerations.isCurrent(tenantId, generation)) return;
