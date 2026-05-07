@@ -133,6 +133,21 @@ async function getBotStatusMap(tenantId) {
     }
 }
 
+async function isAdminBotRecord(botId, tenantId, queryFn = query) {
+    if (!botId || !tenantId) return false;
+
+    try {
+        const result = await queryFn(
+            'SELECT is_admin_bot FROM bot_status WHERE tenant_id = $1 AND bot_id = $2',
+            [tenantId, botId]
+        );
+        return result.rows[0]?.is_admin_bot === true;
+    } catch (err) {
+        logger.warn(`[${botId}] Failed to verify admin bot flag: ${err.message}`);
+        return false;
+    }
+}
+
 async function updateBotStatus(botId, status, tenantId) {
     try {
         await query(
@@ -216,6 +231,12 @@ async function connectBot(botId, opts = {}) {
     }
 
     ensureTenant(tenantId);
+
+    if (await isAdminBotRecord(botId, tenantId)) {
+        logger.warn(`[${botId}] is configured as admin bot; skipping operation bot connection.`);
+        return null;
+    }
+
     markRoutingExpected(tenantId, botId);
 
     if (reconnectTimers[timerKey] === 'connecting') {
@@ -344,6 +365,12 @@ async function reconnectSingleBotAPI(botId, tenantId) {
 async function startOperationBotAPI(botId, tenantId) {
     if (!tenantId) return null;
     ensureTenant(tenantId);
+
+    if (await isAdminBotRecord(botId, tenantId)) {
+        logger.warn(`[${botId}] is configured as admin bot; skipping API operation bot connection.`);
+        return null;
+    }
+
     markRoutingExpected(tenantId, botId);
     let qrBase64 = null;
 
@@ -583,6 +610,7 @@ module.exports = {
     waitForRoutingReady,
     isRoutingReady,
     __markRoutingExpectedForTests: markRoutingExpected,
+    __isAdminBotRecordForTests: isAdminBotRecord,
     __resetRoutingReadinessForTests() {
         operationBots = {};
         groupBots = {};

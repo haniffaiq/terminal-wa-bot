@@ -20,6 +20,42 @@ const logger = pino({
 // Store admin bot sockets per tenant: { tenantId: sock }
 const adminBots = {};
 
+function createAdminSocketGenerationTracker() {
+    const generations = {};
+
+    return {
+        next(tenantId) {
+            generations[tenantId] = (generations[tenantId] || 0) + 1;
+            return generations[tenantId];
+        },
+        isCurrent(tenantId, generation) {
+            return generations[tenantId] === generation;
+        }
+    };
+}
+
+const adminSocketGenerations = createAdminSocketGenerationTracker();
+
+function getNestedMessage(message = {}) {
+    return message.ephemeralMessage?.message ||
+        message.viewOnceMessage?.message ||
+        message.viewOnceMessageV2?.message ||
+        message.documentWithCaptionMessage?.message ||
+        message;
+}
+
+function extractMessageText(message) {
+    const content = getNestedMessage(message?.message || {});
+    const text = content.conversation ||
+        content.extendedTextMessage?.text ||
+        content.imageMessage?.caption ||
+        content.videoMessage?.caption ||
+        content.documentMessage?.caption ||
+        '';
+
+    return String(text).trim();
+}
+
 // ============================================================
 // Tenant lookup
 // ============================================================
@@ -130,7 +166,7 @@ async function checkBotStatusForTenant(tenantId, brand) {
 // Custom command handler
 // ============================================================
 async function handleCustomCommand(sock, chatId, text, tenant, message) {
-    const cmdName = text.split(' ')[0];
+    const cmdName = text.split(/\s+/)[0].toLowerCase();
     try {
         const result = await query(
             'SELECT response_template FROM custom_commands WHERE tenant_id = $1 AND command = $2',
@@ -169,18 +205,41 @@ async function handleCustomCommand(sock, chatId, text, tenant, message) {
 // ============================================================
 // External API calls (keep existing)
 // ============================================================
-function callApi(keyword, type) {
+function callApi(keyword, type, options = {}) {
     return new Promise((resolve, reject) => {
-        const baseUrl = "http://10.17.7.147:9098/autohealing/api/network_intelligent_api.php";
+        const httpClient = options.httpClient || http;
+        const baseUrl = options.baseUrl || "http://10.17.7.147:9098/autohealing/api/network_intelligent_api.php";
+        const timeoutMs = options.timeoutMs || 15000;
         const params = new URLSearchParams({ keyword, type }).toString();
         const url = `${baseUrl}?${params}`;
-        http.get(url, (res) => {
+        let settled = false;
+
+        function finish(error, data) {
+            if (settled) return;
+            settled = true;
+            if (error) reject(error);
+            else resolve(data);
+        }
+
+        const request = httpClient.get(url, (res) => {
             let data = "";
             res.on("data", (chunk) => data += chunk);
             res.on("end", () => {
-                try { resolve(JSON.parse(data)); } catch (e) { resolve({ raw: data }); }
+                try { finish(null, JSON.parse(data)); } catch (e) { finish(null, { raw: data }); }
             });
-        }).on("error", (err) => reject(err));
+        });
+
+        request.on("error", (err) => finish(err));
+
+        if (typeof request.setTimeout === 'function') {
+            request.setTimeout(timeoutMs, () => {
+                const error = new Error(`Command API timed out after ${timeoutMs}ms`);
+                if (typeof request.destroy === 'function') {
+                    request.destroy(error);
+                }
+                finish(error);
+            });
+        }
     });
 }
 
@@ -196,11 +255,12 @@ function setupAdminCommands(sock, tenant) {
         if (!message?.message || !message.key.remoteJid) return;
 
         const chatId = message.key.remoteJid;
-        const text = message.message.conversation || message.message.extendedTextMessage?.text;
+        const text = extractMessageText(message);
         if (!text) return;
+        const commandName = text.split(/\s+/)[0].toLowerCase();
 
         // System commands
-        if (text.startsWith('!addbot')) {
+        if (commandName === '!addbot') {
             const [, botName] = text.split(' ');
             if (!botName) return sock.sendMessage(chatId, { text: '*Usage:* !addbot <bot_name>' });
             logger.info(`[${tenantId}] Adding bot: ${botName}`);
@@ -209,7 +269,7 @@ function setupAdminCommands(sock, tenant) {
             return;
         }
 
-        if (text.startsWith('!rst')) {
+        if (commandName === '!rst') {
             const [, botName] = text.split(' ');
             if (!botName) return sock.sendMessage(chatId, { text: '*Usage:* !rst <bot_name>' });
             logger.info(`[${tenantId}] Restarting bot: ${botName}`);
@@ -218,7 +278,7 @@ function setupAdminCommands(sock, tenant) {
             return;
         }
 
-        if (text.startsWith('!rmbot')) {
+        if (commandName === '!rmbot') {
             const [, botNumber] = text.split(' ');
             if (!botNumber) return sock.sendMessage(chatId, { text: '*Usage:* !rmbot <bot_name>' });
             await stopOperationBot(botNumber, tenantId);
@@ -226,24 +286,24 @@ function setupAdminCommands(sock, tenant) {
             return;
         }
 
-        if (text.startsWith('!botstatus')) {
+        if (commandName === '!botstatus') {
             const status = await checkBotStatusForTenant(tenantId, brand);
             sock.sendMessage(chatId, { text: status });
             return;
         }
 
-        if (text.startsWith('!restart')) {
+        if (commandName === '!restart') {
             await reconnectBot(tenantId);
             sock.sendMessage(chatId, { text: `*${brand}* Restarting all operation bots...` });
             return;
         }
 
-        if (text === '!groupid') {
+        if (commandName === '!groupid') {
             sock.sendMessage(chatId, { text: `*${brand}* Group ID: ${chatId}` });
             return;
         }
 
-        if (text === '!hi' || text === '!ho') {
+        if (commandName === '!hi' || commandName === '!ho') {
             try {
                 const statusMsg = await checkBotStatusForTenant(tenantId, brand);
                 await sock.sendMessage(chatId, { text: statusMsg });
@@ -265,13 +325,13 @@ function setupAdminCommands(sock, tenant) {
             return;
         }
 
-        if (text === '!info') {
+        if (commandName === '!info') {
             const groupInfo = await getGroupInfo(sock, chatId, brand);
             sock.sendMessage(chatId, { text: groupInfo });
             return;
         }
 
-        if (text.startsWith('!block')) {
+        if (commandName === '!block') {
             const [, groupId] = text.split(' ');
             if (!groupId) return sock.sendMessage(chatId, { text: '*Usage:* !block <group_id>' });
             // TODO: tenant-scoped block list in DB
@@ -279,19 +339,19 @@ function setupAdminCommands(sock, tenant) {
             return;
         }
 
-        if (text.startsWith('!open')) {
+        if (commandName === '!open') {
             const [, groupId] = text.split(' ');
             if (!groupId) return sock.sendMessage(chatId, { text: '*Usage:* !open <group_id>' });
             sock.sendMessage(chatId, { text: `*${brand}* Group unblocked: ${groupId}` });
             return;
         }
 
-        if (text === '!listblock') {
+        if (commandName === '!listblock') {
             sock.sendMessage(chatId, { text: `*${brand}* Block list: _coming soon_` });
             return;
         }
 
-        if (text.startsWith('!cmd')) {
+        if (commandName === '!cmd') {
             const parts = text.trim().split(' ');
             if (parts.length < 3) return sock.sendMessage(chatId, { text: '*Usage:* !cmd <type> <keyword>' });
             const cmdType = parts[1];
@@ -310,7 +370,7 @@ function setupAdminCommands(sock, tenant) {
         }
 
         // Custom commands (check DB)
-        if (text.startsWith('!')) {
+        if (commandName.startsWith('!')) {
             await handleCustomCommand(sock, chatId, text, tenant, message);
         }
     });
@@ -332,6 +392,7 @@ async function stopAdminBot(tenantId) {
     }
 
     // Close socket
+    adminSocketGenerations.next(tenantId);
     if (adminBots[tenantId]) {
         try { await adminBots[tenantId].end(); } catch (e) {}
         delete adminBots[tenantId];
@@ -385,6 +446,8 @@ async function startSingleAdminBot(tenant, attempt = 0) {
     const qrTimeout = setTimeout(() => { if (qrResolve) { qrResolve(null); qrResolve = null; } }, 15000);
 
     try {
+        const generation = adminSocketGenerations.next(tenantId);
+
         // Close old socket
         if (adminBots[tenantId]) {
             try { await adminBots[tenantId].end(); } catch (e) {}
@@ -394,6 +457,8 @@ async function startSingleAdminBot(tenant, attempt = 0) {
         const { sock } = await createSock(botId, tenantId);
 
         sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
+            if (!adminSocketGenerations.isCurrent(tenantId, generation)) return;
+
             if (qr) {
                 try {
                     qrcodeTerminal.generate(qr, { small: true });
@@ -415,6 +480,10 @@ async function startSingleAdminBot(tenant, attempt = 0) {
                 logger.info(`[${tenantId}] Admin bot ${botId} connected.`);
                 adminBots[tenantId] = sock;
                 adminReconnectAttempts[tenantId] = 0;
+                if (adminReconnectTimers[tenantId]) {
+                    clearTimeout(adminReconnectTimers[tenantId]);
+                    delete adminReconnectTimers[tenantId];
+                }
                 await updateBotStatus(botId, 'open', tenantId);
                 await updateGroupCache(botId, sock, tenantId);
             }
@@ -471,4 +540,13 @@ async function startAdminBot() {
     return startAdminBots();
 }
 
-module.exports = { startAdminBot, startAdminBots, startSingleAdminBot, stopAdminBot, checkBotStatusForTenant };
+module.exports = {
+    startAdminBot,
+    startAdminBots,
+    startSingleAdminBot,
+    stopAdminBot,
+    checkBotStatusForTenant,
+    __extractMessageTextForTests: extractMessageText,
+    __createAdminSocketGenerationTrackerForTests: createAdminSocketGenerationTracker,
+    __callApiForTests: callApi
+};

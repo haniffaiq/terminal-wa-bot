@@ -4,6 +4,10 @@ const { query } = require('../utils/db');
 
 const SYSTEM_COMMANDS = ['!addbot', '!rst', '!rmbot', '!block', '!open', '!listblock', '!botstatus', '!restart', '!groupid', '!hi', '!ho', '!info', '!cmd', '!pmtcmt'];
 
+function normalizeCommand(command) {
+    return typeof command === 'string' ? command.trim().toLowerCase() : command;
+}
+
 router.get('/', async (req, res) => {
     try {
         const result = await query(
@@ -18,23 +22,24 @@ router.get('/', async (req, res) => {
 
 router.post('/', async (req, res) => {
     const { command, response_template } = req.body;
+    const normalizedCommand = normalizeCommand(command);
 
-    if (!command || !response_template) {
+    if (!normalizedCommand || !response_template) {
         return res.status(400).json({ success: false, error: 'command and response_template are required' });
     }
 
-    if (!command.startsWith('!')) {
+    if (!normalizedCommand.startsWith('!')) {
         return res.status(400).json({ success: false, error: 'Command must start with !' });
     }
 
-    if (SYSTEM_COMMANDS.includes(command)) {
-        return res.status(400).json({ success: false, error: `"${command}" is a reserved system command` });
+    if (SYSTEM_COMMANDS.includes(normalizedCommand)) {
+        return res.status(400).json({ success: false, error: `"${normalizedCommand}" is a reserved system command` });
     }
 
     try {
         const result = await query(
             'INSERT INTO custom_commands (tenant_id, command, response_template) VALUES ($1, $2, $3) RETURNING *',
-            [req.user.tenantId, command, response_template]
+            [req.user.tenantId, normalizedCommand, response_template]
         );
         res.json({ success: true, command: result.rows[0] });
     } catch (err) {
@@ -48,6 +53,7 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
     const { id } = req.params;
     const { command, response_template } = req.body;
+    const normalizedCommand = normalizeCommand(command);
 
     try {
         const existing = await query('SELECT * FROM custom_commands WHERE id = $1', [id]);
@@ -55,8 +61,18 @@ router.put('/:id', async (req, res) => {
             return res.status(404).json({ success: false, error: 'Command not found' });
         }
 
-        if (command && SYSTEM_COMMANDS.includes(command)) {
-            return res.status(400).json({ success: false, error: `"${command}" is a reserved system command` });
+        if (normalizedCommand !== undefined && normalizedCommand !== null) {
+            if (!normalizedCommand) {
+                return res.status(400).json({ success: false, error: 'Command cannot be empty' });
+            }
+
+            if (!normalizedCommand.startsWith('!')) {
+                return res.status(400).json({ success: false, error: 'Command must start with !' });
+            }
+
+            if (SYSTEM_COMMANDS.includes(normalizedCommand)) {
+                return res.status(400).json({ success: false, error: `"${normalizedCommand}" is a reserved system command` });
+            }
         }
 
         const result = await query(
@@ -64,7 +80,7 @@ router.put('/:id', async (req, res) => {
                 command = COALESCE($1, command),
                 response_template = COALESCE($2, response_template)
              WHERE id = $3 AND tenant_id = $4 RETURNING *`,
-            [command, response_template, id, req.user.tenantId]
+            [normalizedCommand, response_template, id, req.user.tenantId]
         );
         res.json({ success: true, command: result.rows[0] });
     } catch (err) {
@@ -90,5 +106,7 @@ router.delete('/:id', async (req, res) => {
         res.status(500).json({ success: false, error: err.message });
     }
 });
+
+router.__normalizeCommandForTests = normalizeCommand;
 
 module.exports = router;
