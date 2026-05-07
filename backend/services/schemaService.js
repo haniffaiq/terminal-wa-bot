@@ -86,6 +86,13 @@ const OPERATIONS_SCHEMA_STATEMENTS = [
         CONSTRAINT chk_bot_group_routes_failure_count CHECK (failure_count >= 0),
         UNIQUE(tenant_id, group_id)
     )`,
+    `CREATE TABLE IF NOT EXISTS webhook_keys (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
+        api_key VARCHAR(64) UNIQUE NOT NULL,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT NOW()
+    )`,
     'CREATE INDEX IF NOT EXISTS idx_message_jobs_tenant ON message_jobs(tenant_id)',
     'CREATE INDEX IF NOT EXISTS idx_message_jobs_status_next_attempt ON message_jobs(status, next_attempt_at)',
     'CREATE INDEX IF NOT EXISTS idx_message_jobs_created_at ON message_jobs(created_at)',
@@ -95,7 +102,9 @@ const OPERATIONS_SCHEMA_STATEMENTS = [
     'CREATE INDEX IF NOT EXISTS idx_bot_health_tenant_status ON bot_health(tenant_id, status)',
     'CREATE INDEX IF NOT EXISTS idx_operational_events_tenant_created ON operational_events(tenant_id, created_at)',
     'CREATE INDEX IF NOT EXISTS idx_operational_events_type ON operational_events(event_type)',
-    'CREATE INDEX IF NOT EXISTS idx_bot_group_routes_tenant_group ON bot_group_routes(tenant_id, group_id)'
+    'CREATE INDEX IF NOT EXISTS idx_bot_group_routes_tenant_group ON bot_group_routes(tenant_id, group_id)',
+    'CREATE INDEX IF NOT EXISTS idx_webhook_key ON webhook_keys(api_key)',
+    'CREATE INDEX IF NOT EXISTS idx_webhook_tenant ON webhook_keys(tenant_id)'
 ];
 
 async function ensureOperationsSchema({ queryFn = query } = {}) {

@@ -7,8 +7,25 @@ import { getUser } from '@/lib/auth';
 import { Key, Copy, Trash2, RefreshCw, Check } from 'lucide-react';
 
 interface KeyData {
+  success?: boolean;
   exists: boolean;
+  id?: string | null;
   masked_key?: string;
+  keys?: Array<{
+    id: string;
+    masked_key?: string;
+    api_key_masked?: string;
+    is_active: boolean;
+    created_at: string;
+  }>;
+}
+
+interface GenerateKeyResponse {
+  success: boolean;
+  id: string;
+  key: string;
+  api_key: string;
+  masked_key: string;
 }
 
 export default function Webhook() {
@@ -40,10 +57,13 @@ export default function Webhook() {
   async function handleGenerate() {
     if (keyData?.exists && !confirm('This will replace your existing API key. Any integrations using the old key will stop working. Continue?')) return;
     try {
-      const data = await postApi<{ key: string }>('/webhook/keys', {});
-      setNewKey(data.key);
-      setKeyData({ exists: true, masked_key: data.key.substring(0, 8) + '...' });
-    } catch {}
+      const data = await postApi<GenerateKeyResponse>('/webhook/keys', {});
+      const generatedKey = data.key || data.api_key;
+      setNewKey(generatedKey);
+      setKeyData({ exists: true, id: data.id, masked_key: data.masked_key });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to generate API key');
+    }
   }
 
   async function handleRevoke() {
@@ -52,7 +72,9 @@ export default function Webhook() {
       await fetchApi('/webhook/keys', { method: 'DELETE' });
       setKeyData({ exists: false });
       setNewKey(null);
-    } catch {}
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to revoke API key');
+    }
   }
 
   function copyToClipboard(text: string, label: string) {
@@ -64,10 +86,10 @@ export default function Webhook() {
   const curlExample = `curl -X POST ${window.location.origin}/api/webhook/send \\
   -H "Content-Type: application/json" \\
   -H "X-API-Key: your-api-key" \\
-  -d '{"number":["group@g.us"],"message":"Hello"}'`;
+  -d '{"number":["120363123456789012@g.us"],"message":"Hello"}'`;
 
   const payloadExample = `{
-  "number": ["group@g.us"],
+  "number": ["120363123456789012@g.us"],
   "message": "Hello"
 }`;
 
@@ -145,6 +167,12 @@ export default function Webhook() {
           <div className="space-y-2">
             <h3 className="text-sm font-medium">Payload</h3>
             <pre className="bg-muted px-4 py-3 rounded text-sm font-mono overflow-x-auto">{payloadExample}</pre>
+            <p className="text-xs text-muted-foreground">Webhook only accepts WhatsApp group targets ending in @g.us.</p>
+          </div>
+
+          <div className="space-y-2">
+            <h3 className="text-sm font-medium">Alternative Auth Header</h3>
+            <code className="block bg-muted px-3 py-2 rounded text-sm font-mono">Authorization: Bearer your-api-key</code>
           </div>
 
           <div className="space-y-2">

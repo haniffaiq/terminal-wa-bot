@@ -4,6 +4,52 @@ const crypto = require('crypto');
 const { query } = require('../utils/db');
 const queueService = require('../services/queueService');
 
+function maskApiKey(apiKey) {
+    if (!apiKey) return null;
+    return `••••••••${String(apiKey).slice(-8)}`;
+}
+
+function buildWebhookKeyListResponse(rows = []) {
+    const keys = rows.map(k => ({
+        id: k.id,
+        api_key_masked: maskApiKey(k.api_key),
+        masked_key: maskApiKey(k.api_key),
+        is_active: k.is_active,
+        created_at: k.created_at
+    }));
+    const current = keys[0] || null;
+
+    return {
+        success: true,
+        exists: Boolean(current),
+        id: current ? current.id : null,
+        masked_key: current ? current.masked_key : null,
+        keys
+    };
+}
+
+function buildWebhookKeyCreateResponse({ id, apiKey }) {
+    return {
+        success: true,
+        id,
+        api_key: apiKey,
+        key: apiKey,
+        masked_key: maskApiKey(apiKey)
+    };
+}
+
+function extractWebhookApiKey(headers = {}) {
+    const directKey = headers['x-api-key'] || headers['X-API-Key'];
+    if (directKey) return String(directKey).trim();
+
+    const authHeader = headers.authorization || headers.Authorization;
+    if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+        return authHeader.slice('Bearer '.length).trim();
+    }
+
+    return null;
+}
+
 function normalizeWebhookTarget(rawTarget) {
     let target = String(rawTarget || '').trim();
     if (!target) {
@@ -28,16 +74,10 @@ function normalizeWebhookTarget(rawTarget) {
 router.get('/keys', async (req, res) => {
     try {
         const result = await query(
-            'SELECT id, api_key, is_active, created_at FROM webhook_keys WHERE tenant_id = $1 AND is_active = TRUE',
+            'SELECT id, api_key, is_active, created_at FROM webhook_keys WHERE tenant_id = $1 AND is_active = TRUE ORDER BY created_at DESC',
             [req.user.tenantId]
         );
-        const keys = result.rows.map(k => ({
-            id: k.id,
-            api_key_masked: '••••••••' + k.api_key.slice(-8),
-            is_active: k.is_active,
-            created_at: k.created_at
-        }));
-        res.json({ success: true, keys });
+        res.json(buildWebhookKeyListResponse(result.rows));
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -51,7 +91,19 @@ router.post('/keys', async (req, res) => {
             'INSERT INTO webhook_keys (tenant_id, api_key) VALUES ($1, $2) RETURNING *',
             [req.user.tenantId, apiKey]
         );
-        res.json({ success: true, api_key: apiKey, id: result.rows[0].id });
+        res.json(buildWebhookKeyCreateResponse({ id: result.rows[0].id, apiKey }));
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+router.delete('/keys', async (req, res) => {
+    try {
+        const result = await query(
+            'UPDATE webhook_keys SET is_active = FALSE WHERE tenant_id = $1 AND is_active = TRUE RETURNING id',
+            [req.user.tenantId]
+        );
+        res.json({ success: true, message: 'Key revoked', revoked: result.rows.length });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -59,15 +111,15 @@ router.post('/keys', async (req, res) => {
 
 router.delete('/keys/:id', async (req, res) => {
     try {
-        await query('UPDATE webhook_keys SET is_active = FALSE WHERE id = $1 AND tenant_id = $2', [req.params.id, req.user.tenantId]);
-        res.json({ success: true, message: 'Key revoked' });
+        const result = await query('UPDATE webhook_keys SET is_active = FALSE WHERE id = $1 AND tenant_id = $2 RETURNING id', [req.params.id, req.user.tenantId]);
+        res.json({ success: true, message: 'Key revoked', revoked: result.rows.length });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
 });
 
 router.post('/send', async (req, res) => {
-    const apiKey = req.headers['x-api-key'];
+    const apiKey = extractWebhookApiKey(req.headers);
     if (!apiKey) return res.status(401).json({ success: false, error: 'X-API-Key header required' });
 
     try {
@@ -78,15 +130,17 @@ router.post('/send', async (req, res) => {
         if (keyResult.rows.length === 0) return res.status(401).json({ success: false, error: 'Invalid or revoked API key' });
 
         const tenantId = keyResult.rows[0].tenant_id;
-        let { number, message } = req.body;
+        let { number, numbers, target, targets, message, text } = req.body;
+        if (!number) number = numbers || target || targets;
+        if (!message) message = text;
 
         if (!number || !message) return res.status(400).json({ success: false, error: 'number and message are required' });
         if (!Array.isArray(number)) number = [number];
         number = [...new Set(number)];
         if (number.length > 10) return res.status(400).json({ success: false, error: 'Maximum 10 recipients' });
-        let targets;
+        let normalizedTargets;
         try {
-            targets = [...new Set(number.map(normalizeWebhookTarget))];
+            normalizedTargets = [...new Set(number.map(normalizeWebhookTarget))];
         } catch (error) {
             return res.status(400).json({ success: false, error: error.message });
         }
@@ -96,7 +150,7 @@ router.post('/send', async (req, res) => {
             tenantId,
             source: 'webhook',
             type: 'text',
-            targets,
+            targets: normalizedTargets,
             payload: { message, transactionId }
         });
 
@@ -111,5 +165,10 @@ router.post('/send', async (req, res) => {
         res.status(500).json({ success: false, error: err.message });
     }
 });
+
+router._normalizeWebhookTarget = normalizeWebhookTarget;
+router._buildWebhookKeyListResponse = buildWebhookKeyListResponse;
+router._buildWebhookKeyCreateResponse = buildWebhookKeyCreateResponse;
+router._extractWebhookApiKey = extractWebhookApiKey;
 
 module.exports = router;

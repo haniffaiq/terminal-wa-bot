@@ -21,6 +21,7 @@ test('ensureOperationsSchema creates operational tables and indexes in order', a
         'CREATE TABLE IF NOT EXISTS bot_health',
         'CREATE TABLE IF NOT EXISTS operational_events',
         'CREATE TABLE IF NOT EXISTS bot_group_routes',
+        'CREATE TABLE IF NOT EXISTS webhook_keys',
         'CREATE INDEX IF NOT EXISTS idx_message_jobs_tenant',
         'CREATE INDEX IF NOT EXISTS idx_message_jobs_status_next_attempt',
         'CREATE INDEX IF NOT EXISTS idx_message_jobs_created_at',
@@ -30,7 +31,9 @@ test('ensureOperationsSchema creates operational tables and indexes in order', a
         'CREATE INDEX IF NOT EXISTS idx_bot_health_tenant_status',
         'CREATE INDEX IF NOT EXISTS idx_operational_events_tenant_created',
         'CREATE INDEX IF NOT EXISTS idx_operational_events_type',
-        'CREATE INDEX IF NOT EXISTS idx_bot_group_routes_tenant_group'
+        'CREATE INDEX IF NOT EXISTS idx_bot_group_routes_tenant_group',
+        'CREATE INDEX IF NOT EXISTS idx_webhook_key',
+        'CREATE INDEX IF NOT EXISTS idx_webhook_tenant'
     ];
 
     for (const name of expectedNames) {
