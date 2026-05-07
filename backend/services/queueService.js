@@ -238,10 +238,10 @@ function createQueueService({ queryFn = query, deliveryQueue, auditService } = {
                 tenant_id,
                 $3,
                 $4,
-                $5,
+                $5::varchar,
                 $6,
                 $7,
-                CASE WHEN $5 IN ('sent', 'failed') THEN NOW() ELSE NULL END
+                CASE WHEN $5::varchar IN ('sent', 'failed') THEN NOW() ELSE NULL END
             FROM message_jobs
             WHERE id = $1
                 AND tenant_id = $2

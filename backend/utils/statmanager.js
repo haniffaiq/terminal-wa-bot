@@ -25,12 +25,31 @@ async function getStatsByDate(date, tenantId) {
         let result;
         if (tenantId) {
             result = await query(
-                'SELECT hour, bot_name, count FROM message_stats WHERE date = $1 AND tenant_id = $2 ORDER BY hour',
+                `SELECT
+                    EXTRACT(HOUR FROM sent_at)::int AS hour,
+                    COALESCE(selected_bot_id, 'unknown') AS bot_name,
+                    COUNT(*)::int AS count
+                FROM message_jobs
+                WHERE status = 'sent'
+                    AND sent_at >= $1::date
+                    AND sent_at < $1::date + INTERVAL '1 day'
+                    AND tenant_id = $2
+                GROUP BY hour, bot_name
+                ORDER BY hour`,
                 [date, tenantId]
             );
         } else {
             result = await query(
-                'SELECT hour, bot_name, count FROM message_stats WHERE date = $1 ORDER BY hour',
+                `SELECT
+                    EXTRACT(HOUR FROM sent_at)::int AS hour,
+                    COALESCE(selected_bot_id, 'unknown') AS bot_name,
+                    COUNT(*)::int AS count
+                FROM message_jobs
+                WHERE status = 'sent'
+                    AND sent_at >= $1::date
+                    AND sent_at < $1::date + INTERVAL '1 day'
+                GROUP BY hour, bot_name
+                ORDER BY hour`,
                 [date]
             );
         }
@@ -38,7 +57,7 @@ async function getStatsByDate(date, tenantId) {
         for (const row of result.rows) {
             const hourKey = String(row.hour).padStart(2, '0');
             if (!stats[hourKey]) stats[hourKey] = {};
-            stats[hourKey][row.bot_name] = row.count;
+            stats[hourKey][row.bot_name] = Number.parseInt(row.count, 10) || 0;
         }
         return stats;
     } catch (err) {

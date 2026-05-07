@@ -329,6 +329,31 @@ test('recordAttempt inserts attempt row', async () => {
     }]);
 });
 
+test('recordAttempt avoids ambiguous PostgreSQL status parameter inference', async () => {
+    const store = createMemoryJobQuery();
+    const deliveryQueue = createDeliveryQueue();
+    const service = createQueueService({ queryFn: store.queryFn, deliveryQueue });
+    await service.enqueueMessageJob({
+        tenantId: 'tenant-1',
+        source: 'api',
+        type: 'text',
+        targetId: 'group-1',
+        payload: { text: 'hello' }
+    });
+
+    await service.recordAttempt({
+        jobId: 'job-1',
+        tenantId: 'tenant-1',
+        attemptNumber: 1,
+        botId: 'bot-a',
+        status: 'sent',
+        responseTimeSeconds: 1.25
+    });
+
+    const sql = normalizeSql(store.calls.at(-1).sql);
+    assert.doesNotMatch(sql, /CASE WHEN \$5 IN/i);
+});
+
 test('recordAttempt returns null for tenant mismatch without direct tenant insert', async () => {
     const calls = [];
     const service = createQueueService({
