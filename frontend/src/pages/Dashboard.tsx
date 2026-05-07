@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, Bot, CheckCircle2, Clock, MessageSquare } from 'lucide-react';
+import { AlertTriangle, Bot, CheckCircle2, Clock, MessageSquare, TrendingUp } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { fetchApi } from '@/lib/api';
 import { useSocket } from '@/hooks/useSocket';
-import type { ApiResponse, OperationalEvent, OpsSummary } from '@/lib/opsTypes';
+import type { ApiResponse, OperationalEvent, OpsSummary, UsageCostSummary } from '@/lib/opsTypes';
 
 interface BotStatusResponse {
   success: boolean;
@@ -49,8 +49,30 @@ function detailsText(details: OperationalEvent['details'] | OperationalEvent['me
   return typeof details === 'string' ? details : JSON.stringify(details);
 }
 
+function formatCurrency(value?: number | null, currency = 'IDR', maximumFractionDigits = 0) {
+  const amount = Number.isFinite(value) ? Number(value) : 0;
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency,
+    maximumFractionDigits,
+  }).format(amount);
+}
+
+function formatRate(value?: number | null, currency = 'IDR') {
+  return `${formatCurrency(value, currency, 2)}/msg`;
+}
+
+function titleCase(value?: string | null) {
+  if (!value) return '-';
+  return value
+    .split('_')
+    .map(part => part ? `${part[0].toUpperCase()}${part.slice(1)}` : part)
+    .join(' ');
+}
+
 export default function Dashboard() {
   const [opsSummary, setOpsSummary] = useState<OpsSummary | null>(null);
+  const [usageCost, setUsageCost] = useState<UsageCostSummary | null>(null);
   const [recentEvents, setRecentEvents] = useState<OperationalEvent[]>([]);
   const [fallback, setFallback] = useState<DashboardFallback>({
     activeBots: [],
@@ -90,19 +112,24 @@ export default function Dashboard() {
 
   const loadData = useCallback(async () => {
     try {
-      const [summary, events] = await Promise.all([
+      const [summary, events, costSummary] = await Promise.all([
         fetchApi<ApiResponse<OpsSummary>>('/ops/summary'),
         fetchApi<ApiResponse<OperationalEvent[]>>('/operational-events?limit=8').catch((): ApiResponse<OperationalEvent[]> => ({
           success: false,
           events: [],
         })),
+        fetchApi<ApiResponse<UsageCostSummary>>('/usage-costs').catch((): ApiResponse<UsageCostSummary> => ({
+          success: false,
+        })),
       ]);
       setOpsSummary(summary.data || null);
+      setUsageCost(costSummary.data || null);
       setRecentEvents(summary.data?.recentEvents || events.data || events.events || []);
       setUsingFallback(false);
     } catch (err) {
       console.error('Failed to load ops summary:', err);
       setOpsSummary(null);
+      setUsageCost(null);
       setRecentEvents([]);
       setUsingFallback(true);
       await loadFallbackData();
@@ -186,6 +213,89 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {usageCost && (
+        <section className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-lg font-semibold">Usage Cost Saving</h2>
+            <Badge variant="secondary">{titleCase(usageCost.benchmark_category)} Estimate</Badge>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Saved Today</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{formatCurrency(usageCost.benchmark.savings.today, usageCost.currency)}</div>
+                <p className="text-xs text-muted-foreground">
+                  {usageCost.counts.sent_today} sent vs {usageCost.benchmark.label}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Saved This Month</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{formatCurrency(usageCost.benchmark.savings.month, usageCost.currency)}</div>
+                <p className="text-xs text-muted-foreground">
+                  {usageCost.counts.sent_month} sent at {formatRate(usageCost.benchmark.rate_per_message, usageCost.currency)}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Current Estimated Cost</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{formatCurrency(usageCost.current.costs.month, usageCost.currency)}</div>
+                <p className="text-xs text-muted-foreground">
+                  {formatRate(usageCost.current.rate_per_message, usageCost.currency)} internal rate
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="overflow-hidden rounded-lg border">
+            <div className="hidden grid-cols-[1.4fr_1fr_1fr_1fr] gap-3 border-b bg-muted/40 px-4 py-2 text-xs font-medium text-muted-foreground md:grid">
+              <span>Provider</span>
+              <span>Rate</span>
+              <span>Month Cost</span>
+              <span>Saving</span>
+            </div>
+            <div className="divide-y">
+              {usageCost.providers.map(provider => (
+                <div key={provider.id} className="grid gap-2 px-4 py-3 text-sm md:grid-cols-[1.4fr_1fr_1fr_1fr] md:items-center">
+                  <div className="min-w-0">
+                    <p className="font-medium">{provider.label}</p>
+                    <p className="text-xs text-muted-foreground">{titleCase(provider.category)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground md:hidden">Rate</p>
+                    <p>{formatRate(provider.rate_per_message, usageCost.currency)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground md:hidden">Month Cost</p>
+                    <p>{formatCurrency(provider.costs.month, usageCost.currency)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground md:hidden">Saving</p>
+                    <p className="font-medium">{formatCurrency(provider.savings.month, usageCost.currency)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            Estimate uses sent jobs. Official providers usually bill delivered messages by market, category, volume tier, and service-window rules.
+          </p>
+        </section>
+      )}
 
       <section className="space-y-3">
         <div className="flex items-center gap-2">

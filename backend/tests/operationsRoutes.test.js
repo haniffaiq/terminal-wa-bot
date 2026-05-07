@@ -221,6 +221,26 @@ test('buildOpsSummaryQueries applies requested tenant_id to every summary query'
     assert.deepEqual(queries.stale.params, [120, OTHER_TENANT_ID]);
 });
 
+test('buildUsageCostQuery applies tenant scope to sent message counts', () => {
+    const regularUserQuery = operationsRoutes._buildUsageCostQuery({
+        user: { role: 'tenant_admin', tenantId: TENANT_ID },
+        query: { tenant_id: OTHER_TENANT_ID }
+    });
+
+    assert.match(normalizeSql(regularUserQuery.sql), /FROM message_jobs/);
+    assert.match(normalizeSql(regularUserQuery.sql), /status = 'sent'/);
+    assert.match(normalizeSql(regularUserQuery.sql), /tenant_id = \$1/);
+    assert.deepEqual(regularUserQuery.params, [TENANT_ID]);
+
+    const superAdminQuery = operationsRoutes._buildUsageCostQuery({
+        user: { role: 'super_admin' },
+        query: { tenant_id: OTHER_TENANT_ID }
+    });
+
+    assert.match(normalizeSql(superAdminQuery.sql), /tenant_id = \$1/);
+    assert.deepEqual(superAdminQuery.params, [OTHER_TENANT_ID]);
+});
+
 test('getReconnectTenantId validates super-admin reconnect tenant input', () => {
     assert.equal(operationsRoutes._getReconnectTenantId({
         user: { role: 'tenant_admin', tenantId: TENANT_ID },

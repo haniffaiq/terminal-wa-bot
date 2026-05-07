@@ -2,6 +2,7 @@ const express = require('express');
 const { query } = require('../utils/db');
 const queueService = require('../services/queueService');
 const botHealthService = require('../services/botHealthService');
+const { buildUsageCostSummary } = require('../services/usageCostService');
 const { reconnectSingleBotAPI } = require('../bots/operationBot');
 
 const router = express.Router();
@@ -276,6 +277,29 @@ function buildOpsSummaryQueries(req) {
                 ${staleTenantClause}`,
             params: staleParams
         }
+    };
+}
+
+function buildUsageCostQuery(req) {
+    const params = [];
+    const tenantClause = appendTenantFilter(req, params);
+
+    return {
+        sql: `SELECT
+            COUNT(*) FILTER (
+                WHERE sent_at >= CURRENT_DATE
+                    AND sent_at < CURRENT_DATE + INTERVAL '1 day'
+            )::int AS sent_today,
+            COUNT(*) FILTER (
+                WHERE sent_at >= date_trunc('month', CURRENT_DATE)
+                    AND sent_at < date_trunc('month', CURRENT_DATE) + INTERVAL '1 month'
+            )::int AS sent_month,
+            COUNT(*)::int AS sent_total
+        FROM message_jobs
+        WHERE status = 'sent'
+            AND sent_at IS NOT NULL
+            ${tenantClause}`,
+        params
     };
 }
 
@@ -620,6 +644,27 @@ router.get('/ops/summary', async (req, res) => {
     }
 });
 
+router.get('/usage-costs', async (req, res) => {
+    try {
+        const usageQuery = buildUsageCostQuery(req);
+        const result = await query(usageQuery.sql, usageQuery.params);
+        const row = result.rows[0] || {};
+
+        res.json({
+            success: true,
+            data: buildUsageCostSummary({
+                counts: {
+                    sent_today: row.sent_today,
+                    sent_month: row.sent_month,
+                    sent_total: row.sent_total
+                }
+            })
+        });
+    } catch (error) {
+        sendRouteError(res, error);
+    }
+});
+
 router.__isValidUuidForTests = isValidUuid;
 router.__validateUuidListForTests = validateUuidList;
 router.__buildJobsQueryForTests = buildJobsQuery;
@@ -632,6 +677,7 @@ router._buildJobsQuery = buildJobsQuery;
 router._buildBotHealthQuery = buildBotHealthQuery;
 router._buildOperationalEventsQuery = buildOperationalEventsQuery;
 router._buildOpsSummaryQueries = buildOpsSummaryQueries;
+router._buildUsageCostQuery = buildUsageCostQuery;
 router._getReconnectTenantId = getReconnectTenantId;
 
 module.exports = router;

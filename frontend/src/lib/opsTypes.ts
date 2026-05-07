@@ -33,6 +33,39 @@ export interface OpsSummary {
   generated_at?: string;
 }
 
+export interface UsageCostAmountSet {
+  today: number;
+  month: number;
+  total: number;
+}
+
+export interface UsageCostProvider {
+  id: string;
+  label: string;
+  category: string;
+  rate_per_message: number;
+  costs: UsageCostAmountSet;
+  savings: UsageCostAmountSet;
+  source?: string | null;
+  note?: string | null;
+}
+
+export interface UsageCostSummary {
+  currency: string;
+  benchmark_provider_id: string;
+  benchmark_category: string;
+  counts: {
+    sent_today: number;
+    sent_month: number;
+    sent_total: number;
+  };
+  current: Omit<UsageCostProvider, 'savings'>;
+  benchmark: UsageCostProvider;
+  providers: UsageCostProvider[];
+  assumptions?: string[];
+  generated_at?: string;
+}
+
 export interface BotHealth {
   botId?: string;
   bot_id?: string;
