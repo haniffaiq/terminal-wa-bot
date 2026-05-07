@@ -26,6 +26,23 @@ const reconnectTimers = {};
 const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_DELAY = 10000;
 
+function createOperationSocketGenerationTracker() {
+    const generations = {};
+
+    return {
+        next(tenantId, botId) {
+            const key = `${tenantId}:${botId}`;
+            generations[key] = (generations[key] || 0) + 1;
+            return generations[key];
+        },
+        isCurrent(tenantId, botId, generation) {
+            return generations[`${tenantId}:${botId}`] === generation;
+        }
+    };
+}
+
+const operationSocketGenerations = createOperationSocketGenerationTracker();
+
 // Helper: ensure tenant maps exist
 function ensureTenant(tenantId) {
     if (!operationBots[tenantId]) operationBots[tenantId] = {};
@@ -148,6 +165,30 @@ async function isAdminBotRecord(botId, tenantId, queryFn = query) {
     }
 }
 
+function removeAuthSessionFiles(botId, tenantId, baseDir = path.join(__dirname, '..', 'auth_sessions')) {
+    if (!botId || !tenantId) return;
+
+    const sessionFolder = path.join(baseDir, tenantId, botId);
+    const qrPath = path.join(baseDir, tenantId, `${botId}.png`);
+
+    for (const targetPath of [sessionFolder, qrPath]) {
+        try {
+            if (fs.existsSync(targetPath)) {
+                fs.rmSync(targetPath, { recursive: true, force: true });
+            }
+        } catch (err) {
+            logger.warn(`[${botId}] Failed to remove auth session file ${targetPath}: ${err.message}`);
+        }
+    }
+}
+
+async function deleteBotRecords(botId, tenantId, queryFn = query) {
+    await queryFn('DELETE FROM bot_group_routes WHERE tenant_id = $1 AND bot_id = $2', [tenantId, botId]);
+    await queryFn('DELETE FROM bot_health WHERE tenant_id = $1 AND bot_id = $2', [tenantId, botId]);
+    await queryFn('DELETE FROM auth_sessions WHERE tenant_id = $1 AND bot_id = $2', [tenantId, botId]);
+    await queryFn('DELETE FROM bot_status WHERE tenant_id = $1 AND bot_id = $2', [tenantId, botId]);
+}
+
 async function updateBotStatus(botId, status, tenantId) {
     try {
         await query(
@@ -244,6 +285,8 @@ async function connectBot(botId, opts = {}) {
         return null;
     }
 
+    const generation = operationSocketGenerations.next(tenantId, botId);
+
     if (attempt >= MAX_RECONNECT_ATTEMPTS) {
         logger.error(`[${botId}] Max reconnect attempts reached.`);
         await updateBotStatus(botId, 'close', tenantId);
@@ -274,6 +317,8 @@ async function connectBot(botId, opts = {}) {
         const { sock } = await createSock(botId, tenantId);
 
         sock.ev.on('connection.update', async ({ connection, qr, lastDisconnect }) => {
+            if (!operationSocketGenerations.isCurrent(tenantId, botId, generation)) return;
+
             if (qr && adminSock && chatId) {
                 try {
                     const qrPath = path.join(__dirname, '..', 'auth_sessions', tenantId, `${botId}.png`);
@@ -336,6 +381,10 @@ async function connectBot(botId, opts = {}) {
     } catch (err) {
         logger.error(`[${botId}] Connect error: ${err.message}`);
         delete reconnectTimers[timerKey];
+        if (!operationSocketGenerations.isCurrent(tenantId, botId, generation)) {
+            clearRoutingExpected(tenantId, botId);
+            return null;
+        }
 
         const delay = RECONNECT_DELAY * (attempt + 1);
         reconnectTimers[timerKey] = setTimeout(() => {
@@ -372,12 +421,15 @@ async function startOperationBotAPI(botId, tenantId) {
     }
 
     markRoutingExpected(tenantId, botId);
+    const generation = operationSocketGenerations.next(tenantId, botId);
     let qrBase64 = null;
 
     try {
         const { sock } = await createSock(botId, tenantId);
 
         sock.ev.on('connection.update', async ({ connection, qr, lastDisconnect }) => {
+            if (!operationSocketGenerations.isCurrent(tenantId, botId, generation)) return;
+
             if (qr) {
                 try {
                     const qrPath = path.join(__dirname, '..', 'auth_sessions', tenantId, `${botId}.png`);
@@ -547,10 +599,12 @@ function getOperationSock(tenantId) {
 
 async function stopOperationBot(botId, tenantId) {
     const timerKey = `${tenantId}:${botId}`;
+    operationSocketGenerations.next(tenantId, botId);
+
     if (reconnectTimers[timerKey] && reconnectTimers[timerKey] !== 'connecting') {
         clearTimeout(reconnectTimers[timerKey]);
-        delete reconnectTimers[timerKey];
     }
+    delete reconnectTimers[timerKey];
 
     // Disconnect socket
     if (operationBots[tenantId]?.[botId]) {
@@ -577,11 +631,12 @@ async function stopOperationBot(botId, tenantId) {
         }
     } catch (err) {}
 
-    // Delete from DB: bot_status + auth_sessions
+    removeAuthSessionFiles(botId, tenantId);
+
+    // Delete all bot records so offline ghosts do not stay visible in Bot Management.
     try {
-        await query('DELETE FROM bot_status WHERE tenant_id = $1 AND bot_id = $2', [tenantId, botId]);
-        await query('DELETE FROM auth_sessions WHERE tenant_id = $1 AND bot_id = $2', [tenantId, botId]);
-        logger.info(`[${botId}] Deleted bot_status + auth_sessions from DB (tenant ${tenantId})`);
+        await deleteBotRecords(botId, tenantId);
+        logger.info(`[${botId}] Deleted bot records + auth sessions (tenant ${tenantId})`);
     } catch (err) {
         logger.error(`[${botId}] DB cleanup error: ${err.message}`);
     }
@@ -611,6 +666,8 @@ module.exports = {
     isRoutingReady,
     __markRoutingExpectedForTests: markRoutingExpected,
     __isAdminBotRecordForTests: isAdminBotRecord,
+    __removeAuthSessionFilesForTests: removeAuthSessionFiles,
+    __deleteBotRecordsForTests: deleteBotRecords,
     __resetRoutingReadinessForTests() {
         operationBots = {};
         groupBots = {};

@@ -1,4 +1,7 @@
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const test = require('node:test');
 
 const operationBot = require('../bots/operationBot');
@@ -107,4 +110,38 @@ test('operation bot lifecycle only skips explicit admin bot rows', async () => {
         await operationBot.__isAdminBotRecordForTests('bot_missing', 'tenant-1', async () => ({ rows: [] })),
         false
     );
+});
+
+test('delete bot cleanup removes persisted auth session files for relogin', () => {
+    const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wa-auth-'));
+    const sessionDir = path.join(baseDir, 'tenant-1', 'admin_bot');
+    fs.mkdirSync(sessionDir, { recursive: true });
+    fs.writeFileSync(path.join(sessionDir, 'creds.json'), '{}');
+    fs.writeFileSync(path.join(baseDir, 'tenant-1', 'admin_bot.png'), 'qr');
+
+    operationBot.__removeAuthSessionFilesForTests('admin_bot', 'tenant-1', baseDir);
+
+    assert.equal(fs.existsSync(sessionDir), false);
+    assert.equal(fs.existsSync(path.join(baseDir, 'tenant-1', 'admin_bot.png')), false);
+});
+
+test('delete bot cleanup removes status, auth, health, and route records', async () => {
+    const calls = [];
+    const queryFn = async (sql, params) => {
+        calls.push({ sql: sql.replace(/\s+/g, ' ').trim(), params });
+        return { rowCount: 1, rows: [] };
+    };
+
+    await operationBot.__deleteBotRecordsForTests('admin_bot', 'tenant-1', queryFn);
+
+    assert.deepEqual(calls.map(call => call.params), [
+        ['tenant-1', 'admin_bot'],
+        ['tenant-1', 'admin_bot'],
+        ['tenant-1', 'admin_bot'],
+        ['tenant-1', 'admin_bot']
+    ]);
+    assert.match(calls[0].sql, /DELETE FROM bot_group_routes/i);
+    assert.match(calls[1].sql, /DELETE FROM bot_health/i);
+    assert.match(calls[2].sql, /DELETE FROM auth_sessions/i);
+    assert.match(calls[3].sql, /DELETE FROM bot_status/i);
 });
