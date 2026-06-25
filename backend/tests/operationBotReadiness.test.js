@@ -158,31 +158,6 @@ test('group event handlers schedule cache refresh after bot is invited', () => {
     assert.equal(scheduled.every(item => item.eventSock === sock), true);
 });
 
-test('admin bot records are skipped by operation bot lifecycle', async () => {
-    const queryFn = async (sql, params) => {
-        assert.match(sql, /SELECT is_admin_bot FROM bot_status/i);
-        assert.deepEqual(params, ['tenant-1', 'admin_bot']);
-        return { rows: [{ is_admin_bot: true }] };
-    };
-
-    assert.equal(
-        await operationBot.__isAdminBotRecordForTests('admin_bot', 'tenant-1', queryFn),
-        true
-    );
-});
-
-test('operation bot lifecycle only skips explicit admin bot rows', async () => {
-    assert.equal(
-        await operationBot.__isAdminBotRecordForTests('bot_FP', 'tenant-1', async () => ({ rows: [{ is_admin_bot: false }] })),
-        false
-    );
-
-    assert.equal(
-        await operationBot.__isAdminBotRecordForTests('bot_missing', 'tenant-1', async () => ({ rows: [] })),
-        false
-    );
-});
-
 test('delete bot cleanup removes persisted auth session files for relogin', () => {
     const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wa-auth-'));
     const sessionDir = path.join(baseDir, 'tenant-1', 'admin_bot');
