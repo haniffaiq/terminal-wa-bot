@@ -3,16 +3,16 @@ const test = require('node:test');
 
 const webhookRoutes = require('../routes/webhook');
 
-test('normalizeWebhookTarget accepts group ids and rejects personal numbers', () => {
+test('normalizeWebhookTarget accepts group ids and personal numbers', () => {
     assert.equal(webhookRoutes._normalizeWebhookTarget('120363123456789012@g.us'), '120363123456789012@g.us');
     assert.equal(webhookRoutes._normalizeWebhookTarget('120363123456789012'), '120363123456789012@g.us');
-    assert.throws(
-        () => webhookRoutes._normalizeWebhookTarget('6281234567890'),
-        /Please don't send to personal number/
-    );
+    // Personal numbers route to @c.us, with leading 0 normalized to 62 (Indonesia).
+    assert.equal(webhookRoutes._normalizeWebhookTarget('6281234567890'), '6281234567890@c.us');
+    assert.equal(webhookRoutes._normalizeWebhookTarget('081234567890'), '6281234567890@c.us');
+    assert.equal(webhookRoutes._normalizeWebhookTarget('6281234567890@c.us'), '6281234567890@c.us');
     assert.throws(
         () => webhookRoutes._normalizeWebhookTarget('not-a-group'),
-        /Target number is malformed|Please don't send to personal number/
+        /Target number is malformed/
     );
 });
 

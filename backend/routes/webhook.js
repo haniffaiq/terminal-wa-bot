@@ -57,14 +57,14 @@ function normalizeWebhookTarget(rawTarget) {
     }
 
     if (!target.includes('@')) {
-        const digits = target.replace(/[^0-9-]/g, '');
+        let digits = target.replace(/[^0-9-]/g, '');
+        if (digits.startsWith('0')) {
+            digits = '62' + digits.slice(1);
+        }
         target = digits.length >= 18 ? `${digits}@g.us` : `${digits}@c.us`;
     }
 
-    if (!target.endsWith('@g.us')) {
-        throw new Error("Please don't send to personal number");
-    }
-    if (!/^[0-9-]+@g\.us$/.test(target)) {
+    if (!/^[0-9][0-9-]*@(g|c)\.us$/.test(target)) {
         throw new Error('Target number is malformed');
     }
 

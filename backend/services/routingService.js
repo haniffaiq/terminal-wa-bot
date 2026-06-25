@@ -3,7 +3,18 @@ const { query } = require('../utils/db');
 function createRoutingService({ queryFn = query, socketRegistry } = {}) {
     const registry = socketRegistry || {};
 
+    function isIndividualTarget(targetId) {
+        return typeof targetId === 'string' && targetId.endsWith('@c.us');
+    }
+
     async function getActiveBotIds(tenantId, groupId) {
+        // Personal numbers aren't tied to group membership — any connected bot can deliver.
+        if (isIndividualTarget(groupId)) {
+            if (typeof registry.getActiveBotIdsForTenant !== 'function') {
+                return [];
+            }
+            return await registry.getActiveBotIdsForTenant(tenantId) || [];
+        }
         if (typeof registry.getActiveGroupBotIds !== 'function') {
             return [];
         }

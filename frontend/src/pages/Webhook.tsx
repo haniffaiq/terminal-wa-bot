@@ -86,10 +86,10 @@ export default function Webhook() {
   const curlExample = `curl -X POST ${window.location.origin}/api/webhook/send \\
   -H "Content-Type: application/json" \\
   -H "X-API-Key: your-api-key" \\
-  -d '{"number":["120363123456789012@g.us"],"message":"Hello"}'`;
+  -d '{"number":["6281234567890"],"message":"Hello"}'`;
 
   const payloadExample = `{
-  "number": ["120363123456789012@g.us"],
+  "number": ["6281234567890", "120363123456789012@g.us"],
   "message": "Hello"
 }`;
 
@@ -155,6 +155,19 @@ export default function Webhook() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-2">
+            <h3 className="text-sm font-medium">How to use</h3>
+            <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-1">
+              <li>Generate an API key above and copy it (shown only once).</li>
+              <li>From any app or server, send a <code className="text-xs bg-muted px-1 py-0.5 rounded">POST</code> to the endpoint below.</li>
+              <li>Put your key in the <code className="text-xs bg-muted px-1 py-0.5 rounded">X-API-Key</code> header.</li>
+              <li>Send the JSON payload with <code className="text-xs bg-muted px-1 py-0.5 rounded">number</code> and <code className="text-xs bg-muted px-1 py-0.5 rounded">message</code>.</li>
+            </ol>
+            <p className="text-xs text-muted-foreground">
+              The key does not expire — reuse it for continuous integrations. It stops working only when you regenerate or revoke it.
+            </p>
+          </div>
+
+          <div className="space-y-2">
             <h3 className="text-sm font-medium">Endpoint</h3>
             <code className="block bg-muted px-3 py-2 rounded text-sm font-mono">POST /api/webhook/send</code>
           </div>
@@ -167,7 +180,11 @@ export default function Webhook() {
           <div className="space-y-2">
             <h3 className="text-sm font-medium">Payload</h3>
             <pre className="bg-muted px-4 py-3 rounded text-sm font-mono overflow-x-auto">{payloadExample}</pre>
-            <p className="text-xs text-muted-foreground">Webhook only accepts WhatsApp group targets ending in @g.us.</p>
+            <ul className="list-disc list-inside text-xs text-muted-foreground space-y-1">
+              <li><span className="font-medium">Personal number</span> — plain digits, e.g. <code className="bg-muted px-1 py-0.5 rounded">6281234567890</code> (leading 0 auto-converts to 62).</li>
+              <li><span className="font-medium">Group</span> — the full group id ending in <code className="bg-muted px-1 py-0.5 rounded">@g.us</code>.</li>
+              <li><code className="bg-muted px-1 py-0.5 rounded">number</code> accepts a single value or an array (max 10 recipients per request).</li>
+            </ul>
           </div>
 
           <div className="space-y-2">

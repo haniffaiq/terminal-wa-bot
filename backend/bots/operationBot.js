@@ -587,6 +587,13 @@ function getActiveGroupBotIds(tenantId, groupId) {
     return activeBots.filter(botId => operationBots[tenantId]?.[botId]);
 }
 
+// Any connected bot can deliver to a personal (@c.us) number — they don't
+// require group membership the way @g.us targets do.
+function getActiveBotIdsForTenant(tenantId) {
+    if (!tenantId || !operationBots[tenantId]) return [];
+    return Object.keys(operationBots[tenantId]);
+}
+
 function getBotSocket(tenantId, botId) {
     if (!tenantId || !botId) return null;
     return operationBots[tenantId]?.[botId] || null;
@@ -712,6 +719,7 @@ module.exports = {
     reconnectBot,
     getNextBotForGroup,
     getActiveGroupBotIds,
+    getActiveBotIdsForTenant,
     getBotSocket,
     startOperationBotAPI,
     getBotStatusList,
