@@ -33,7 +33,9 @@ test('ensureOperationsSchema creates operational tables and indexes in order', a
         'CREATE INDEX IF NOT EXISTS idx_operational_events_type',
         'CREATE INDEX IF NOT EXISTS idx_bot_group_routes_tenant_group',
         'CREATE INDEX IF NOT EXISTS idx_webhook_key',
-        'CREATE INDEX IF NOT EXISTS idx_webhook_tenant'
+        'CREATE INDEX IF NOT EXISTS idx_webhook_tenant',
+        'ALTER TABLE bot_status DROP COLUMN IF EXISTS is_admin_bot',
+        'ALTER TABLE tenants DROP COLUMN IF EXISTS admin_bot_id'
     ];
 
     for (const name of expectedNames) {
@@ -43,6 +45,15 @@ test('ensureOperationsSchema creates operational tables and indexes in order', a
     assert.equal(statements.length, expectedNames.length);
     assert.ok(statements[0].includes('message_jobs'));
     assert.ok(statements[1].includes('message_job_attempts'));
+});
+
+test('ensureOperationsSchema drops the admin/operation distinguishing columns', async () => {
+    const executed = [];
+    await ensureOperationsSchema({ queryFn: async (sql) => { executed.push(sql); return { rows: [] }; } });
+
+    const joined = executed.join('\n');
+    assert.match(joined, /ALTER TABLE bot_status DROP COLUMN IF EXISTS is_admin_bot/i);
+    assert.match(joined, /ALTER TABLE tenants DROP COLUMN IF EXISTS admin_bot_id/i);
 });
 
 test('requiring schemaService has no DB side effects', () => {

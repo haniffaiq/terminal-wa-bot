@@ -104,7 +104,10 @@ const OPERATIONS_SCHEMA_STATEMENTS = [
     'CREATE INDEX IF NOT EXISTS idx_operational_events_type ON operational_events(event_type)',
     'CREATE INDEX IF NOT EXISTS idx_bot_group_routes_tenant_group ON bot_group_routes(tenant_id, group_id)',
     'CREATE INDEX IF NOT EXISTS idx_webhook_key ON webhook_keys(api_key)',
-    'CREATE INDEX IF NOT EXISTS idx_webhook_tenant ON webhook_keys(tenant_id)'
+    'CREATE INDEX IF NOT EXISTS idx_webhook_tenant ON webhook_keys(tenant_id)',
+    // Unified bot migration: every bot is both command-handler and sender.
+    'ALTER TABLE bot_status DROP COLUMN IF EXISTS is_admin_bot',
+    'ALTER TABLE tenants DROP COLUMN IF EXISTS admin_bot_id'
 ];
 
 async function ensureOperationsSchema({ queryFn = query } = {}) {
