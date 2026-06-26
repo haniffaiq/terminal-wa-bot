@@ -58,7 +58,6 @@ export default function BotManagement() {
   const [botHealth, setBotHealth] = useState<BotHealth[]>([]);
   const [usingFallback, setUsingFallback] = useState(false);
   const [newBotId, setNewBotId] = useState('');
-  const [isAdminBot, setIsAdminBot] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
   const { botStatuses, qrCode, setQrCode } = useSocket();
@@ -88,9 +87,8 @@ export default function BotManagement() {
   async function handleAddBot() {
     if (!newBotId.trim()) return;
     try {
-      const data = await postApi<{ success: boolean; qr?: string; is_admin_bot?: boolean }>('/addbot', {
+      const data = await postApi<{ success: boolean; qr?: string }>('/addbot', {
         botname: newBotId.trim(),
-        is_admin_bot: isAdminBot,
       });
       if (data.qr) {
         setQrCode({ botId: newBotId.trim(), qr: data.qr });
@@ -181,16 +179,8 @@ export default function BotManagement() {
                   placeholder="e.g. bot_03"
                 />
               </div>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isAdminBot}
-                  onChange={(event) => setIsAdminBot(event.target.checked)}
-                />
-                <span className="text-sm">Set as Admin Bot (handles WhatsApp commands)</span>
-              </label>
               <Button onClick={handleAddBot} disabled={!newBotId.trim()}>
-                {isAdminBot ? 'Add Admin Bot' : 'Add Operation Bot'}
+                Add Bot
               </Button>
               {qrCode && (
                 <div className="flex flex-col items-center gap-2">
@@ -201,11 +191,6 @@ export default function BotManagement() {
             </div>
           </DialogContent>
         </Dialog>
-      </div>
-
-      <div className="rounded-md border bg-accent border-border p-4 text-sm text-accent-foreground">
-        <p><strong>admin_bot</strong> starts with the server and handles WhatsApp commands.</p>
-        <p className="mt-1">Operation bots handle message delivery. Each bot requires a different WhatsApp number.</p>
       </div>
 
       <div className="overflow-hidden rounded-lg border">

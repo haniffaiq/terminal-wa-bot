@@ -6,6 +6,7 @@ const { DisconnectReason } = require('baileys');
 const { createSock } = require('../utils/createSock');
 const { query } = require('../utils/db');
 const botHealthService = require('../services/botHealthService');
+const { setupCommands } = require('./commandHandler');
 
 const logger = pino({
     transport: {
@@ -50,6 +51,15 @@ function ensureTenant(tenantId) {
     if (!groupBots[tenantId]) groupBots[tenantId] = {};
     if (!groupCache[tenantId]) groupCache[tenantId] = new Map();
     if (!routingExpectedBots[tenantId]) routingExpectedBots[tenantId] = new Set();
+}
+
+async function getTenantById(tenantId) {
+    try {
+        const result = await query('SELECT * FROM tenants WHERE id = $1', [tenantId]);
+        return result.rows[0] || null;
+    } catch (err) {
+        return null;
+    }
 }
 
 function getTimerTenants() {
@@ -148,21 +158,6 @@ async function getBotStatusMap(tenantId) {
         return map;
     } catch (err) {
         return {};
-    }
-}
-
-async function isAdminBotRecord(botId, tenantId, queryFn = query) {
-    if (!botId || !tenantId) return false;
-
-    try {
-        const result = await queryFn(
-            'SELECT is_admin_bot FROM bot_status WHERE tenant_id = $1 AND bot_id = $2',
-            [tenantId, botId]
-        );
-        return result.rows[0]?.is_admin_bot === true;
-    } catch (err) {
-        logger.warn(`[${botId}] Failed to verify admin bot flag: ${err.message}`);
-        return false;
     }
 }
 
@@ -328,11 +323,6 @@ async function connectBot(botId, opts = {}) {
 
     ensureTenant(tenantId);
 
-    if (await isAdminBotRecord(botId, tenantId)) {
-        logger.warn(`[${botId}] is configured as admin bot; skipping operation bot connection.`);
-        return null;
-    }
-
     markRoutingExpected(tenantId, botId);
 
     if (reconnectTimers[timerKey] === 'connecting') {
@@ -371,6 +361,18 @@ async function connectBot(botId, opts = {}) {
         logger.info(`[${botId}] Connecting (attempt ${attempt + 1}, tenant ${tenantId})...`);
         const { sock } = await createSock(botId, tenantId);
         registerGroupCacheRefreshHandlers(botId, sock, tenantId);
+
+        const tenant = await getTenantById(tenantId);
+        if (tenant) {
+            setupCommands(sock, botId, tenant, {
+                getNextBotForGroup,
+                startOperationBot,
+                stopOperationBot,
+                reconnectBot,
+                reconnectSingleBotCommand,
+                getBotStatusList
+            });
+        }
 
         sock.ev.on('connection.update', async ({ connection, qr, lastDisconnect }) => {
             if (!operationSocketGenerations.isCurrent(tenantId, botId, generation)) return;
@@ -471,11 +473,6 @@ async function startOperationBotAPI(botId, tenantId) {
     if (!tenantId) return null;
     ensureTenant(tenantId);
 
-    if (await isAdminBotRecord(botId, tenantId)) {
-        logger.warn(`[${botId}] is configured as admin bot; skipping API operation bot connection.`);
-        return null;
-    }
-
     markRoutingExpected(tenantId, botId);
     const generation = operationSocketGenerations.next(tenantId, botId);
     let qrBase64 = null;
@@ -483,6 +480,18 @@ async function startOperationBotAPI(botId, tenantId) {
     try {
         const { sock } = await createSock(botId, tenantId);
         registerGroupCacheRefreshHandlers(botId, sock, tenantId);
+
+        const tenant = await getTenantById(tenantId);
+        if (tenant) {
+            setupCommands(sock, botId, tenant, {
+                getNextBotForGroup,
+                startOperationBot,
+                stopOperationBot,
+                reconnectBot,
+                reconnectSingleBotCommand,
+                getBotStatusList
+            });
+        }
 
         sock.ev.on('connection.update', async ({ connection, qr, lastDisconnect }) => {
             if (!operationSocketGenerations.isCurrent(tenantId, botId, generation)) return;
@@ -541,11 +550,11 @@ async function reconnectBot(tenantId) {
         let result;
         if (tenantId) {
             result = await query(
-                'SELECT bot_id, tenant_id FROM bot_status WHERE tenant_id = $1 AND is_admin_bot = FALSE',
+                'SELECT bot_id, tenant_id FROM bot_status WHERE tenant_id = $1',
                 [tenantId]
             );
         } else {
-            result = await query('SELECT bot_id, tenant_id FROM bot_status WHERE is_admin_bot = FALSE');
+            result = await query('SELECT bot_id, tenant_id FROM bot_status');
         }
 
         logger.info(`Reconnecting ${result.rows.length} operation bots...`);
@@ -631,7 +640,7 @@ async function disconnectBotForce(botId, tenantId) {
 async function getBotStatusList(tenantId, target) {
     try {
         const result = await query(
-            'SELECT bot_id, status FROM bot_status WHERE tenant_id = $1 AND is_admin_bot = FALSE',
+            'SELECT bot_id, status FROM bot_status WHERE tenant_id = $1',
             [tenantId]
         );
 
@@ -688,17 +697,6 @@ async function stopOperationBot(botId, tenantId) {
         }
     }
 
-    // If this was the admin bot, stop it properly and clear admin_bot_id
-    try {
-        const tenantResult = await query('SELECT admin_bot_id FROM tenants WHERE id = $1', [tenantId]);
-        if (tenantResult.rows.length > 0 && tenantResult.rows[0].admin_bot_id === botId) {
-            const { stopAdminBot } = require('./adminBot');
-            await stopAdminBot(tenantId);
-            await query('UPDATE tenants SET admin_bot_id = NULL WHERE id = $1', [tenantId]);
-            logger.info(`[${botId}] Admin bot cleared for tenant ${tenantId}`);
-        }
-    } catch (err) {}
-
     removeAuthSessionFiles(botId, tenantId);
 
     // Delete all bot records so offline ghosts do not stay visible in Bot Management.
@@ -736,7 +734,6 @@ module.exports = {
     waitForRoutingReady,
     isRoutingReady,
     __markRoutingExpectedForTests: markRoutingExpected,
-    __isAdminBotRecordForTests: isAdminBotRecord,
     __registerGroupCacheRefreshHandlersForTests: registerGroupCacheRefreshHandlers,
     __removeAuthSessionFilesForTests: removeAuthSessionFiles,
     __deleteBotRecordsForTests: deleteBotRecords,

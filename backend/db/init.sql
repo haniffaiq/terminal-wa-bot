@@ -3,7 +3,6 @@ CREATE TABLE IF NOT EXISTS tenants (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(100) NOT NULL,
     brand_name VARCHAR(50) NOT NULL,
-    admin_bot_id VARCHAR(100),
     created_at TIMESTAMP DEFAULT NOW(),
     is_active BOOLEAN DEFAULT TRUE
 );
@@ -35,7 +34,6 @@ CREATE TABLE IF NOT EXISTS bot_status (
     tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
     bot_id VARCHAR(100) NOT NULL,
     status VARCHAR(20) DEFAULT 'close',
-    is_admin_bot BOOLEAN DEFAULT FALSE,
     updated_at TIMESTAMP DEFAULT NOW(),
     UNIQUE(tenant_id, bot_id)
 );

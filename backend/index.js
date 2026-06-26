@@ -3,7 +3,6 @@ const express = require('express');
 const cors = require('cors');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
-const { startAdminBot, startSingleAdminBot } = require('./bots/adminBot');
 const { checkHeartbeatFromFile } = require('./bots/hertbeat');
 const stats = require("./utils/statmanager");
 const db = require("./utils/db");
@@ -738,49 +737,26 @@ app.post('/api/deletebot', async (req, res) => {
 
 app.post('/api/addbot', async (req, res) => {
     try {
-        const { botname, is_admin_bot } = req.body;
+        const { botname } = req.body;
         if (!botname) {
             return res.status(400).json({ success: false, error: 'botname is required' });
         }
 
         const tenantId = req.user.tenantId;
-        const isAdmin = is_admin_bot === true;
 
         // Register bot in DB
         await db.query(
-            `INSERT INTO bot_status (tenant_id, bot_id, status, is_admin_bot)
-             VALUES ($1, $2, 'connecting', $3)
-             ON CONFLICT (tenant_id, bot_id) DO UPDATE SET is_admin_bot = $3`,
-            [tenantId, botname, isAdmin]
+            `INSERT INTO bot_status (tenant_id, bot_id, status)
+             VALUES ($1, $2, 'connecting')
+             ON CONFLICT (tenant_id, bot_id) DO NOTHING`,
+            [tenantId, botname]
         );
 
-        if (isAdmin) {
-            // Set as tenant's admin bot
-            await db.query('UPDATE tenants SET admin_bot_id = $1 WHERE id = $2', [botname, tenantId]);
-
-            // Start as admin bot (with command handler, NOT as operation bot)
-            const tenantResult = await db.query('SELECT * FROM tenants WHERE id = $1', [tenantId]);
-            const tenant = tenantResult.rows[0];
-
-            let qrBase64 = null;
-            if (tenant) {
-                const result = await startSingleAdminBot(tenant);
-                qrBase64 = result?.qr || null;
-            }
-
-            res.json({
-                success: true,
-                message: `Admin bot ${botname} started. Scan QR to connect.`,
-                qr: qrBase64,
-                is_admin_bot: true
-            });
+        const qrBase64 = await startOperationBotAPI(botname, tenantId);
+        if (qrBase64) {
+            res.json({ success: true, message: `Bot ${botname} started. Scan QR to connect.`, qr: qrBase64 });
         } else {
-            const qrBase64 = await startOperationBotAPI(botname, tenantId);
-            if (qrBase64) {
-                res.json({ success: true, message: `Bot ${botname} started. Scan QR to connect.`, qr: qrBase64 });
-            } else {
-                res.json({ success: true, message: `Bot ${botname} started. It may already be connected.` });
-            }
+            res.json({ success: true, message: `Bot ${botname} started. It may already be connected.` });
         }
     } catch (err) {
         logger('error', `Failed to add bot: ${err.message}`);
@@ -1327,7 +1303,7 @@ async function startServer() {
     try {
         await ensureOperationsSchema();
         await seedSuperAdmin();
-        await startAdminBot();
+        await reconnectBot();
         checkHeartbeatFromFile();
         await initScheduler();
 
