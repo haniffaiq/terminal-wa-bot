@@ -6,7 +6,7 @@ function checkHeartbeatFromDB() {
         try {
             const result = await query(`
                 SELECT t.name as tenant_name, t.id as tenant_id,
-                       bs.bot_id, bs.status, bs.is_admin_bot, bs.updated_at
+                       bs.bot_id, bs.status, bs.updated_at
                 FROM bot_status bs
                 JOIN tenants t ON bs.tenant_id = t.id
                 WHERE t.is_active = TRUE
