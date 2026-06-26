@@ -238,6 +238,9 @@ function setupCommands(sock, botId, tenant, deps = {}) {
     sock.ev.on('messages.upsert', async (m) => {
         const message = m.messages?.[0];
         if (!message?.message || !message.key?.remoteJid) return;
+        // Ignore our own outgoing messages so a reply that happens to start
+        // with '!' can never self-trigger another command.
+        if (message.key.fromMe) return;
 
         const text = extractMessageText(message);
         if (!text) return;
