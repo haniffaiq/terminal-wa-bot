@@ -30,7 +30,7 @@ function createFs({ exists = true } = {}) {
     };
 }
 
-test('sendJob sends text payload with transaction id prefix', async () => {
+test('sendJob sends text payload without transaction id prefix', async () => {
     const sock = createSock();
 
     const result = await sendJob({
@@ -49,7 +49,7 @@ test('sendJob sends text payload with transaction id prefix', async () => {
     assert.equal(sock.calls.length, 1);
     assert.deepEqual(sock.calls[0], {
         targetId: 'group-1',
-        message: { text: 'TRX-123\n\n\nPayment received' }
+        message: { text: 'Payment received' }
     });
 });
 

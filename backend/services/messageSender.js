@@ -17,11 +17,7 @@ function normalizeContentType(headers = {}) {
 }
 
 function buildTextPayload(payload = {}) {
-    const message = payload.message ?? payload.text ?? '';
-    if (payload.transactionId) {
-        return `${payload.transactionId}\n\n\n${message}`;
-    }
-    return message;
+    return payload.message ?? payload.text ?? '';
 }
 
 function buildMediaMessage({ mediaKey, mediaValue, caption, mimetype }) {

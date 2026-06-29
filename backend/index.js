@@ -238,7 +238,7 @@ async function resendFailedRequest(reqBody, transactionId, tenantId) {
                 }
             } else {
                 logger('info', `[${transactionId}] SENDING type=TEXT target=${groupId}`);
-                await botSock.sendMessage(groupId, { text: `${transactionId}\n\n\n${message}` });
+                await botSock.sendMessage(groupId, { text: message });
             }
 
             const sendEndTime = Date.now();
@@ -331,7 +331,7 @@ app.post('/api/hi', async (req, res) => {
                         await botSock.sendMessage(groupId, { document: buffer, mimetype });
                     }
                 } else {
-                    await botSock.sendMessage(groupId, { text: message + " " + transactionId });
+                    await botSock.sendMessage(groupId, { text: message });
                 }
 
                 const sendEndTime = Date.now();
@@ -687,7 +687,7 @@ async function sendMessage(botSock, targetNumber, message, caption, transactionI
             logger('info', `${prefix} SENDING type=IMAGE target=${targetNumber} attempt=${attempt + 1}`);
             await botSock.sendMessage(targetNumber, {
                 image: buffer,
-                caption: `${transactionId}\n\n\n${caption || ''}`
+                caption: caption || ''
             });
         } else {
             logger('info', `${prefix} SENDING type=DOCUMENT target=${targetNumber} attempt=${attempt + 1}`);
@@ -700,7 +700,7 @@ async function sendMessage(botSock, targetNumber, message, caption, transactionI
     } else {
         logger('info', `${prefix} SENDING type=TEXT target=${targetNumber} attempt=${attempt + 1}`);
         await botSock.sendMessage(targetNumber, {
-            text: `${transactionId}\n\n\n${message}`
+            text: message
         });
     }
 }
