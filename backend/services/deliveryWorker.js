@@ -1,6 +1,16 @@
 const TERMINAL_STATUSES = new Set(['sent', 'failed', 'resolved', 'ignored']);
 const NO_BOT_ERROR = 'No available bot for target group';
 
+// A throttle deferral must not sit in the queue forever nor block for a full day
+// in one hop — clamp so a daily-cap wait re-evaluates itself periodically.
+const MIN_DEFER_MS = 1000;
+const MAX_DEFER_MS = 6 * 60 * 60 * 1000;
+
+function clampDeferMs(ms) {
+    if (!Number.isFinite(ms)) return MIN_DEFER_MS;
+    return Math.min(MAX_DEFER_MS, Math.max(MIN_DEFER_MS, Math.round(ms)));
+}
+
 function normalizeError(error) {
     if (!error) return '';
     if (typeof error === 'string') return error;
@@ -135,7 +145,8 @@ async function processDeliveryJob(bullJob, deps) {
         deliveryQueue,
         workerId = 'worker',
         retryService = require('./retryService'),
-        tenantNameResolver = require('./tenantNameCache')
+        tenantNameResolver = require('./tenantNameCache'),
+        sendThrottle = require('./sendThrottle').getDefaultSendThrottle()
     } = deps || {};
 
     if (!queueService || !routingService || !botHealthService || !messageSender || !deliveryQueue) {
@@ -154,6 +165,33 @@ async function processDeliveryJob(bullJob, deps) {
         return { status: 'skipped', reason: 'not_due', jobId };
     }
 
+    // Select the bot before locking so the pacing/daily-cap gate can defer the
+    // job without burning a delivery attempt. Selection is a sticky-route lookup
+    // with no round-robin side effect, so calling it early is safe.
+    const route = await routingService.selectBotForGroup({
+        tenantId,
+        groupId: dbJob.target_id
+    });
+
+    if (route && route.botId) {
+        const gate = sendThrottle.check({ tenantId, botId: route.botId });
+        if (!gate.allowed) {
+            const delay = clampDeferMs(gate.retryMs);
+            await deliveryQueue.add(
+                'deliver-message',
+                { jobId, tenantId },
+                {
+                    jobId: `throttle-${jobId}-${Date.now()}`,
+                    delay,
+                    priority: dbJob.priority ?? 5,
+                    removeOnComplete: true,
+                    removeOnFail: false
+                }
+            );
+            return { status: 'throttled', reason: gate.reason, jobId, botId: route.botId, delayMs: delay };
+        }
+    }
+
     const sendingJob = await queueService.markJobSending({
         jobId,
         tenantId,
@@ -163,11 +201,6 @@ async function processDeliveryJob(bullJob, deps) {
     if (!sendingJob) {
         return { status: 'skipped', reason: 'stale', jobId };
     }
-
-    const route = await routingService.selectBotForGroup({
-        tenantId: sendingJob.tenant_id,
-        groupId: sendingJob.target_id
-    });
 
     if (!route || !route.botId || !route.sock) {
         return handleFailure({
@@ -190,6 +223,8 @@ async function processDeliveryJob(bullJob, deps) {
             sock: route.sock,
             tenantName: await tenantNameResolver.getTenantName(sendingJob.tenant_id)
         });
+        // Count the send and arm the next randomised gap only after it lands.
+        sendThrottle.commit({ tenantId: sendingJob.tenant_id, botId: route.botId });
         const responseTimeSeconds = result.responseTimeSeconds;
         const cleanupError = result.cleanup && result.cleanup.error ? result.cleanup : null;
 
@@ -264,6 +299,7 @@ function startDeliveryWorker(deps = {}) {
     const retryService = deps.retryService || require('./retryService');
     const deliveryQueue = deps.deliveryQueue || redisQueue.createDeliveryQueue();
     const workerId = deps.workerId || 'worker';
+    const sendThrottle = deps.sendThrottle || require('./sendThrottle').getDefaultSendThrottle();
 
     return redisQueue.createDeliveryWorker(
         job => processDeliveryJob(job, {
@@ -273,7 +309,8 @@ function startDeliveryWorker(deps = {}) {
             messageSender,
             deliveryQueue,
             retryService,
-            workerId
+            workerId,
+            sendThrottle
         }),
         deps.workerOptions || {}
     );

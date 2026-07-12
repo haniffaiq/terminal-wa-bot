@@ -25,6 +25,15 @@ function createDeliveryQueue() {
     };
 }
 
+function passThroughThrottle() {
+    return {
+        checks: [],
+        commits: [],
+        check(payload) { this.checks.push(payload); return { allowed: true }; },
+        commit(payload) { this.commits.push(payload); }
+    };
+}
+
 function createRetryService(nextState) {
     return {
         calls: [],
@@ -86,15 +95,18 @@ test('processDeliveryJob marks sending, sends, records success, and marks sent',
             messageSender,
             deliveryQueue: createDeliveryQueue(),
             workerId: 'worker-1',
-            tenantNameResolver: { getTenantName: async () => 'petagid' }
+            tenantNameResolver: { getTenantName: async () => 'petagid' },
+            sendThrottle: passThroughThrottle()
         }
     );
 
     assert.deepEqual(result, { status: 'sent', jobId: 'job-1' });
     assert.deepEqual(calls, [
         ['getMessageJob', { jobId: 'job-1', tenantId: 'tenant-1' }],
-        ['markJobSending', { jobId: 'job-1', tenantId: 'tenant-1', workerId: 'worker-1' }],
+        // Bot is chosen before the lock so the throttle can defer without
+        // burning an attempt.
         ['selectBotForGroup', { tenantId: 'tenant-1', groupId: 'group-1' }],
+        ['markJobSending', { jobId: 'job-1', tenantId: 'tenant-1', workerId: 'worker-1' }],
         // The sender needs the tenant name to stamp the anti-spam header.
         ['sendJob', { job: sendingJob, sock, tenantName: 'petagid' }],
         ['recordAttempt', {
@@ -116,6 +128,76 @@ test('processDeliveryJob marks sending, sends, records success, and marks sent',
         ['recordRouteSuccess', { tenantId: 'tenant-1', groupId: 'group-1', botId: 'bot-a' }],
         ['markSuccess', { tenantId: 'tenant-1', botId: 'bot-a' }]
     ]);
+});
+
+test('processDeliveryJob defers a throttled bot without locking or sending', async () => {
+    const calls = [];
+    const sock = { id: 'sock-a' };
+    const deliveryQueue = createDeliveryQueue();
+    const queueService = {
+        async getMessageJob() { return baseDbJob; },
+        async markJobSending(payload) { calls.push(['markJobSending', payload]); return { ...baseDbJob, status: 'sending' }; }
+    };
+    const messageSender = {
+        async sendJob(payload) { calls.push(['sendJob', payload]); return { responseTimeSeconds: 1 }; }
+    };
+
+    const result = await processDeliveryJob(
+        { data: { jobId: 'job-1', tenantId: 'tenant-1' } },
+        {
+            queueService,
+            routingService: { async selectBotForGroup() { return { botId: 'bot-a', sock }; } },
+            botHealthService: {},
+            messageSender,
+            deliveryQueue,
+            workerId: 'worker-1',
+            sendThrottle: {
+                check() { return { allowed: false, reason: 'pacing', retryMs: 12000 }; },
+                commit() { throw new Error('commit must not run for a deferred job'); }
+            }
+        }
+    );
+
+    // Deferred: neither locked (no attempt burned) nor sent.
+    assert.deepEqual(calls, []);
+    assert.equal(result.status, 'throttled');
+    assert.equal(result.reason, 'pacing');
+    assert.equal(deliveryQueue.addCalls.length, 1);
+    assert.equal(deliveryQueue.addCalls[0].options.delay, 12000);
+    assert.match(deliveryQueue.addCalls[0].options.jobId, /^throttle-job-1-/);
+});
+
+test('processDeliveryJob commits to the throttle only after a successful send', async () => {
+    const sock = { id: 'sock-a' };
+    const commits = [];
+    const sendingJob = { ...baseDbJob, status: 'sending', attempt_count: 1 };
+
+    await processDeliveryJob(
+        { data: { jobId: 'job-1', tenantId: 'tenant-1' } },
+        {
+            queueService: {
+                async getMessageJob() { return baseDbJob; },
+                async markJobSending() { return sendingJob; },
+                async recordAttempt() {},
+                async markJobSent() { return { ...sendingJob, status: 'sent' }; }
+            },
+            routingService: {
+                async selectBotForGroup() { return { botId: 'bot-a', sock }; },
+                async recordRouteSuccess() {}
+            },
+            botHealthService: { async markSuccess() {} },
+            messageSender: { async sendJob() { return { responseTimeSeconds: 1 }; } },
+            deliveryQueue: createDeliveryQueue(),
+            workerId: 'worker-1',
+            tenantNameResolver: { getTenantName: async () => 'petagid' },
+            sendThrottle: {
+                check() { return { allowed: true }; },
+                commit(payload) { commits.push(payload); }
+            }
+        }
+    );
+
+    assert.deepEqual(commits, [{ tenantId: 'tenant-1', botId: 'bot-a' }]);
 });
 
 test('processDeliveryJob returns cleanup error reported by successful send', async () => {
@@ -167,7 +249,8 @@ test('processDeliveryJob returns cleanup error reported by successful send', asy
                 }
             },
             deliveryQueue: createDeliveryQueue(),
-            workerId: 'worker-1'
+            workerId: 'worker-1',
+            sendThrottle: passThroughThrottle()
         }
     );
 
@@ -229,7 +312,8 @@ test('processDeliveryJob records no-bot failure and schedules delayed retry', as
             messageSender,
             deliveryQueue,
             retryService,
-            workerId: 'worker-1'
+            workerId: 'worker-1',
+            sendThrottle: passThroughThrottle()
         }
     );
 
@@ -368,7 +452,8 @@ test('processDeliveryJob skips retrying job that is not due before marking sendi
                 }
             },
             deliveryQueue: createDeliveryQueue(),
-            workerId: 'worker-1'
+            workerId: 'worker-1',
+            sendThrottle: passThroughThrottle()
         }
     );
 
@@ -479,7 +564,8 @@ test('processDeliveryJob send failure with non-retryable policy marks failed wit
             messageSender,
             deliveryQueue,
             retryService,
-            workerId: 'worker-1'
+            workerId: 'worker-1',
+            sendThrottle: passThroughThrottle()
         }
     );
 
@@ -556,7 +642,8 @@ test('processDeliveryJob cleans up uploaded media when failure is final', async 
             },
             deliveryQueue,
             retryService,
-            workerId: 'worker-1'
+            workerId: 'worker-1',
+            sendThrottle: passThroughThrottle()
         }
     );
 
@@ -613,7 +700,8 @@ test('processDeliveryJob does not clean up uploaded media when failure is retryi
             },
             deliveryQueue,
             retryService,
-            workerId: 'worker-1'
+            workerId: 'worker-1',
+            sendThrottle: passThroughThrottle()
         }
     );
 
@@ -659,7 +747,8 @@ test('processDeliveryJob schedules delayed retry with tenantId after retryable s
             },
             deliveryQueue,
             retryService,
-            workerId: 'worker-1'
+            workerId: 'worker-1',
+            sendThrottle: passThroughThrottle()
         }
     );
 
@@ -715,7 +804,8 @@ test('processDeliveryJob schedules retry with BullMQ-safe jobId after retryable 
             },
             deliveryQueue,
             retryService,
-            workerId: 'worker-1'
+            workerId: 'worker-1',
+            sendThrottle: passThroughThrottle()
         }
     );
 
