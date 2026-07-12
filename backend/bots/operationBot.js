@@ -44,6 +44,7 @@ function createOperationSocketGenerationTracker() {
 
 const operationSocketGenerations = createOperationSocketGenerationTracker();
 const groupRefreshTimers = {};
+const lastGroupFetchAt = {};
 
 // Helper: ensure tenant maps exist
 function ensureTenant(tenantId) {
@@ -282,9 +283,23 @@ async function updateGroupCache(botId, sock, tenantId) {
     }
 }
 
-function scheduleGroupCacheRefresh(botId, sock, tenantId, reason = 'group-event', delayMs = 1000) {
+// groupFetchAllParticipating() is one heavy query per call — it pulls every group
+// the bot belongs to. History sync right after connect fires a long trickle of
+// groups.upsert events, and a 1s debounce let each one through: 7 full fetches
+// over 24 groups in 30 seconds, which reads as bot traffic. Debounce longer and
+// enforce a floor between fetches so a burst collapses into a single refresh.
+const GROUP_REFRESH_DEBOUNCE_MS = Number(process.env.GROUP_REFRESH_DEBOUNCE_MS || 15000);
+const GROUP_REFRESH_MIN_INTERVAL_MS = Number(process.env.GROUP_REFRESH_MIN_INTERVAL_MS || 60000);
+
+function scheduleGroupCacheRefresh(botId, sock, tenantId, reason = 'group-event', delayMs = GROUP_REFRESH_DEBOUNCE_MS) {
     if (!botId || !sock || !tenantId) return;
     const timerKey = `${tenantId}:${botId}`;
+
+    const lastFetch = lastGroupFetchAt[timerKey];
+    const throttleWait = lastFetch === undefined
+        ? 0
+        : Math.max(0, GROUP_REFRESH_MIN_INTERVAL_MS - (Date.now() - lastFetch));
+    const wait = Math.max(delayMs, throttleWait);
 
     if (groupRefreshTimers[timerKey]) {
         clearTimeout(groupRefreshTimers[timerKey]);
@@ -292,12 +307,29 @@ function scheduleGroupCacheRefresh(botId, sock, tenantId, reason = 'group-event'
 
     groupRefreshTimers[timerKey] = setTimeout(async () => {
         delete groupRefreshTimers[timerKey];
+
+        // The socket may have closed while this was pending — refreshing a dead
+        // socket just burns a query and times out.
+        if (operationBots[tenantId]?.[botId] !== sock) {
+            logger.info(`[${botId}] Skipping group refresh after ${reason} — socket no longer active`);
+            return;
+        }
+
         logger.info(`[${botId}] Refreshing group cache after ${reason} (tenant ${tenantId})`);
+        lastGroupFetchAt[timerKey] = Date.now();
         await updateGroupCache(botId, sock, tenantId);
-    }, delayMs);
+    }, wait);
 
     if (typeof groupRefreshTimers[timerKey].unref === 'function') {
         groupRefreshTimers[timerKey].unref();
+    }
+}
+
+function cancelGroupCacheRefresh(tenantId, botId) {
+    const timerKey = `${tenantId}:${botId}`;
+    if (groupRefreshTimers[timerKey]) {
+        clearTimeout(groupRefreshTimers[timerKey]);
+        delete groupRefreshTimers[timerKey];
     }
 }
 
@@ -424,6 +456,7 @@ async function connectBot(botId, opts = {}) {
                     } catch (e) {}
                 }
 
+                lastGroupFetchAt[timerKey] = Date.now();
                 await updateGroupCache(botId, sock, tenantId);
             }
 
@@ -434,6 +467,7 @@ async function connectBot(botId, opts = {}) {
                 await updateBotStatus(botId, 'close', tenantId);
                 if (operationBots[tenantId]) delete operationBots[tenantId][botId];
                 delete reconnectTimers[timerKey];
+                cancelGroupCacheRefresh(tenantId, botId);
 
                 if (statusCode === DisconnectReason.loggedOut) {
                     logger.error(`[${botId}] Logged out by WhatsApp. Clearing session — bot needs a QR rescan.`);
@@ -540,6 +574,7 @@ async function startOperationBotAPI(botId, tenantId) {
                 const reason = lastDisconnect?.error?.message || 'unknown';
                 logger.warn(`[${botId}] Disconnected via API (reason: ${statusCode} "${reason}", tenant ${tenantId}).`);
                 if (operationBots[tenantId]) delete operationBots[tenantId][botId];
+                cancelGroupCacheRefresh(tenantId, botId);
                 await updateBotStatus(botId, 'close', tenantId);
                 if (statusCode !== DisconnectReason.loggedOut) {
                     setTimeout(() => connectBot(botId, { tenantId }), RECONNECT_DELAY);
@@ -703,10 +738,8 @@ async function stopOperationBot(botId, tenantId) {
         clearTimeout(reconnectTimers[timerKey]);
     }
     delete reconnectTimers[timerKey];
-    if (groupRefreshTimers[timerKey]) {
-        clearTimeout(groupRefreshTimers[timerKey]);
-        delete groupRefreshTimers[timerKey];
-    }
+    cancelGroupCacheRefresh(tenantId, botId);
+    delete lastGroupFetchAt[timerKey];
 
     // Disconnect socket
     if (operationBots[tenantId]?.[botId]) {
@@ -759,6 +792,15 @@ module.exports = {
     waitForRoutingReady,
     isRoutingReady,
     clearAuthSession,
+    __scheduleGroupCacheRefreshForTests: scheduleGroupCacheRefresh,
+    __cancelGroupCacheRefreshForTests: cancelGroupCacheRefresh,
+    __registerActiveSocketForTests(tenantId, botId, sock) {
+        ensureTenant(tenantId);
+        operationBots[tenantId][botId] = sock;
+    },
+    __hasPendingGroupRefreshForTests(tenantId, botId) {
+        return Boolean(groupRefreshTimers[`${tenantId}:${botId}`]);
+    },
     __markRoutingExpectedForTests: markRoutingExpected,
     __registerGroupCacheRefreshHandlersForTests: registerGroupCacheRefreshHandlers,
     __removeAuthSessionFilesForTests: removeAuthSessionFiles,
@@ -780,6 +822,9 @@ module.exports = {
         for (const key of Object.keys(groupRefreshTimers)) {
             clearTimeout(groupRefreshTimers[key]);
             delete groupRefreshTimers[key];
+        }
+        for (const key of Object.keys(lastGroupFetchAt)) {
+            delete lastGroupFetchAt[key];
         }
     }
 };
