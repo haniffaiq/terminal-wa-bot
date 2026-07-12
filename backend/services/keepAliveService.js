@@ -1,18 +1,12 @@
 const { query } = require('../utils/db');
+const { buildMessageHeader, applyHeaderToText } = require('../utils/messageHeader');
 
 const DEFAULT_TICK_MS = 60000;
 
-function formatTimestamp(date) {
-    return date.toLocaleString('id-ID', {
-        timeZone: 'Asia/Jakarta',
-        dateStyle: 'short',
-        timeStyle: 'medium'
-    });
-}
-
-function buildMessage({ botIds, now }) {
+function buildMessage({ botIds, tenantName, now }) {
     const list = botIds.map(id => `• ${id}`).join('\n');
-    return `🟢 *Bot masih connect*\n${list}\n\n_${formatTimestamp(now)} WIB_`;
+    const body = `🟢 *Bot masih connect*\n${list}`;
+    return applyHeaderToText(body, buildMessageHeader({ tenantName, date: now }));
 }
 
 /**
@@ -33,7 +27,7 @@ function createKeepAliveService({
 } = {}) {
     async function findDueTargets(now) {
         const result = await queryFn(
-            `SELECT k.id, k.tenant_id, k.group_id, k.interval_minutes
+            `SELECT k.id, k.tenant_id, k.group_id, k.interval_minutes, t.name AS tenant_name
              FROM bot_keepalive k
              JOIN tenants t ON t.id = k.tenant_id
              WHERE k.is_active = TRUE
@@ -48,7 +42,7 @@ function createKeepAliveService({
     }
 
     async function runTarget(target, now) {
-        const { id, tenant_id: tenantId, group_id: groupId } = target;
+        const { id, tenant_id: tenantId, group_id: groupId, tenant_name: tenantName } = target;
         const botIds = botRegistry.getActiveBotIdsForTenant(tenantId);
 
         if (botIds.length === 0) {
@@ -76,7 +70,7 @@ function createKeepAliveService({
             logger.warn?.(`[KeepAlive] No bot in group ${groupId} (tenant ${tenantId})`);
         } else {
             try {
-                await sender.sendMessage(groupId, { text: buildMessage({ botIds, now }) });
+                await sender.sendMessage(groupId, { text: buildMessage({ botIds, tenantName, now }) });
                 sent = true;
             } catch (err) {
                 logger.error(`[KeepAlive] Send failed for group ${groupId}: ${err.message}`);

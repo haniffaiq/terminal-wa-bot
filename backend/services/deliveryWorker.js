@@ -134,7 +134,8 @@ async function processDeliveryJob(bullJob, deps) {
         messageSender,
         deliveryQueue,
         workerId = 'worker',
-        retryService = require('./retryService')
+        retryService = require('./retryService'),
+        tenantNameResolver = require('./tenantNameCache')
     } = deps || {};
 
     if (!queueService || !routingService || !botHealthService || !messageSender || !deliveryQueue) {
@@ -186,7 +187,8 @@ async function processDeliveryJob(bullJob, deps) {
     try {
         const result = await messageSender.sendJob({
             job: sendingJob,
-            sock: route.sock
+            sock: route.sock,
+            tenantName: await tenantNameResolver.getTenantName(sendingJob.tenant_id)
         });
         const responseTimeSeconds = result.responseTimeSeconds;
         const cleanupError = result.cleanup && result.cleanup.error ? result.cleanup : null;

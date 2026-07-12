@@ -24,7 +24,16 @@ const { verifyToken } = require('./utils/auth');
 const { ensureOperationsSchema } = require('./services/schemaService');
 const { startBotWatchdog } = require('./services/botWatchdog');
 const { startKeepAliveService } = require('./services/keepAliveService');
+const { getTenantName } = require('./services/tenantNameCache');
+const { buildMessageHeader, applyHeaderToMessage } = require('./utils/messageHeader');
 const queueService = require('./services/queueService');
+
+// Every outbound message carries "TENANT - YYYYMMDDHHMMSSmmm" so no two sends
+// share a body — repeated identical text is what WhatsApp scores as spam.
+async function sendWithHeader(botSock, target, message, tenantId) {
+    const header = buildMessageHeader({ tenantName: await getTenantName(tenantId) });
+    return botSock.sendMessage(target, applyHeaderToMessage(message, header));
+}
 const { startDeliveryWorker } = require('./services/deliveryWorker');
 const { startBotHealthMonitor } = require('./services/botHealthService');
 const { createRoutingService } = require('./services/routingService');
@@ -233,14 +242,14 @@ async function resendFailedRequest(reqBody, transactionId, tenantId) {
 
                 if (mimetype.startsWith('image/')) {
                     logger('info', `[${transactionId}] SENDING type=IMAGE target=${groupId}`);
-                    await botSock.sendMessage(groupId, { image: buffer, mimetype });
+                    await sendWithHeader(botSock, groupId, { image: buffer, mimetype }, tenantId);
                 } else {
                     logger('info', `[${transactionId}] SENDING type=DOCUMENT target=${groupId}`);
-                    await botSock.sendMessage(groupId, { document: buffer, mimetype });
+                    await sendWithHeader(botSock, groupId, { document: buffer, mimetype }, tenantId);
                 }
             } else {
                 logger('info', `[${transactionId}] SENDING type=TEXT target=${groupId}`);
-                await botSock.sendMessage(groupId, { text: message });
+                await sendWithHeader(botSock, groupId, { text: message }, tenantId);
             }
 
             const sendEndTime = Date.now();
@@ -328,12 +337,12 @@ app.post('/api/hi', async (req, res) => {
                     const buffer = Buffer.from(base64Data, 'base64');
 
                     if (mimetype.startsWith('image/')) {
-                        await botSock.sendMessage(groupId, { image: buffer, mimetype });
+                        await sendWithHeader(botSock, groupId, { image: buffer, mimetype }, req.user.tenantId);
                     } else {
-                        await botSock.sendMessage(groupId, { document: buffer, mimetype });
+                        await sendWithHeader(botSock, groupId, { document: buffer, mimetype }, req.user.tenantId);
                     }
                 } else {
-                    await botSock.sendMessage(groupId, { text: message });
+                    await sendWithHeader(botSock, groupId, { text: message }, req.user.tenantId);
                 }
 
                 const sendEndTime = Date.now();
@@ -616,7 +625,7 @@ async function sendMessageWithRetry(botSock, targetNumber, message, caption, tra
 
     while (attempt <= maxRetry) {
         try {
-            await sendMessage(botSock, targetNumber, message, caption, transactionId, attempt);
+            await sendMessage(botSock, targetNumber, message, caption, transactionId, attempt, tenantId);
             const elapsed = (Date.now() - sendStartTime) / 1000;
             let botHealth = getBotInfo(botSock)
             logger('info', `[${transactionId}] DELIVERED target=${targetNumber} bot=${botHealth.number} time=${elapsed.toFixed(3)}s`);
@@ -676,7 +685,7 @@ async function sendMessageWithRetry(botSock, targetNumber, message, caption, tra
 }
 
 
-async function sendMessage(botSock, targetNumber, message, caption, transactionId, attempt) {
+async function sendMessage(botSock, targetNumber, message, caption, transactionId, attempt, tenantId) {
     const prefix = `[${transactionId}]`;
     const match = message.match(/^data:([^;]+);base64,(.+)$/s);
 
@@ -687,23 +696,23 @@ async function sendMessage(botSock, targetNumber, message, caption, transactionI
 
         if (mimetype.startsWith('image/')) {
             logger('info', `${prefix} SENDING type=IMAGE target=${targetNumber} attempt=${attempt + 1}`);
-            await botSock.sendMessage(targetNumber, {
+            await sendWithHeader(botSock, targetNumber, {
                 image: buffer,
                 caption: caption || ''
-            });
+            }, tenantId);
         } else {
             logger('info', `${prefix} SENDING type=DOCUMENT target=${targetNumber} attempt=${attempt + 1}`);
-            await botSock.sendMessage(targetNumber, {
+            await sendWithHeader(botSock, targetNumber, {
                 document: buffer,
                 mimetype,
                 fileName: `${transactionId}.${mime.extension(mimetype) || 'bin'}`
-            });
+            }, tenantId);
         }
     } else {
         logger('info', `${prefix} SENDING type=TEXT target=${targetNumber} attempt=${attempt + 1}`);
-        await botSock.sendMessage(targetNumber, {
+        await sendWithHeader(botSock, targetNumber, {
             text: message
-        });
+        }, tenantId);
     }
 }
 

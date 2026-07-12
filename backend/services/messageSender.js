@@ -1,6 +1,7 @@
 const axios = require('axios');
 const fs = require('node:fs');
 const path = require('node:path');
+const { buildMessageHeader, applyHeaderToMessage } = require('../utils/messageHeader');
 
 const MEDIA_URL_LIMIT_BYTES = 25 * 1024 * 1024;
 
@@ -134,6 +135,7 @@ async function cleanupJobPayload({
 async function sendJob({
     job,
     sock,
+    tenantName = null,
     axiosClient = axios,
     fsModule = fs,
     pathModule = path,
@@ -197,7 +199,9 @@ async function sendJob({
         throw new Error(`Unsupported message job type: ${job.type}`);
     }
 
-    await sock.sendMessage(job.target_id, message);
+    // Stamped at send time, not enqueue time, so a retry never repeats a body.
+    const header = buildMessageHeader({ tenantName });
+    await sock.sendMessage(job.target_id, applyHeaderToMessage(message, header));
 
     const cleanup = job.type === 'media_upload' && payload.cleanupAfterSend !== false
         ? await cleanupJobPayload({

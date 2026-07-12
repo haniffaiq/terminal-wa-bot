@@ -53,6 +53,63 @@ test('sendJob sends text payload without transaction id prefix', async () => {
     });
 });
 
+test('sendJob stamps a tenant header on text so repeat sends never share a body', async () => {
+    const sock = createSock();
+
+    await sendJob({
+        sock,
+        tenantName: 'petagid',
+        job: { type: 'text', target_id: 'group-1', payload: { message: 'Payment received' } }
+    });
+
+    assert.match(sock.calls[0].message.text, /^PETAGID - \d{17}\n\nPayment received$/);
+});
+
+test('sendJob stamps the header on a media caption', async () => {
+    const sock = createSock();
+
+    await sendJob({
+        sock,
+        tenantName: 'petagid',
+        fsModule: createFs(),
+        uploadRoot: path.join('/tmp', 'uploads'),
+        job: {
+            type: 'media_upload',
+            target_id: 'group-1',
+            payload: {
+                filePath: path.join('/tmp', 'uploads', 'nota.png'),
+                mimetype: 'image/png',
+                caption: 'Nota',
+                cleanupAfterSend: false
+            }
+        }
+    });
+
+    assert.match(sock.calls[0].message.caption, /^PETAGID - \d{17}\n\nNota$/);
+});
+
+test('two sendJob calls for the same body produce different text', async () => {
+    const sock = createSock();
+    const job = { type: 'text', target_id: 'group-1', payload: { message: 'Bot masih connect' } };
+
+    await sendJob({ sock, tenantName: 'petagid', job });
+    await new Promise(resolve => setTimeout(resolve, 2));
+    await sendJob({ sock, tenantName: 'petagid', job });
+
+    assert.notEqual(sock.calls[0].message.text, sock.calls[1].message.text);
+});
+
+test('sendJob without a tenant name sends the body untouched', async () => {
+    const sock = createSock();
+
+    await sendJob({
+        sock,
+        job: { type: 'text', target_id: 'group-1', payload: { message: 'Payment received' } }
+    });
+
+    assert.deepEqual(sock.calls[0].message, { text: 'Payment received' });
+});
+
 test('sendJob sends uploaded image media based on mimetype', async () => {
     const sock = createSock();
     const filePath = 'uploads/photo.jpg';

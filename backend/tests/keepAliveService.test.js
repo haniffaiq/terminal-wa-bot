@@ -41,7 +41,8 @@ test('pushes a presence update on every connected bot and posts one group messag
                     id: 'ka-1',
                     tenant_id: 'tenant-1',
                     group_id: '1203@g.us',
-                    interval_minutes: 39
+                    interval_minutes: 39,
+                    tenant_name: 'petagid'
                 }]
             };
         },
@@ -58,6 +59,10 @@ test('pushes a presence update on every connected bot and posts one group messag
     assert.equal(botA.sent.length, 1);
     assert.equal(botB.sent.length, 0);
     assert.equal(botA.sent[0].target, '1203@g.us');
+    // Repeating the identical body every 39 minutes is exactly what gets an
+    // account flagged, so the keepalive carries the same stamped header.
+    // NOW is 05:00Z == 12:00 Jakarta.
+    assert.match(botA.sent[0].content.text, /^PETAGID - 20260712120000000\n\n/);
     assert.match(botA.sent[0].content.text, /Bot masih connect/);
     assert.match(botA.sent[0].content.text, /bot-a/);
     assert.match(botA.sent[0].content.text, /bot-b/);
@@ -93,7 +98,7 @@ test('does nothing when the tenant has no connected bot', async () => {
                 updates.push(params);
                 return { rows: [] };
             }
-            return { rows: [{ id: 'ka-1', tenant_id: 'tenant-1', group_id: '1203@g.us', interval_minutes: 39 }] };
+            return { rows: [{ id: 'ka-1', tenant_id: 'tenant-1', group_id: '1203@g.us', interval_minutes: 39, tenant_name: 'petagid' }] };
         },
         botRegistry: registryWith({ bots: {} }),
         logger: SILENT
@@ -115,7 +120,7 @@ test('still marks the run when no bot is a member of the target group', async ()
                 updates.push(params);
                 return { rows: [] };
             }
-            return { rows: [{ id: 'ka-1', tenant_id: 'tenant-1', group_id: '1203@g.us', interval_minutes: 39 }] };
+            return { rows: [{ id: 'ka-1', tenant_id: 'tenant-1', group_id: '1203@g.us', interval_minutes: 39, tenant_name: 'petagid' }] };
         },
         botRegistry: registryWith({ bots: { 'bot-a': botA }, groupSender: null }),
         logger: SILENT
@@ -136,7 +141,7 @@ test('a send failure does not abort the tick', async () => {
     const service = createKeepAliveService({
         queryFn: async (sql) => {
             if (sql.includes('UPDATE bot_keepalive')) return { rows: [] };
-            return { rows: [{ id: 'ka-1', tenant_id: 'tenant-1', group_id: '1203@g.us', interval_minutes: 39 }] };
+            return { rows: [{ id: 'ka-1', tenant_id: 'tenant-1', group_id: '1203@g.us', interval_minutes: 39, tenant_name: 'petagid' }] };
         },
         botRegistry: registryWith({ bots: { 'bot-a': botA }, groupSender: botA }),
         logger: SILENT

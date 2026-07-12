@@ -85,7 +85,8 @@ test('processDeliveryJob marks sending, sends, records success, and marks sent',
             botHealthService,
             messageSender,
             deliveryQueue: createDeliveryQueue(),
-            workerId: 'worker-1'
+            workerId: 'worker-1',
+            tenantNameResolver: { getTenantName: async () => 'petagid' }
         }
     );
 
@@ -94,7 +95,8 @@ test('processDeliveryJob marks sending, sends, records success, and marks sent',
         ['getMessageJob', { jobId: 'job-1', tenantId: 'tenant-1' }],
         ['markJobSending', { jobId: 'job-1', tenantId: 'tenant-1', workerId: 'worker-1' }],
         ['selectBotForGroup', { tenantId: 'tenant-1', groupId: 'group-1' }],
-        ['sendJob', { job: sendingJob, sock }],
+        // The sender needs the tenant name to stamp the anti-spam header.
+        ['sendJob', { job: sendingJob, sock, tenantName: 'petagid' }],
         ['recordAttempt', {
             jobId: 'job-1',
             tenantId: 'tenant-1',
