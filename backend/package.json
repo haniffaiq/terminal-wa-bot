@@ -10,7 +10,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "baileys": "^6.7.20",
+    "baileys": "^6.7.23",
     "bcryptjs": "^3.0.3",
     "bullmq": "^5.76.5",
     "cors": "^2.8.6",
