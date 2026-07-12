@@ -97,7 +97,9 @@ async function createSock(botId, tenantId) {
         console.log(`[${botId}] Failed to fetch version, using default`);
     }
 
-    const logger = pino({ level: 'silent' });
+    // 'silent' hides the stream <failure> node WhatsApp sends before a 401 logout,
+    // which is the only place the real logout reason shows up.
+    const logger = pino({ level: process.env.BAILEYS_LOG_LEVEL || 'warn' });
 
     const socketOptions = {
         auth: {

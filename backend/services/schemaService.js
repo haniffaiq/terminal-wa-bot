@@ -93,6 +93,17 @@ const OPERATIONS_SCHEMA_STATEMENTS = [
         is_active BOOLEAN DEFAULT TRUE,
         created_at TIMESTAMP DEFAULT NOW()
     )`,
+    `CREATE TABLE IF NOT EXISTS bot_keepalive (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
+        group_id VARCHAR(100) NOT NULL,
+        interval_minutes INTEGER NOT NULL DEFAULT 39,
+        is_active BOOLEAN DEFAULT TRUE,
+        last_run_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW(),
+        CONSTRAINT chk_bot_keepalive_interval CHECK (interval_minutes > 0),
+        UNIQUE(tenant_id, group_id)
+    )`,
     'CREATE INDEX IF NOT EXISTS idx_message_jobs_tenant ON message_jobs(tenant_id)',
     'CREATE INDEX IF NOT EXISTS idx_message_jobs_status_next_attempt ON message_jobs(status, next_attempt_at)',
     'CREATE INDEX IF NOT EXISTS idx_message_jobs_created_at ON message_jobs(created_at)',
@@ -105,6 +116,7 @@ const OPERATIONS_SCHEMA_STATEMENTS = [
     'CREATE INDEX IF NOT EXISTS idx_bot_group_routes_tenant_group ON bot_group_routes(tenant_id, group_id)',
     'CREATE INDEX IF NOT EXISTS idx_webhook_key ON webhook_keys(api_key)',
     'CREATE INDEX IF NOT EXISTS idx_webhook_tenant ON webhook_keys(tenant_id)',
+    'CREATE INDEX IF NOT EXISTS idx_bot_keepalive_active ON bot_keepalive(is_active)',
     // Unified bot migration: every bot is both command-handler and sender.
     'ALTER TABLE bot_status DROP COLUMN IF EXISTS is_admin_bot',
     'ALTER TABLE tenants DROP COLUMN IF EXISTS admin_bot_id'

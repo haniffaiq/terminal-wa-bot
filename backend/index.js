@@ -22,6 +22,8 @@ const { initScheduler } = require('./utils/scheduler');
 const { seedSuperAdmin } = require('./utils/seed');
 const { verifyToken } = require('./utils/auth');
 const { ensureOperationsSchema } = require('./services/schemaService');
+const { startBotWatchdog } = require('./services/botWatchdog');
+const { startKeepAliveService } = require('./services/keepAliveService');
 const queueService = require('./services/queueService');
 const { startDeliveryWorker } = require('./services/deliveryWorker');
 const { startBotHealthMonitor } = require('./services/botHealthService');
@@ -1271,6 +1273,8 @@ module.exports = { io };
 const PORT = 8008;
 let deliveryWorker;
 let botHealthMonitor;
+let botWatchdog;
+let keepAliveService;
 
 function getDeliveryWorkerStartDelayMs(env = process.env) {
     if (env.DELIVERY_WORKER_START_DELAY_MS !== undefined) {
@@ -1297,6 +1301,27 @@ async function startDeliveryWorkerAfterWarmup({ delayMs, routingService }) {
 
     botHealthMonitor = startBotHealthMonitor();
     logger('info', '[BotHealthMonitor] started');
+
+    botWatchdog = startBotWatchdog({
+        botRegistry: operationBot,
+        reconnectFn: operationBot.reconnectSingleBot,
+        logger: {
+            log: message => logger('info', message),
+            warn: message => logger('warn', message),
+            error: message => logger('error', message)
+        }
+    });
+    logger('info', '[BotWatchdog] started');
+
+    keepAliveService = startKeepAliveService({
+        botRegistry: operationBot,
+        logger: {
+            log: message => logger('info', message),
+            warn: message => logger('warn', message),
+            error: message => logger('error', message)
+        }
+    });
+    logger('info', '[KeepAlive] started');
 }
 
 async function startServer() {

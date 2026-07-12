@@ -89,6 +89,19 @@ CREATE TABLE IF NOT EXISTS scheduled_messages (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Keepalive: periodic activity so WhatsApp does not log out an idle linked device
+CREATE TABLE IF NOT EXISTS bot_keepalive (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
+    group_id VARCHAR(100) NOT NULL,
+    interval_minutes INTEGER NOT NULL DEFAULT 39,
+    is_active BOOLEAN DEFAULT TRUE,
+    last_run_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW(),
+    CONSTRAINT chk_bot_keepalive_interval CHECK (interval_minutes > 0),
+    UNIQUE(tenant_id, group_id)
+);
+
 -- Message templates
 CREATE TABLE IF NOT EXISTS message_templates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

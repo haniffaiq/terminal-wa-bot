@@ -178,6 +178,20 @@ function removeAuthSessionFiles(botId, tenantId, baseDir = path.join(__dirname, 
     }
 }
 
+// Auth creds live in the auth_sessions table (see utils/createSock.js), not on
+// disk. A logged-out session must be purged there or every later connect resumes
+// with dead creds and is rejected 401 again without ever emitting a QR.
+async function clearAuthSession(botId, tenantId, queryFn = query) {
+    if (!botId || !tenantId) return;
+    try {
+        await queryFn('DELETE FROM auth_sessions WHERE tenant_id = $1 AND bot_id = $2', [tenantId, botId]);
+        logger.info(`[${botId}] Cleared auth session rows (tenant ${tenantId})`);
+    } catch (err) {
+        logger.error(`[${botId}] Failed to clear auth session: ${err.message}`);
+    }
+    removeAuthSessionFiles(botId, tenantId);
+}
+
 async function deleteBotRecords(botId, tenantId, queryFn = query) {
     await queryFn('DELETE FROM bot_group_routes WHERE tenant_id = $1 AND bot_id = $2', [tenantId, botId]);
     await queryFn('DELETE FROM bot_health WHERE tenant_id = $1 AND bot_id = $2', [tenantId, botId]);
@@ -357,6 +371,12 @@ async function connectBot(botId, opts = {}) {
         fs.mkdirSync(authFolder, { recursive: true });
     }
 
+    // Reset the retry budget once a socket actually reaches 'open'. Without this
+    // the counter accumulates across the whole life of the bot and a long-running
+    // bot permanently gives up after its 5th ever disconnect.
+    let hasConnected = false;
+    const nextAttempt = () => (hasConnected ? 0 : attempt + 1);
+
     try {
         logger.info(`[${botId}] Connecting (attempt ${attempt + 1}, tenant ${tenantId})...`);
         const { sock } = await createSock(botId, tenantId);
@@ -393,6 +413,7 @@ async function connectBot(botId, opts = {}) {
 
             if (connection === 'open') {
                 logger.info(`[${botId}] Connected (tenant ${tenantId}).`);
+                hasConnected = true;
                 operationBots[tenantId][botId] = sock;
                 await updateBotStatus(botId, 'open', tenantId);
                 delete reconnectTimers[timerKey];
@@ -408,28 +429,27 @@ async function connectBot(botId, opts = {}) {
 
             if (connection === 'close') {
                 const statusCode = lastDisconnect?.error?.output?.statusCode;
-                logger.warn(`[${botId}] Disconnected (reason: ${statusCode}, tenant ${tenantId}).`);
+                const reason = lastDisconnect?.error?.message || 'unknown';
+                logger.warn(`[${botId}] Disconnected (reason: ${statusCode} "${reason}", tenant ${tenantId}).`);
                 await updateBotStatus(botId, 'close', tenantId);
                 if (operationBots[tenantId]) delete operationBots[tenantId][botId];
                 delete reconnectTimers[timerKey];
 
                 if (statusCode === DisconnectReason.loggedOut) {
-                    logger.error(`[${botId}] Logged out. Session cleared.`);
+                    logger.error(`[${botId}] Logged out by WhatsApp. Clearing session — bot needs a QR rescan.`);
                     clearRoutingExpected(tenantId, botId);
-                    const sessFolder = path.join(__dirname, '..', 'auth_sessions', tenantId, botId);
-                    if (fs.existsSync(sessFolder)) {
-                        fs.rmSync(sessFolder, { recursive: true, force: true });
-                    }
+                    await clearAuthSession(botId, tenantId);
                     if (groupBots[tenantId]) {
                         for (const gId of Object.keys(groupBots[tenantId])) {
                             groupBots[tenantId][gId] = groupBots[tenantId][gId].filter(b => b !== botId);
                         }
                     }
                 } else {
-                    const delay = RECONNECT_DELAY * (attempt + 1);
-                    logger.info(`[${botId}] Will reconnect in ${delay / 1000}s...`);
+                    const retry = nextAttempt();
+                    const delay = RECONNECT_DELAY * Math.max(1, retry);
+                    logger.info(`[${botId}] Will reconnect in ${delay / 1000}s (attempt ${retry})...`);
                     reconnectTimers[timerKey] = setTimeout(() => {
-                        connectBot(botId, { adminSock, chatId, tenantId, attempt: attempt + 1 });
+                        connectBot(botId, { adminSock, chatId, tenantId, attempt: retry });
                     }, delay);
                 }
             }
@@ -517,11 +537,16 @@ async function startOperationBotAPI(botId, tenantId) {
 
             if (connection === 'close') {
                 const statusCode = lastDisconnect?.error?.output?.statusCode;
+                const reason = lastDisconnect?.error?.message || 'unknown';
+                logger.warn(`[${botId}] Disconnected via API (reason: ${statusCode} "${reason}", tenant ${tenantId}).`);
+                if (operationBots[tenantId]) delete operationBots[tenantId][botId];
                 await updateBotStatus(botId, 'close', tenantId);
                 if (statusCode !== DisconnectReason.loggedOut) {
                     setTimeout(() => connectBot(botId, { tenantId }), RECONNECT_DELAY);
                 } else {
+                    logger.error(`[${botId}] Logged out by WhatsApp. Clearing session — bot needs a QR rescan.`);
                     clearRoutingExpected(tenantId, botId);
+                    await clearAuthSession(botId, tenantId);
                 }
             }
         });
@@ -733,6 +758,7 @@ module.exports = {
     registerGroupCacheRefreshHandlers,
     waitForRoutingReady,
     isRoutingReady,
+    clearAuthSession,
     __markRoutingExpectedForTests: markRoutingExpected,
     __registerGroupCacheRefreshHandlersForTests: registerGroupCacheRefreshHandlers,
     __removeAuthSessionFilesForTests: removeAuthSessionFiles,
