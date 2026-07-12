@@ -93,6 +93,16 @@ const OPERATIONS_SCHEMA_STATEMENTS = [
         is_active BOOLEAN DEFAULT TRUE,
         created_at TIMESTAMP DEFAULT NOW()
     )`,
+    `CREATE TABLE IF NOT EXISTS bot_proxies (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
+        bot_id VARCHAR(100) NOT NULL,
+        proxy_url TEXT NOT NULL,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(tenant_id, bot_id)
+    )`,
     `CREATE TABLE IF NOT EXISTS bot_keepalive (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
@@ -117,6 +127,7 @@ const OPERATIONS_SCHEMA_STATEMENTS = [
     'CREATE INDEX IF NOT EXISTS idx_webhook_key ON webhook_keys(api_key)',
     'CREATE INDEX IF NOT EXISTS idx_webhook_tenant ON webhook_keys(tenant_id)',
     'CREATE INDEX IF NOT EXISTS idx_bot_keepalive_active ON bot_keepalive(is_active)',
+    'CREATE INDEX IF NOT EXISTS idx_bot_proxies_lookup ON bot_proxies(tenant_id, bot_id)',
     // Unified bot migration: every bot is both command-handler and sender.
     'ALTER TABLE bot_status DROP COLUMN IF EXISTS is_admin_bot',
     'ALTER TABLE tenants DROP COLUMN IF EXISTS admin_bot_id'

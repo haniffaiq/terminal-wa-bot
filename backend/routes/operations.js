@@ -4,6 +4,8 @@ const queueService = require('../services/queueService');
 const botHealthService = require('../services/botHealthService');
 const { buildUsageCostSummary } = require('../services/usageCostService');
 const { reconnectSingleBotAPI } = require('../bots/operationBot');
+const { invalidateProxy } = require('../services/botProxyService');
+const { buildProxyAgent } = require('../utils/socketFingerprint');
 
 const router = express.Router();
 const RETRYABLE_TERMINAL_STATUSES = ['failed', 'resolved', 'ignored'];
@@ -602,6 +604,79 @@ router.post('/bot-health/:botId/reconnect', async (req, res) => {
         });
 
         res.json({ success: true, status: 'reconnecting', bot_id: req.params.botId, tenant_id: tenantId });
+    } catch (error) {
+        sendRouteError(res, error);
+    }
+});
+
+router.get('/bots/:botId/proxy', async (req, res) => {
+    try {
+        const tenantId = getReconnectTenantId(req);
+        const result = await query(
+            'SELECT proxy_url, is_active, updated_at FROM bot_proxies WHERE tenant_id = $1 AND bot_id = $2',
+            [tenantId, req.params.botId]
+        );
+        res.json({ success: true, bot_id: req.params.botId, proxy: result.rows[0] || null });
+    } catch (error) {
+        sendRouteError(res, error);
+    }
+});
+
+router.put('/bots/:botId/proxy', async (req, res) => {
+    try {
+        const tenantId = getReconnectTenantId(req);
+        const proxyUrl = (req.body && (req.body.proxy_url || req.body.proxyUrl) || '').trim();
+        if (!proxyUrl) {
+            throw new BadRequestError('proxy_url is required');
+        }
+        // Validate the scheme up front so a bad value is rejected here, not at
+        // connect time.
+        buildProxyAgent(proxyUrl);
+
+        const result = await query(
+            `INSERT INTO bot_proxies (tenant_id, bot_id, proxy_url, is_active, updated_at)
+             VALUES ($1, $2, $3, TRUE, NOW())
+             ON CONFLICT (tenant_id, bot_id)
+             DO UPDATE SET proxy_url = $3, is_active = TRUE, updated_at = NOW()
+             RETURNING proxy_url, is_active, updated_at`,
+            [tenantId, req.params.botId, proxyUrl]
+        );
+        invalidateProxy(tenantId, req.params.botId);
+
+        await logOperationalEvent({
+            tenantId,
+            actorId: getActorId(req),
+            eventType: 'bot_proxy_set',
+            entityType: 'bot',
+            entityId: req.params.botId,
+            message: `Proxy set for bot ${req.params.botId} (takes effect on next reconnect)`
+        });
+
+        res.json({ success: true, bot_id: req.params.botId, proxy: result.rows[0] });
+    } catch (error) {
+        sendRouteError(res, error);
+    }
+});
+
+router.delete('/bots/:botId/proxy', async (req, res) => {
+    try {
+        const tenantId = getReconnectTenantId(req);
+        await query(
+            'DELETE FROM bot_proxies WHERE tenant_id = $1 AND bot_id = $2',
+            [tenantId, req.params.botId]
+        );
+        invalidateProxy(tenantId, req.params.botId);
+
+        await logOperationalEvent({
+            tenantId,
+            actorId: getActorId(req),
+            eventType: 'bot_proxy_cleared',
+            entityType: 'bot',
+            entityId: req.params.botId,
+            message: `Proxy cleared for bot ${req.params.botId} (takes effect on next reconnect)`
+        });
+
+        res.json({ success: true, bot_id: req.params.botId, proxy: null });
     } catch (error) {
         sendRouteError(res, error);
     }

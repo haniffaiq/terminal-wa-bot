@@ -89,6 +89,18 @@ CREATE TABLE IF NOT EXISTS scheduled_messages (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Per-bot outbound proxy so a bot's WhatsApp traffic exits a residential IP
+CREATE TABLE IF NOT EXISTS bot_proxies (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
+    bot_id VARCHAR(100) NOT NULL,
+    proxy_url TEXT NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(tenant_id, bot_id)
+);
+
 -- Keepalive: periodic activity so WhatsApp does not log out an idle linked device
 CREATE TABLE IF NOT EXISTS bot_keepalive (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

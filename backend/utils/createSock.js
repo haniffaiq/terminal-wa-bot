@@ -1,6 +1,7 @@
 const { makeWASocket, makeCacheableSignalKeyStore, fetchLatestBaileysVersion, proto, initAuthCreds, BufferJSON } = require('baileys');
 const pino = require('pino');
 const { query } = require('./db');
+const { resolveBrowser, buildProxyAgent } = require('./socketFingerprint');
 
 /**
  * DB-backed auth state — exact mirror of Baileys useMultiFileAuthState
@@ -86,7 +87,7 @@ async function useDatabaseAuthState(botId, tenantId) {
     };
 }
 
-async function createSock(botId, tenantId) {
+async function createSock(botId, tenantId, opts = {}) {
     const { state, saveCreds } = await useDatabaseAuthState(botId, tenantId);
 
     let version;
@@ -107,6 +108,9 @@ async function createSock(botId, tenantId) {
             keys: makeCacheableSignalKeyStore(state.keys, logger),
         },
         logger,
+        // Present a common desktop-browser tuple instead of the default Baileys
+        // signature during the linked-device handshake.
+        browser: resolveBrowser(),
         connectTimeoutMs: 60000,
         defaultQueryTimeoutMs: 30000,
         keepAliveIntervalMs: 30000,
@@ -116,6 +120,21 @@ async function createSock(botId, tenantId) {
 
     if (version) {
         socketOptions.version = version;
+    }
+
+    // Route all WhatsApp traffic (websocket + media) through a residential proxy
+    // when one is configured for this bot, so it exits a residential IP instead
+    // of the datacenter host.
+    let proxyAgent = null;
+    try {
+        proxyAgent = buildProxyAgent(opts.proxyUrl);
+    } catch (err) {
+        console.error(`[${botId}] Invalid proxy, connecting direct: ${err.message}`);
+    }
+    if (proxyAgent) {
+        socketOptions.agent = proxyAgent;
+        socketOptions.fetchAgent = proxyAgent;
+        console.log(`[${botId}] Connecting via proxy`);
     }
 
     const sock = makeWASocket(socketOptions);

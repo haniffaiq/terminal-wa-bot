@@ -4,6 +4,7 @@ const qrcode = require('qrcode');
 const path = require('path');
 const { DisconnectReason } = require('baileys');
 const { createSock } = require('../utils/createSock');
+const botProxyService = require('../services/botProxyService');
 const { query } = require('../utils/db');
 const botHealthService = require('../services/botHealthService');
 const { setupCommands } = require('./commandHandler');
@@ -411,7 +412,8 @@ async function connectBot(botId, opts = {}) {
 
     try {
         logger.info(`[${botId}] Connecting (attempt ${attempt + 1}, tenant ${tenantId})...`);
-        const { sock } = await createSock(botId, tenantId);
+        const proxyUrl = await botProxyService.getProxyUrl(tenantId, botId);
+        const { sock } = await createSock(botId, tenantId, { proxyUrl });
         registerGroupCacheRefreshHandlers(botId, sock, tenantId);
 
         const tenant = await getTenantById(tenantId);
@@ -532,7 +534,8 @@ async function startOperationBotAPI(botId, tenantId) {
     let qrBase64 = null;
 
     try {
-        const { sock } = await createSock(botId, tenantId);
+        const proxyUrl = await botProxyService.getProxyUrl(tenantId, botId);
+        const { sock } = await createSock(botId, tenantId, { proxyUrl });
         registerGroupCacheRefreshHandlers(botId, sock, tenantId);
 
         const tenant = await getTenantById(tenantId);
