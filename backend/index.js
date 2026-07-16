@@ -17,6 +17,7 @@ const commandRoutes = require('./routes/commands');
 const scheduleRoutes = require('./routes/schedules');
 const templateRoutes = require('./routes/templates');
 const webhookRoutes = require('./routes/webhook');
+const inboundRelayRoutes = require('./routes/inboundRelays');
 const operationsRoutes = require('./routes/operations');
 const { initScheduler } = require('./utils/scheduler');
 const { seedSuperAdmin } = require('./utils/seed');
@@ -88,6 +89,7 @@ app.use('/api/commands', commandRoutes);
 app.use('/api/schedules', scheduleRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/webhook', webhookRoutes);
+app.use('/api/inbound-relays', inboundRelayRoutes);
 app.use('/api', operationsRoutes);
 
 function getBlockedList() {
