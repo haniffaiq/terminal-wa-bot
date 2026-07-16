@@ -109,7 +109,7 @@ browser-polling UI must not poll forever:
 **What we don't yet know:** the real-world rate of LID-only senders. It depends
 on Meta's rollout state for each user population, and ZYRON has not observed it
 live. It may be near zero today and rise later. ZYRON will log every drop with
-`warn` severity to its Timeline, so the rate is measurable once running.
+`warning` severity to its Timeline, so the rate is measurable once running.
 
 If the rate turns out to be material, resolving LID → phone number via a
 WhatsApp lookup is the next step on ZYRON's side. It is deliberately out of

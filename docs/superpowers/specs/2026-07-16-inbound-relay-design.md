@@ -69,19 +69,21 @@ visible in the Timeline page rather than invisible.
 ```sql
 CREATE TABLE IF NOT EXISTS inbound_relays (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id UUID NOT NULL REFERENCES tenants(id),
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     marker VARCHAR(64) NOT NULL,
     destination_url TEXT NOT NULL,
     secret TEXT NOT NULL,
     reply_text TEXT,
     is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
     UNIQUE (tenant_id)
-);
+)
 ```
 
-Added to `services/schemaService.js` only.
+Appended to `OPERATIONS_SCHEMA_STATEMENTS` in `services/schemaService.js` only.
+House style there is `TIMESTAMP` (not `TIMESTAMPTZ`) and
+`REFERENCES tenants(id) ON DELETE CASCADE`; this matches.
 
 `secret` is **plaintext by necessity** — HMAC-SHA256 is symmetric, so the value
 is needed to compute the signature and cannot be hashed like a password. This is
@@ -122,7 +124,7 @@ Consequences, in order:
 1. `message.key.remoteJid` is not `@g.us` — else return.
 2. Load relay config for the tenant (60s TTL cache, `botProxyService` pattern) — inactive/absent → return.
 3. `text.startsWith(relay.marker)` — else return.
-4. Resolve sender phone (R2). `null` → log `warn`, return.
+4. Resolve sender phone (R2). `null` → log `warning`, return.
 5. Forward (R3).
 
 The DM guard closes two things at once: multiple bots relaying the same group
@@ -142,7 +144,7 @@ function resolveSenderPhone(key) {
 ```
 
 `null` means we could only obtain a LID. **Do not forward.** Write
-`operational_events` with severity `warn` and drop. Fail closed: a wrong `from`
+`operational_events` with severity `warning` and drop. Fail closed: a wrong `from`
 is more dangerous than a failed login, because the destination's entire trust
 model rests on `from` being the true sender.
 
@@ -153,22 +155,33 @@ normalizer exists for user-supplied input, not authoritative JIDs.
 
 ### R3. Relay service (`backend/services/inboundRelayService.js`)
 
-`createInboundRelayService({ queryFn, httpClient, auditFn })` — DI-shaped to
+`createInboundRelayService({ queryFn, fetchFn, auditFn })` — DI-shaped to
 match `botProxyService`/`auditService` so tests inject fakes.
+
+**HTTP client is the global `fetch`**, not axios. `services/messageSender.js:1`
+requires axios, but axios is **not a declared dependency** of `backend/package.json`
+— it resolves only because `baileys@6.7.23` happens to depend on it
+(`npm ls axios` confirms). That is a latent boot failure for the existing
+`media_url` path if baileys ever drops it, and this design will not deepen the
+debt. Node 22 ships `fetch` globally. (Repairing `messageSender`'s undeclared
+dependency is out of scope here — see Out of scope.)
 
 Serialize once, hash those bytes, send those bytes:
 
 ```js
 const body = JSON.stringify({ from, text, message_id, timestamp });
 const signature = crypto.createHmac('sha256', relay.secret).update(body).digest('hex');
-await httpClient.post(relay.destination_url, body, {
-    headers: { 'Content-Type': 'application/json', 'X-Zyron-Signature': signature }
+const res = await fetchFn(relay.destination_url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Zyron-Signature': signature },
+    body,
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
 });
 ```
 
-Passing the **object** to axios instead of the string would let axios
-re-serialize it, producing bytes that may differ from what was hashed — the
-destination recomputes over the raw body and returns `403`. The string is
+Passing an **object** to a client that re-serializes it would produce bytes that
+may differ from what was hashed — the destination recomputes over the raw body
+and returns `403`. `body` must be the same string that was hashed. The string is
 load-bearing.
 
 Field mapping:
@@ -182,9 +195,19 @@ Field mapping:
 
 ### R4. Config API (`backend/routes/inboundRelays.js`)
 
-`GET` / `PUT` / `DELETE /api/inbound-relays`, tenant-scoped via
-`getTenantScope()` from `operations.js` — the strict pattern, not the ad-hoc
-ones in `index.js`.
+`GET` / `PUT` / `DELETE /api/inbound-relays`, mounted alongside the other named
+routers in `index.js` (before `app.use('/api', operationsRoutes)`).
+
+Tenant resolution follows the **discipline** of `operations.js` — a super admin
+must name an explicit, UUID-validated `tenant_id`; everyone else is pinned to
+their JWT tenant — via a small local helper, not by importing from
+`operations.js`. Two reasons: `getTenantScope` is only reachable as
+`router._getTenantScope`, a test hook bolted onto the live router object
+(`operations.js:748`), and its shape is wrong here — it builds a SQL clause and
+pushes params for **list** queries, while this resource is one row per tenant.
+The right analogue is `getReconnectTenantId` (`operations.js:75-89`), which
+answers "which single tenant am I acting on". Extracting a shared helper out of
+`operations.js` is deliberately not attempted here.
 
 `GET` **never returns `secret`**; it returns `secret_set: boolean`. `PUT`
 accepts a new secret or omits the field to leave it unchanged.
@@ -222,7 +245,7 @@ user taps wa.me/<bot>?text=PETAG-VERIFY:<blob>
 | `403` | **No retry.** Signature rejected ⇒ the shared secret is misconfigured; retrying cannot help. `operational_events` severity `error`. |
 | Other non-2xx, network error, timeout | Retry with backoff, 3 attempts total. |
 | Attempts exhausted | `operational_events` severity `error`. |
-| Sender is LID-only | Do not forward. `operational_events` severity `warn`. |
+| Sender is LID-only | Do not forward. `operational_events` severity `warning`. |
 
 At-least-once is acceptable — the destination is idempotent on `message_id`.
 
@@ -255,6 +278,7 @@ addressed here.
 - Encryption at rest for `secret`.
 - Repairing `queueService`'s dead `auditService` wiring (`queueService.js:381`).
 - The `db/init.sql` ↔ `schemaService.js` DDL duplication.
+- Declaring axios in `backend/package.json` to fix `messageSender.js`'s reliance on a transitive dep. Real, and a boot-failure risk, but a separate concern from this feature — the relay avoids it by using `fetch`.
 - Any change to the outbound pipeline.
 
 ## Rollout
@@ -262,7 +286,7 @@ addressed here.
 1. Ship schema + service + hook + API + page.
 2. Configure petag.id's tenant via the dashboard.
 3. End-to-end: petag issues `wa.me/<bot>?text=PETAG-VERIFY:<blob>` → user sends → verify the signed POST lands and the browser auto-logs-in.
-4. Watch the Timeline page for `warn`-severity LID drops. A high rate means WhatsApp is addressing that population by LID and R2 needs a resolution strategy (out of scope today, deliberately).
+4. Watch the Timeline page for `warning`-severity LID drops. A high rate means WhatsApp is addressing that population by LID and R2 needs a resolution strategy (out of scope today, deliberately).
 
 ## Coordination required with petag.id
 
