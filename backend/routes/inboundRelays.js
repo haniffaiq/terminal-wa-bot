@@ -48,6 +48,24 @@ function buildRelayResponse(row) {
     };
 }
 
+/**
+ * Resolve the row's next `is_active` value in JS instead of leaning on SQL's
+ * `COALESCE($n, TRUE)`. That expression lives in the INSERT ... VALUES list,
+ * and on conflict `EXCLUDED.is_active` re-reads that *evaluated VALUES
+ * expression* — not the row's current value in the table. So an omitted
+ * `is_active` (bound as JS `undefined` -> SQL NULL) would COALESCE to TRUE
+ * and silently flip a deliberately-disabled relay back on during an
+ * unrelated edit (e.g. fixing a typo in `marker`). Resolving it here lets us
+ * see the existing row and actually preserve it on omission.
+ */
+function resolveIsActive(bodyValue, existingRow) {
+    if (bodyValue === true || bodyValue === false) return bodyValue;
+    if (existingRow && (existingRow.is_active === true || existingRow.is_active === false)) {
+        return existingRow.is_active;
+    }
+    return true;
+}
+
 function sendRouteError(res, error) {
     res.status(error.statusCode || 500).json({ success: false, error: error.message });
 }
@@ -81,7 +99,7 @@ router.put('/', async (req, res) => {
         const urlCheck = validateRelayUrl(destinationUrl);
         if (!urlCheck.ok) throw new BadRequestError(urlCheck.error);
 
-        const existing = await query('SELECT secret FROM inbound_relays WHERE tenant_id = $1', [tenantId]);
+        const existing = await query('SELECT secret, is_active FROM inbound_relays WHERE tenant_id = $1', [tenantId]);
         // Omitting `secret` means "leave it alone", so the marker or reply text
         // can be edited without the operator re-pasting the shared secret.
         const nextSecret = (typeof secret === 'string' && secret.length > 0)
@@ -90,9 +108,11 @@ router.put('/', async (req, res) => {
 
         if (!nextSecret) throw new BadRequestError('secret is required');
 
+        const nextIsActive = resolveIsActive(isActive, existing.rows[0]);
+
         const result = await query(
             `INSERT INTO inbound_relays (tenant_id, marker, destination_url, secret, reply_text, is_active)
-             VALUES ($1, $2, $3, $4, $5, COALESCE($6, TRUE))
+             VALUES ($1, $2, $3, $4, $5, $6)
              ON CONFLICT (tenant_id) DO UPDATE SET
                 marker = EXCLUDED.marker,
                 destination_url = EXCLUDED.destination_url,
@@ -101,7 +121,7 @@ router.put('/', async (req, res) => {
                 is_active = EXCLUDED.is_active,
                 updated_at = NOW()
              RETURNING marker, destination_url, secret, reply_text, is_active`,
-            [tenantId, marker.trim(), urlCheck.url, nextSecret, replyText || null, isActive]
+            [tenantId, marker.trim(), urlCheck.url, nextSecret, replyText || null, nextIsActive]
         );
 
         invalidateRelay(tenantId);
@@ -124,5 +144,6 @@ router.delete('/', async (req, res) => {
 
 router._getTargetTenantId = getTargetTenantId;
 router._buildRelayResponse = buildRelayResponse;
+router._resolveIsActive = resolveIsActive;
 
 module.exports = router;

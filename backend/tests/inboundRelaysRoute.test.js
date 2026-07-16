@@ -5,6 +5,7 @@ const router = require('../routes/inboundRelays');
 
 const getTargetTenantId = router._getTargetTenantId;
 const buildRelayResponse = router._buildRelayResponse;
+const resolveIsActive = router._resolveIsActive;
 
 const TENANT_A = '11111111-1111-4111-8111-111111111111';
 const TENANT_B = '22222222-2222-4222-8222-222222222222';
@@ -52,4 +53,28 @@ test('the response reports a missing secret', () => {
 
 test('a null row builds a null response', () => {
     assert.equal(buildRelayResponse(null), null);
+});
+
+test('is_active explicit true is used as-is', () => {
+    assert.equal(resolveIsActive(true, { is_active: false }), true);
+});
+
+test('is_active explicit false is used as-is', () => {
+    assert.equal(resolveIsActive(false, { is_active: true }), false);
+});
+
+test('is_active omitted with an existing active row stays active', () => {
+    assert.equal(resolveIsActive(undefined, { is_active: true }), true);
+});
+
+test('is_active omitted with an existing disabled row stays disabled', () => {
+    assert.equal(resolveIsActive(undefined, { is_active: false }), false);
+});
+
+test('is_active omitted with no existing row defaults to active', () => {
+    assert.equal(resolveIsActive(undefined, undefined), true);
+});
+
+test('is_active junk value falls back to the existing row value', () => {
+    assert.equal(resolveIsActive('nope', { is_active: false }), false);
 });
