@@ -128,6 +128,18 @@ const OPERATIONS_SCHEMA_STATEMENTS = [
     'CREATE INDEX IF NOT EXISTS idx_webhook_tenant ON webhook_keys(tenant_id)',
     'CREATE INDEX IF NOT EXISTS idx_bot_keepalive_active ON bot_keepalive(is_active)',
     'CREATE INDEX IF NOT EXISTS idx_bot_proxies_lookup ON bot_proxies(tenant_id, bot_id)',
+    `CREATE TABLE IF NOT EXISTS inbound_relays (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        marker VARCHAR(64) NOT NULL,
+        destination_url TEXT NOT NULL,
+        secret TEXT NOT NULL,
+        reply_text TEXT,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(tenant_id)
+    )`,
     // Unified bot migration: every bot is both command-handler and sender.
     'ALTER TABLE bot_status DROP COLUMN IF EXISTS is_admin_bot',
     'ALTER TABLE tenants DROP COLUMN IF EXISTS admin_bot_id'
