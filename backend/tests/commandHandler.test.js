@@ -94,6 +94,131 @@ test('handleCustomCommand substitutes template variables and sends via the given
     assert.equal(calls[0].payload.text, 'Hi ACME, group Sales, bots 2');
 });
 
+// ============================================================
+// setupCommands: dispatch-level tests against the real
+// `messages.upsert` listener (not the extracted helpers above).
+// ============================================================
+function fakeSock(overrides = {}) {
+    let handler;
+    return {
+        ev: { on: (event, fn) => { if (event === 'messages.upsert') handler = fn; } },
+        get handler() { return handler; },
+        sendMessage: async () => {},
+        ...overrides
+    };
+}
+
+test('a history-sync replay (type: "append") does not relay, even when the marker matches', async () => {
+    commandHandler.__resetDedupForTests();
+    const forwarded = [];
+    const sock = fakeSock({
+        sendMessage: async () => { throw new Error('a history replay must never send a confirmation reply'); }
+    });
+    const tenant = { id: 'replay-tenant', brand_name: 'ACME' };
+
+    commandHandler.setupCommands(sock, 'bot1', tenant, {
+        getRelay: async () => ({
+            marker: 'PETAG-VERIFY:',
+            destination_url: 'https://api.petag.id/webhooks/zyron',
+            secret: 's3cr3t',
+            reply_text: 'Verified'
+        }),
+        forward: async (a) => { forwarded.push(a); return { ok: true, status: 200 }; }
+    });
+
+    const message = {
+        key: { remoteJid: '6281234567890@s.whatsapp.net', id: 'OLD-MSG', fromMe: false },
+        message: { conversation: 'PETAG-VERIFY:blob123' },
+        messageTimestamp: 1700000000
+    };
+
+    await sock.handler({ messages: [message], type: 'append' });
+
+    assert.equal(forwarded.length, 0, 'a replayed history message must not be relayed');
+});
+
+test('a history-sync replay (type: "append") does not re-run a "!" command', async () => {
+    commandHandler.__resetDedupForTests();
+    const sent = [];
+    const sock = fakeSock({ sendMessage: async (chatId, payload) => { sent.push({ chatId, payload }); } });
+    const tenant = { id: 'replay-tenant-2', brand_name: 'ACME' };
+
+    commandHandler.setupCommands(sock, 'bot1', tenant, {});
+
+    const message = {
+        key: { remoteJid: '123@g.us', id: 'OLD-CMD', fromMe: false },
+        message: { conversation: '!groupid' }
+    };
+
+    await sock.handler({ messages: [message], type: 'append' });
+
+    assert.equal(sent.length, 0, 'a replayed command must not re-fire');
+});
+
+test('a live upsert (type: "notify") still relays normally', async () => {
+    commandHandler.__resetDedupForTests();
+    const forwarded = [];
+    const sock = fakeSock();
+    const tenant = { id: 'live-tenant', brand_name: 'ACME' };
+
+    commandHandler.setupCommands(sock, 'bot1', tenant, {
+        getRelay: async () => ({
+            marker: 'PETAG-VERIFY:',
+            destination_url: 'https://api.petag.id/webhooks/zyron',
+            secret: 's3cr3t',
+            reply_text: null
+        }),
+        forward: async (a) => { forwarded.push(a); return { ok: true, status: 200 }; }
+    });
+
+    const message = {
+        key: { remoteJid: '6281234567890@s.whatsapp.net', id: 'NEW-MSG', fromMe: false },
+        message: { conversation: 'PETAG-VERIFY:blob123' },
+        messageTimestamp: 1752600000
+    };
+
+    await sock.handler({ messages: [message], type: 'notify' });
+
+    assert.equal(forwarded.length, 1, 'a live message must still relay — the type guard must not swallow real traffic');
+});
+
+test('two concurrent messages.upsert events carrying the same group command id are handled exactly once', async () => {
+    // Every member-bot in a group receives the same message with the same
+    // message.key.id, and exactly one must answer. This pins that behavior.
+    //
+    // It does NOT pin the "claim before any await" ordering, despite what
+    // that comment in setupCommands implies. claimMessage is synchronous and
+    // JS is single-threaded, so its check-and-set is atomic on resume: with an
+    // await above it, both handlers would yield, then the first to resume
+    // claims and the second finds the id taken. Still exactly one. Verified by
+    // injecting `await new Promise(r => setImmediate(r))` above the claim —
+    // this test still passed.
+    //
+    // What the ordering actually buys is avoided work: claiming early means
+    // one bot does the async work per group message instead of all of them.
+    // That is a cost property, not a correctness one, and it is not asserted
+    // here.
+    commandHandler.__resetDedupForTests();
+    const sent = [];
+    const sock = fakeSock({ sendMessage: async (chatId, payload) => { sent.push({ chatId, payload }); } });
+    const tenant = { id: 'race-tenant', brand_name: 'ACME' };
+
+    commandHandler.setupCommands(sock, 'bot1', tenant, {});
+
+    const message = {
+        key: { remoteJid: '120363419686014131@g.us', id: 'DUP-GROUP-MSG', fromMe: false },
+        message: { conversation: '!groupid' }
+    };
+
+    // Two member-bots receiving the same group message "at once".
+    await Promise.all([
+        sock.handler({ messages: [message] }),
+        sock.handler({ messages: [message] })
+    ]);
+
+    assert.equal(sent.length, 1, 'exactly one bot must answer a duplicate group command');
+});
+
 test('handleCustomCommand returns false when command is not defined', async () => {
     const fakeQuery = async () => ({ rows: [] });
     const handled = await commandHandler.__handleCustomCommandForTests(

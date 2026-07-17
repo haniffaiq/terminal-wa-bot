@@ -29,6 +29,16 @@ function createInboundRelayService({
         }
     }
 
+    // Undici keeps the underlying socket open until the response body is
+    // consumed or GC'd. This is a hot, retried path, so an un-drained body
+    // per attempt accumulates open sockets. We never read the destination's
+    // response — discard it as soon as we have the status.
+    async function drain(res) {
+        if (res && typeof res.arrayBuffer === 'function') {
+            await res.arrayBuffer().catch(() => {});
+        }
+    }
+
     async function forward({ tenantId, relay, from, text, messageId, timestamp }) {
         const body = buildRelayBody({ from, text, messageId, timestamp });
         const signature = signRelayBody(relay.secret, body);
@@ -43,10 +53,20 @@ function createInboundRelayService({
                         'X-Zyron-Signature': signature
                     },
                     body,
+                    // Save-time validation (relayUrl.js) rejects every IP literal, but
+                    // that check runs only against the URL the tenant saved. A 307/308
+                    // redirect hands back a *second* URL that never passes through it —
+                    // Node's fetch preserves method/headers/body across redirects and
+                    // would follow it straight past the guard (e.g. to 127.0.0.1 on the
+                    // pod's shared netns), and the https requirement is lost in the same
+                    // hop. A legitimate webhook endpoint does not redirect, so treat one
+                    // as a hard failure instead of following it.
+                    redirect: 'error',
                     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
                 });
 
                 if (res.status === 403) {
+                    await drain(res);
                     // Signature rejected: the shared secret is wrong on one side.
                     // Retrying cannot fix that and would bury the real fault.
                     await safeAudit({
@@ -61,8 +81,12 @@ function createInboundRelayService({
                     return { ok: false, status: 403 };
                 }
 
-                if (res.ok) return { ok: true, status: res.status };
+                if (res.ok) {
+                    await drain(res);
+                    return { ok: true, status: res.status };
+                }
 
+                await drain(res);
                 lastError = `HTTP ${res.status}`;
             } catch (err) {
                 lastError = err.message;

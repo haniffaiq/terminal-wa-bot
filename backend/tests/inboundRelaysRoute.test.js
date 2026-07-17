@@ -6,6 +6,7 @@ const router = require('../routes/inboundRelays');
 const getTargetTenantId = router._getTargetTenantId;
 const buildRelayResponse = router._buildRelayResponse;
 const resolveIsActive = router._resolveIsActive;
+const validateMarker = router._validateMarker;
 
 const TENANT_A = '11111111-1111-4111-8111-111111111111';
 const TENANT_B = '22222222-2222-4222-8222-222222222222';
@@ -77,4 +78,45 @@ test('is_active omitted with no existing row defaults to active', () => {
 
 test('is_active junk value falls back to the existing row value', () => {
     assert.equal(resolveIsActive('nope', { is_active: false }), false);
+});
+
+test('a marker starting with "!" is rejected — it would silently never relay', () => {
+    const result = validateMarker('!verify');
+    assert.equal(result.ok, false);
+    assert.match(result.error, /must not start with "!"/);
+});
+
+test('a marker with leading whitespace before "!" is still rejected after trimming', () => {
+    const result = validateMarker('   !verify');
+    assert.equal(result.ok, false);
+    assert.match(result.error, /must not start with "!"/);
+});
+
+test('an ordinary marker is accepted and trimmed', () => {
+    const result = validateMarker('  PETAG-VERIFY:  ');
+    assert.equal(result.ok, true);
+    assert.equal(result.marker, 'PETAG-VERIFY:');
+});
+
+test('a missing marker is rejected', () => {
+    assert.equal(validateMarker(undefined).ok, false);
+    assert.equal(validateMarker('').ok, false);
+    assert.equal(validateMarker('   ').ok, false);
+});
+
+test('a marker over the max length is rejected', () => {
+    const result = validateMarker('X'.repeat(65));
+    assert.equal(result.ok, false);
+    assert.match(result.error, /at most 64 characters/);
+});
+
+test('a marker at the max length is accepted', () => {
+    const result = validateMarker('X'.repeat(64));
+    assert.equal(result.ok, true);
+});
+
+test('a marker containing "!" but not starting with it is accepted', () => {
+    const result = validateMarker('VERIFY-!-CODE:');
+    assert.equal(result.ok, true);
+    assert.equal(result.marker, 'VERIFY-!-CODE:');
 });

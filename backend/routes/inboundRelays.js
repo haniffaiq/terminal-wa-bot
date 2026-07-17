@@ -20,6 +20,31 @@ function isValidUuid(value) {
 }
 
 /**
+ * A marker starting with '!' would save fine and then never relay: every bot
+ * socket routes '!'-prefixed text down the command path
+ * (`commandHandler.js`'s `!` gate) before the relay hook ever sees it, so
+ * such a marker is permanently unreachable. That failure is invisible from
+ * here — PUT would return 200 and the dashboard would show the relay
+ * "Active" — so it must be rejected at save time instead.
+ */
+function validateMarker(marker) {
+    if (typeof marker !== 'string' || !marker.trim()) {
+        return { ok: false, error: 'marker is required' };
+    }
+    const trimmed = marker.trim();
+    if (trimmed.length > MAX_MARKER_LENGTH) {
+        return { ok: false, error: `marker must be at most ${MAX_MARKER_LENGTH} characters` };
+    }
+    if (trimmed.startsWith('!')) {
+        return {
+            ok: false,
+            error: 'marker must not start with "!" — that prefix is reserved for bot commands and a message starting with it would never reach the relay'
+        };
+    }
+    return { ok: true, marker: trimmed };
+}
+
+/**
  * The tenant this request acts on. A tenant admin is always pinned to their JWT
  * tenant — a client-supplied tenant_id must never widen their reach. A super
  * admin has no tenant of their own, so they must name one explicitly.
@@ -89,12 +114,8 @@ router.put('/', async (req, res) => {
         const tenantId = getTargetTenantId(req);
         const { marker, destination_url: destinationUrl, secret, reply_text: replyText, is_active: isActive } = req.body || {};
 
-        if (typeof marker !== 'string' || !marker.trim()) {
-            throw new BadRequestError('marker is required');
-        }
-        if (marker.trim().length > MAX_MARKER_LENGTH) {
-            throw new BadRequestError(`marker must be at most ${MAX_MARKER_LENGTH} characters`);
-        }
+        const markerCheck = validateMarker(marker);
+        if (!markerCheck.ok) throw new BadRequestError(markerCheck.error);
 
         const urlCheck = validateRelayUrl(destinationUrl);
         if (!urlCheck.ok) throw new BadRequestError(urlCheck.error);
@@ -121,7 +142,7 @@ router.put('/', async (req, res) => {
                 is_active = EXCLUDED.is_active,
                 updated_at = NOW()
              RETURNING marker, destination_url, secret, reply_text, is_active`,
-            [tenantId, marker.trim(), urlCheck.url, nextSecret, replyText || null, nextIsActive]
+            [tenantId, markerCheck.marker, urlCheck.url, nextSecret, replyText || null, nextIsActive]
         );
 
         invalidateRelay(tenantId);
@@ -145,5 +166,6 @@ router.delete('/', async (req, res) => {
 router._getTargetTenantId = getTargetTenantId;
 router._buildRelayResponse = buildRelayResponse;
 router._resolveIsActive = resolveIsActive;
+router._validateMarker = validateMarker;
 
 module.exports = router;

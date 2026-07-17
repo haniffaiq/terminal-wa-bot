@@ -19,7 +19,7 @@ const MSG = {
 };
 
 function okResponse(status = 200) {
-    return { ok: status >= 200 && status < 300, status };
+    return { ok: status >= 200 && status < 300, status, arrayBuffer: async () => new ArrayBuffer(0) };
 }
 
 test('posts the signed body and reports success', async () => {
@@ -40,6 +40,18 @@ test('posts the signed body and reports success', async () => {
         calls[0].opts.headers['X-Zyron-Signature'],
         'a91d6da679a6d41e5ae7a07712bf4b7e48558425ce67bd4cc06cc24a08ea1b2e'
     );
+});
+
+test('never follows a redirect — a followed redirect bypasses save-time SSRF validation', async () => {
+    let sawRedirectOption = null;
+    const svc = createInboundRelayService({
+        fetchFn: async (url, opts) => { sawRedirectOption = opts.redirect; return okResponse(200); },
+        auditFn: async () => {}
+    });
+
+    await svc.forward(MSG);
+
+    assert.equal(sawRedirectOption, 'error', 'destination_url is validated once at save time; a followed 307/308 hands back a second URL that never passes through that check');
 });
 
 test('the body sent is a string, and it is the string that was signed', async () => {
@@ -148,6 +160,40 @@ test('an audit failure never breaks the relay result', async () => {
 
     const result = await svc.forward(MSG);
     assert.equal(result.status, 403);
+});
+
+test('the response body is drained on the ok path, the 403 path, and every retried non-ok path', async () => {
+    let drainedCount = 0;
+    const responses = [500, 500, 403];
+    let call = 0;
+    const svc = createInboundRelayService({
+        fetchFn: async () => {
+            const status = responses[call];
+            call += 1;
+            return {
+                ok: false,
+                status,
+                arrayBuffer: async () => { drainedCount += 1; return new ArrayBuffer(0); }
+            };
+        },
+        auditFn: async () => {},
+        sleepFn: async () => {}
+    });
+
+    await svc.forward(MSG);
+
+    assert.equal(call, 3);
+    assert.equal(drainedCount, 3, 'every fetch response must have its body consumed, including the final 403');
+});
+
+test('draining a body that rejects never breaks the relay result', async () => {
+    const svc = createInboundRelayService({
+        fetchFn: async () => ({ ok: true, status: 200, arrayBuffer: async () => { throw new Error('stream error'); } }),
+        auditFn: async () => {}
+    });
+
+    const result = await svc.forward(MSG);
+    assert.equal(result.ok, true);
 });
 
 test('logDroppedSender records a warning', async () => {

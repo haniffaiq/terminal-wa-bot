@@ -231,8 +231,15 @@ function callApi(keyword, type, options = {}) {
 
 // ============================================================
 // Inbound relay: forward marker-prefixed DMs to the tenant's
-// configured endpoint. Guards run cheapest-first so ordinary
-// chatter costs nothing beyond a string check.
+// configured endpoint. Guards run cheapest-first, so group chatter
+// costs a string check and an ordinary DM costs a cache hit.
+//
+// `deps` is setupCommands' dep bag, which carries the command deps
+// (getNextBotForGroup, startOperationBot, ...) — the relay's keys ride
+// along in the same object and are only ever set by tests. Keep the relay
+// keys below (getRelay, forward, logDroppedSender) distinct from any
+// command dep name: a collision would silently hand the relay the wrong
+// function, and nothing would fail loudly.
 // ============================================================
 async function maybeRelayInbound({ message, text, tenant, sock, deps = {} }) {
     const chatId = message.key?.remoteJid;
@@ -286,6 +293,17 @@ function setupCommands(sock, botId, tenant, deps = {}) {
     const tenantId = tenant.id;
 
     sock.ev.on('messages.upsert', async (m) => {
+        // Baileys emits `messages.upsert` with `type: 'append'` during a
+        // history sync (e.g. right after a reconnect), replaying old
+        // messages verbatim — it is not a live delivery. `type` is 'notify'
+        // (or absent, on some paths) for a message actually arriving now.
+        // Bail out before touching dedup, the relay, or any command: a
+        // replayed marker DM would re-POST to the destination and re-fire a
+        // non-idempotent confirmation reply days later, and a replayed '!'
+        // command would re-run its action. This must be the very first
+        // check in the handler, before any other work.
+        if (m.type && m.type !== 'notify') return;
+
         const message = m.messages?.[0];
         if (!message?.message || !message.key?.remoteJid) return;
         // Ignore our own outgoing messages so a reply that happens to start
@@ -300,7 +318,7 @@ function setupCommands(sock, botId, tenant, deps = {}) {
         // claim below the first await on the command path. No dedup claim here:
         // a DM reaches exactly one bot, the destination is idempotent on
         // message_id, and claiming would let chatter evict command ids.
-        if (!text.startsWith('!')) return maybeRelayInbound({ message, text, tenant, sock });
+        if (!text.startsWith('!')) return maybeRelayInbound({ message, text, tenant, sock, deps });
 
         const commandName = text.split(/\s+/)[0].toLowerCase();
 

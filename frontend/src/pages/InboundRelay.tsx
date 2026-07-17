@@ -115,7 +115,7 @@ export default function InboundRelay() {
               <div className="space-y-1">
                 <label className="text-sm font-medium">Marker</label>
                 <Input value={marker} onChange={(e) => setMarker(e.target.value)} placeholder="PETAG-VERIFY:" />
-                <p className="text-xs text-muted-foreground">Direct messages starting with this text are forwarded. Everything else is ignored.</p>
+                <p className="text-xs text-muted-foreground">Direct messages starting with this text are forwarded. Everything else is ignored. Cannot start with "!" — that prefix is reserved for bot commands and would never reach the relay.</p>
               </div>
 
               <div className="space-y-1">
