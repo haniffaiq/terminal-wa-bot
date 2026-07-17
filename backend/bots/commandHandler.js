@@ -293,17 +293,14 @@ function setupCommands(sock, botId, tenant, deps = {}) {
     const tenantId = tenant.id;
 
     sock.ev.on('messages.upsert', async (m) => {
-        // Baileys emits `messages.upsert` with `type: 'append'` during a
-        // history sync (e.g. right after a reconnect), replaying old
-        // messages verbatim — it is not a live delivery. `type` is 'notify'
-        // (or absent, on some paths) for a message actually arriving now.
-        // Bail out before touching dedup, the relay, or any command: a
-        // replayed marker DM would re-POST to the destination and re-fire a
-        // non-idempotent confirmation reply days later, and a replayed '!'
-        // command would re-run its action. This must be the very first
-        // check in the handler, before any other work.
-        if (m.type && m.type !== 'notify') return;
-
+        // Do NOT filter on m.type here. It looks like a staleness signal and is
+        // not: baileys sets type 'append' for the OFFLINE QUEUE — messages sent
+        // to this bot while it was disconnected, delivered in a batch on
+        // reconnect (Socket/messages-recv.js:699, `node.attrs.offline ?
+        // 'append' : 'notify'`). Those are new messages a user is waiting on,
+        // and dropping them silently loses relays and commands. History sync
+        // never reaches this event at all — it emits `messaging-history.set`
+        // (Utils/process-message.js:168), which nothing here listens to.
         const message = m.messages?.[0];
         if (!message?.message || !message.key?.remoteJid) return;
         // Ignore our own outgoing messages so a reply that happens to start

@@ -108,68 +108,68 @@ function fakeSock(overrides = {}) {
     };
 }
 
-test('a history-sync replay (type: "append") does not relay, even when the marker matches', async () => {
-    commandHandler.__resetDedupForTests();
-    const forwarded = [];
-    const sock = fakeSock({
-        sendMessage: async () => { throw new Error('a history replay must never send a confirmation reply'); }
-    });
-    const tenant = { id: 'replay-tenant', brand_name: 'ACME' };
-
-    commandHandler.setupCommands(sock, 'bot1', tenant, {
+// m.type is NOT a staleness signal. baileys sets 'append' for the offline
+// queue — messages sent while this bot was disconnected, delivered on
+// reconnect (Socket/messages-recv.js:699). Those are new messages a user is
+// waiting on. An earlier version of this handler dropped them; these two tests
+// exist so it never happens again.
+function relayDeps(forwarded, replyText = null) {
+    return {
         getRelay: async () => ({
             marker: 'PETAG-VERIFY:',
             destination_url: 'https://api.petag.id/webhooks/zyron',
             secret: 's3cr3t',
-            reply_text: 'Verified'
+            reply_text: replyText
         }),
         forward: async (a) => { forwarded.push(a); return { ok: true, status: 200 }; }
-    });
+    };
+}
+
+test('an offline-queue delivery (type: "append") still relays — it is a new message, not a replay', async () => {
+    commandHandler.__resetDedupForTests();
+    const forwarded = [];
+    const sock = fakeSock();
+    const tenant = { id: 'offline-tenant', brand_name: 'ACME' };
+
+    commandHandler.setupCommands(sock, 'bot1', tenant, relayDeps(forwarded));
 
     const message = {
-        key: { remoteJid: '6281234567890@s.whatsapp.net', id: 'OLD-MSG', fromMe: false },
+        key: { remoteJid: '6281234567890@s.whatsapp.net', id: 'OFFLINE-MSG', fromMe: false },
         message: { conversation: 'PETAG-VERIFY:blob123' },
-        messageTimestamp: 1700000000
+        messageTimestamp: 1752600000
     };
 
+    // Sent while the bot was down; WhatsApp delivers it on reconnect.
     await sock.handler({ messages: [message], type: 'append' });
 
-    assert.equal(forwarded.length, 0, 'a replayed history message must not be relayed');
+    assert.equal(forwarded.length, 1, 'a verification sent during a disconnect must still reach the destination');
 });
 
-test('a history-sync replay (type: "append") does not re-run a "!" command', async () => {
+test('an offline-queue delivery (type: "append") still runs a "!" command', async () => {
     commandHandler.__resetDedupForTests();
     const sent = [];
     const sock = fakeSock({ sendMessage: async (chatId, payload) => { sent.push({ chatId, payload }); } });
-    const tenant = { id: 'replay-tenant-2', brand_name: 'ACME' };
+    const tenant = { id: 'offline-tenant-2', brand_name: 'ACME' };
 
     commandHandler.setupCommands(sock, 'bot1', tenant, {});
 
     const message = {
-        key: { remoteJid: '123@g.us', id: 'OLD-CMD', fromMe: false },
+        key: { remoteJid: '123@g.us', id: 'OFFLINE-CMD', fromMe: false },
         message: { conversation: '!groupid' }
     };
 
     await sock.handler({ messages: [message], type: 'append' });
 
-    assert.equal(sent.length, 0, 'a replayed command must not re-fire');
+    assert.equal(sent.length, 1, 'a command sent during a disconnect must still run');
 });
 
-test('a live upsert (type: "notify") still relays normally', async () => {
+test('a live upsert (type: "notify") relays normally', async () => {
     commandHandler.__resetDedupForTests();
     const forwarded = [];
     const sock = fakeSock();
     const tenant = { id: 'live-tenant', brand_name: 'ACME' };
 
-    commandHandler.setupCommands(sock, 'bot1', tenant, {
-        getRelay: async () => ({
-            marker: 'PETAG-VERIFY:',
-            destination_url: 'https://api.petag.id/webhooks/zyron',
-            secret: 's3cr3t',
-            reply_text: null
-        }),
-        forward: async (a) => { forwarded.push(a); return { ok: true, status: 200 }; }
-    });
+    commandHandler.setupCommands(sock, 'bot1', tenant, relayDeps(forwarded));
 
     const message = {
         key: { remoteJid: '6281234567890@s.whatsapp.net', id: 'NEW-MSG', fromMe: false },
@@ -179,7 +179,7 @@ test('a live upsert (type: "notify") still relays normally', async () => {
 
     await sock.handler({ messages: [message], type: 'notify' });
 
-    assert.equal(forwarded.length, 1, 'a live message must still relay — the type guard must not swallow real traffic');
+    assert.equal(forwarded.length, 1);
 });
 
 test('two concurrent messages.upsert events carrying the same group command id are handled exactly once', async () => {

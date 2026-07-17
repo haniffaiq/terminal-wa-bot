@@ -59,8 +59,9 @@ function createInboundRelayService({
                     // Node's fetch preserves method/headers/body across redirects and
                     // would follow it straight past the guard (e.g. to 127.0.0.1 on the
                     // pod's shared netns), and the https requirement is lost in the same
-                    // hop. A legitimate webhook endpoint does not redirect, so treat one
-                    // as a hard failure instead of following it.
+                    // hop. A legitimate webhook endpoint does not redirect, so refuse
+                    // rather than follow. fetch then rejects, and the retry loop below
+                    // treats it like any other transport error.
                     redirect: 'error',
                     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
                 });
@@ -89,7 +90,10 @@ function createInboundRelayService({
                 await drain(res);
                 lastError = `HTTP ${res.status}`;
             } catch (err) {
-                lastError = err.message;
+                // undici collapses every transport fault to "fetch failed" and puts the
+                // real reason in .cause — a refused redirect, a DNS miss and a TLS error
+                // are indistinguishable without it, though each needs a different fix.
+                lastError = err.cause?.message ? `${err.message}: ${err.cause.message}` : err.message;
             }
 
             if (attempt < maxAttempts) {
