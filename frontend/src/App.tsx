@@ -15,6 +15,7 @@ import CustomCommands from '@/pages/CustomCommands';
 import ScheduledMessages from '@/pages/ScheduledMessages';
 import MessageTemplates from '@/pages/MessageTemplates';
 import Webhook from '@/pages/Webhook';
+import InboundRelay from '@/pages/InboundRelay';
 
 export default function App() {
   const [, setAuthed] = useState(false);
@@ -36,6 +37,7 @@ export default function App() {
             <Route path="/schedules" element={<ScheduledMessages />} />
             <Route path="/templates" element={<MessageTemplates />} />
             <Route path="/webhook" element={<Webhook />} />
+            <Route path="/inbound-relay" element={<InboundRelay />} />
             <Route path="/tenants" element={<TenantManagement />} />
           </Routes>
         </Layout>

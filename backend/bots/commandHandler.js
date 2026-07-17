@@ -1,6 +1,9 @@
 const http = require('http');
 const pino = require('pino');
 const { query } = require('../utils/db');
+const { getRelay } = require('../services/inboundRelayConfig');
+const { resolveSenderPhone } = require('../utils/inboundSender');
+const inboundRelayService = require('../services/inboundRelayService');
 
 const logger = pino({
     transport: {
@@ -227,6 +230,60 @@ function callApi(keyword, type, options = {}) {
 }
 
 // ============================================================
+// Inbound relay: forward marker-prefixed DMs to the tenant's
+// configured endpoint. Guards run cheapest-first, so group chatter
+// costs a string check and an ordinary DM costs a cache hit.
+//
+// `deps` is setupCommands' dep bag, which carries the command deps
+// (getNextBotForGroup, startOperationBot, ...) — the relay's keys ride
+// along in the same object and are only ever set by tests. Keep the relay
+// keys below (getRelay, forward, logDroppedSender) distinct from any
+// command dep name: a collision would silently hand the relay the wrong
+// function, and nothing would fail loudly.
+// ============================================================
+async function maybeRelayInbound({ message, text, tenant, sock, deps = {} }) {
+    const chatId = message.key?.remoteJid;
+    // DM only. A group message would reach every member-bot, and a group
+    // sender needs participantPn rather than senderPn — neither is supported.
+    if (!chatId || chatId.endsWith('@g.us')) return;
+
+    const getRelayFn = deps.getRelay || getRelay;
+    const relay = await getRelayFn(tenant.id);
+    if (!relay || !relay.marker || !text.startsWith(relay.marker)) return;
+
+    const messageId = message.key.id;
+    const from = resolveSenderPhone(message.key);
+    if (!from) {
+        // Only a LID was available. Forwarding it would put a non-phone-number
+        // in `from`, which the destination trusts as proof of ownership.
+        const logDropped = deps.logDroppedSender || inboundRelayService.logDroppedSender;
+        await logDropped({ tenantId: tenant.id, messageId });
+        return;
+    }
+
+    const forwardFn = deps.forward || inboundRelayService.forward;
+    const result = await forwardFn({
+        tenantId: tenant.id,
+        relay,
+        from,
+        text,
+        messageId,
+        timestamp: Number(message.messageTimestamp) || Math.floor(Date.now() / 1000)
+    });
+
+    if (!result?.ok || !relay.reply_text) return;
+
+    // In-session reply to a user who messaged first, so it carries none of the
+    // cold-message ban risk the outbound throttle exists to manage — and it must
+    // not depend on the queue. Its failure is cosmetic; the relay already landed.
+    try {
+        await sock.sendMessage(chatId, { text: relay.reply_text });
+    } catch (err) {
+        logger.warn(`[${tenant.id}] Inbound relay confirmation reply failed: ${err.message}`);
+    }
+}
+
+// ============================================================
 // Attach command handling to ANY bot socket.
 // deps: { getNextBotForGroup, startOperationBot, stopOperationBot,
 //         reconnectBot, reconnectSingleBotCommand, getBotStatusList }
@@ -236,6 +293,14 @@ function setupCommands(sock, botId, tenant, deps = {}) {
     const tenantId = tenant.id;
 
     sock.ev.on('messages.upsert', async (m) => {
+        // Do NOT filter on m.type here. It looks like a staleness signal and is
+        // not: baileys sets type 'append' for the OFFLINE QUEUE — messages sent
+        // to this bot while it was disconnected, delivered in a batch on
+        // reconnect (Socket/messages-recv.js:699, `node.attrs.offline ?
+        // 'append' : 'notify'`). Those are new messages a user is waiting on,
+        // and dropping them silently loses relays and commands. History sync
+        // never reaches this event at all — it emits `messaging-history.set`
+        // (Utils/process-message.js:168), which nothing here listens to.
         const message = m.messages?.[0];
         if (!message?.message || !message.key?.remoteJid) return;
         // Ignore our own outgoing messages so a reply that happens to start
@@ -244,8 +309,15 @@ function setupCommands(sock, botId, tenant, deps = {}) {
 
         const text = extractMessageText(message);
         if (!text) return;
+
+        // Inbound relay: markers are not commands, so this must run before the
+        // '!' gate. It returns rather than falling through, which keeps the
+        // claim below the first await on the command path. No dedup claim here:
+        // a DM reaches exactly one bot, the destination is idempotent on
+        // message_id, and claiming would let chatter evict command ids.
+        if (!text.startsWith('!')) return maybeRelayInbound({ message, text, tenant, sock, deps });
+
         const commandName = text.split(/\s+/)[0].toLowerCase();
-        if (!commandName.startsWith('!')) return;
 
         // Dedup BEFORE any await — exactly one bot proceeds.
         if (!claimMessage(tenantId, message.key.id)) return;
@@ -368,6 +440,7 @@ function setupCommands(sock, botId, tenant, deps = {}) {
 
 module.exports = {
     setupCommands,
+    maybeRelayInbound,
     __claimMessageForTests: claimMessage,
     __resetDedupForTests: resetDedup,
     __selectResponderForTests: selectResponder,

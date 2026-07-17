@@ -20,6 +20,7 @@ import {
   Clock,
   FileStack,
   Plug,
+  Inbox,
 } from 'lucide-react';
 import { getUser, isSuperAdmin, clearToken } from '@/lib/auth';
 import { disconnectSocket } from '@/lib/socket';
@@ -47,6 +48,7 @@ export function Layout({ children, onLogout }: { children: React.ReactNode; onLo
       { path: '/schedules', label: 'Schedules', icon: Clock },
       { path: '/templates', label: 'Templates', icon: FileStack },
       { path: '/webhook', label: 'Webhook', icon: Plug },
+      { path: '/inbound-relay', label: 'Inbound Relay', icon: Inbox },
     ] : []),
     ...(isSuperAdmin() ? [{ path: '/tenants', label: 'Tenants', icon: Building2 }] : []),
   ];

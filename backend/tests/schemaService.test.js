@@ -38,6 +38,7 @@ test('ensureOperationsSchema creates operational tables and indexes in order', a
         'CREATE INDEX IF NOT EXISTS idx_bot_proxies_lookup',
         'CREATE TABLE IF NOT EXISTS bot_keepalive',
         'CREATE TABLE IF NOT EXISTS bot_proxies',
+        'CREATE TABLE IF NOT EXISTS inbound_relays',
         'ALTER TABLE bot_status DROP COLUMN IF EXISTS is_admin_bot',
         'ALTER TABLE tenants DROP COLUMN IF EXISTS admin_bot_id'
     ];
