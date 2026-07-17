@@ -41,7 +41,6 @@ const { createRoutingService } = require('./services/routingService');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
-const axios = require('axios');
 const mime = require('mime-types');
 
 
