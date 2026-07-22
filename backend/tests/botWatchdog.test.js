@@ -5,10 +5,23 @@ const { createBotWatchdog } = require('../services/botWatchdog');
 
 const SILENT = { log() {}, warn() {}, error() {} };
 
-function registryWith(sockets = {}) {
+function registryWith(sockets = {}, reconnecting = {}) {
     return {
-        getBotSocket: (tenantId, botId) => sockets[`${tenantId}:${botId}`] || null
+        getBotSocket: (tenantId, botId) => sockets[`${tenantId}:${botId}`] || null,
+        isReconnecting: (tenantId, botId) => Boolean(reconnecting[`${tenantId}:${botId}`])
     };
+}
+
+// A live socket: Baileys' ws wrapper reports isOpen true.
+function aliveSocket() {
+    return { ws: { isOpen: true } };
+}
+
+// A dead socket still sitting in the registry: Baileys' keepalive closed the ws
+// (isOpen false), but our close handler missed the event. This is the half-open
+// case the watchdog must catch.
+function deadSocket() {
+    return { ws: { isOpen: false } };
 }
 
 test('revives a closed bot that still holds auth creds', async () => {
@@ -46,12 +59,14 @@ test('only considers bots whose creds row still exists', async () => {
     assert.match(sql, /t\.is_active = TRUE/i);
 });
 
-test('skips a bot whose socket is still live in memory', async () => {
+test('a present, open socket is left alone and marked alive', async () => {
     const reconnected = [];
+    const marked = [];
     const watchdog = createBotWatchdog({
         queryFn: async () => ({ rows: [{ tenant_id: 'tenant-1', bot_id: 'bot-a' }] }),
-        botRegistry: registryWith({ 'tenant-1:bot-a': { live: true } }),
+        botRegistry: registryWith({ 'tenant-1:bot-a': aliveSocket() }),
         reconnectFn: async (botId, tenantId) => reconnected.push(`${tenantId}:${botId}`),
+        markSuccessFn: async ({ tenantId, botId }) => marked.push(`${tenantId}:${botId}`),
         logger: SILENT
     });
 
@@ -59,6 +74,101 @@ test('skips a bot whose socket is still live in memory', async () => {
 
     assert.deepEqual(reconnected, []);
     assert.deepEqual(result.revived, []);
+    assert.deepEqual(result.alive, ['tenant-1:bot-a']);
+    assert.deepEqual(marked, ['tenant-1:bot-a'], 'a live socket refreshes last_seen (DB only, no WhatsApp traffic)');
+});
+
+test('a present-but-closed socket (half-open Baileys already closed) is reconnected', async () => {
+    const reconnected = [];
+    const watchdog = createBotWatchdog({
+        queryFn: async () => ({ rows: [{ tenant_id: 'tenant-1', bot_id: 'bot-a' }] }),
+        botRegistry: registryWith({ 'tenant-1:bot-a': deadSocket() }),
+        reconnectFn: async (botId, tenantId) => reconnected.push(`${tenantId}:${botId}`),
+        logger: SILENT
+    });
+
+    const result = await watchdog.tick(0);
+
+    assert.deepEqual(reconnected, ['tenant-1:bot-a'], 'a frozen bot_status=open bot with a dead ws must still be caught');
+    assert.deepEqual(result.revived, ['tenant-1:bot-a']);
+});
+
+test('detection sends nothing — a live socket is never asked to transmit', async () => {
+    let transmitted = false;
+    // A socket that reports open but throws if anything tries to send through it.
+    const silentSocket = {
+        ws: { isOpen: true },
+        sendPresenceUpdate: () => { transmitted = true; throw new Error('watchdog must not send'); },
+        sendMessage: () => { transmitted = true; throw new Error('watchdog must not send'); }
+    };
+    const watchdog = createBotWatchdog({
+        queryFn: async () => ({ rows: [{ tenant_id: 'tenant-1', bot_id: 'bot-a' }] }),
+        botRegistry: registryWith({ 'tenant-1:bot-a': silentSocket }),
+        reconnectFn: async () => {},
+        markSuccessFn: async () => {},
+        logger: SILENT
+    });
+
+    await watchdog.tick(0);
+
+    assert.equal(transmitted, false, 'liveness is read passively from ws.isOpen; the OTP number stays silent');
+});
+
+test('a bot mid-reconnect is skipped without reconnecting', async () => {
+    const reconnected = [];
+    const watchdog = createBotWatchdog({
+        queryFn: async () => ({ rows: [{ tenant_id: 'tenant-1', bot_id: 'bot-a' }] }),
+        botRegistry: registryWith(
+            { 'tenant-1:bot-a': deadSocket() },
+            { 'tenant-1:bot-a': true }
+        ),
+        reconnectFn: async (botId, tenantId) => reconnected.push(`${tenantId}:${botId}`),
+        logger: SILENT
+    });
+
+    const result = await watchdog.tick(0);
+
+    assert.deepEqual(reconnected, [], 'a settling socket must not be torn down mid-handshake');
+    assert.deepEqual(result.skipped, ['tenant-1:bot-a']);
+});
+
+test('the revive query no longer excludes bots whose bot_status is open', async () => {
+    let sql = '';
+    const watchdog = createBotWatchdog({
+        queryFn: async (statement) => { sql = statement.replace(/\s+/g, ' '); return { rows: [] }; },
+        botRegistry: registryWith(),
+        reconnectFn: async () => {},
+        logger: SILENT
+    });
+
+    await watchdog.tick(0);
+
+    assert.doesNotMatch(sql, /status <> 'open'/i, 'half-open bots freeze at open; excluding them reintroduces the bug');
+});
+
+test('a recovered-alive socket clears backoff so a later death retries at once', async () => {
+    let live = false;
+    const attempts = [];
+    const socket = { ws: { get isOpen() { return live; } } };
+    const watchdog = createBotWatchdog({
+        queryFn: async () => ({ rows: [{ tenant_id: 'tenant-1', bot_id: 'bot-a' }] }),
+        botRegistry: registryWith({ 'tenant-1:bot-a': socket }),
+        reconnectFn: async () => attempts.push(true),
+        markSuccessFn: async () => {},
+        baseBackoffMs: 60000,
+        logger: SILENT
+    });
+
+    await watchdog.tick(0);        // dead -> reconnect, backoff armed
+    assert.equal(attempts.length, 1);
+
+    live = true;
+    await watchdog.tick(100);      // now open -> backoff cleared
+    assert.equal(attempts.length, 1);
+
+    live = false;
+    await watchdog.tick(200);      // dead again, backoff cleared -> retries immediately
+    assert.equal(attempts.length, 2);
 });
 
 test('backs off exponentially instead of hammering a bot that will not come back', async () => {
@@ -163,5 +273,5 @@ test('a failing lookup returns empty instead of crashing the interval', async ()
 
     const result = await watchdog.tick(0);
 
-    assert.deepEqual(result, { revived: [], skipped: [] });
+    assert.deepEqual(result, { revived: [], skipped: [], alive: [] });
 });
