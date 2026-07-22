@@ -6,14 +6,34 @@
 
 ## Goal
 
-Make bot recovery act on **true liveness** — an active round-trip probe — instead of two DB signals that both lie. Detect and auto-reconnect half-open sockets. Affects all bots.
+Make bot recovery act on **true liveness** instead of two DB signals that both
+lie. Detect and auto-reconnect half-open sockets. Affects all bots. **Sends
+nothing** — detection is a passive read, so an OTP receive-only number stays
+silent.
+
+## Correction (post-review): passive detection, not an active probe
+
+An earlier draft of this design had the watchdog send a `sendPresenceUpdate`
+probe to force a round-trip. That was **redundant and abandoned**. Baileys
+already runs its own keepalive (`Socket/socket.js:285`): every ~30s
+(`keepAliveIntervalMs`, set to 30000 in `createSock.js:116`) it checks time
+since the last received frame, sends a protocol `ping`, and calls
+`end(connectionLost)` if the peer has gone quiet past the threshold. That is the
+round-trip that detects half-open — it runs regardless of us, and it is protocol
+plumbing, not app-level presence.
+
+So the watchdog sends nothing. It **reads** `sock.ws.isOpen`
+(`Socket/Client/websocket.js:9`, `readyState === OPEN`). Baileys flips it to
+false when it closes a dead connection. A socket present in the registry but not
+open is a dead socket whose close event our handler missed → reconnect. Zero
+outbound; the OTP number's silence is preserved.
 
 ## The bug (confirmed from code)
 
 - `botWatchdog.js:35` queries `WHERE bs.status <> 'open'`. A half-open socket leaves `bot_status` frozen at `'open'`, so the watchdog **never sees it**.
 - `bot_status` freezes on half-open (no event updates it). `bot_health.last_seen_at` is refreshed **only** on connect (`operationBot.js:218`, the sole `markOnline` caller), so the 120s staleness sweep (`botHealthService.js:177`, wired at `index.js:1312`) flips every healthy idle bot to `offline` 120s after connect. Neither signal reflects "socket alive now".
-- `ws.readyState` does **not** detect half-open: TCP is dead but the local socket still reports OPEN (no FIN/RST received). Only a failed round-trip detects it.
-- Keepalive presence (`keepAliveService.js:60`) fires every 39 min and keeps the socket warm, but writes nothing to the DB and is the tenant's only defense — if it fails, nothing acts.
+- At the instant of half-open, `ws.readyState` still reports OPEN (no FIN/RST received). But Baileys' own keepalive (`socket.js:285`) closes the ws within ~35s of the peer going quiet, so `sock.ws.isOpen` becomes a reliable liveness read on the watchdog's 60s cadence — no probe from us needed.
+- Why `admin_bot1` sat dead ~28h: Baileys detected the death and ended the socket, but operationBot's `connection.update` generation guard (`operationBot.js:432`) can `return` before the close handler runs, silently swallowing the close — leaving a dead socket in the registry with `bot_status` frozen at 'open'. A passive `ws.isOpen` read catches exactly that residual case.
 
 ## Confirmed contract (unchanged)
 

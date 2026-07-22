@@ -12,14 +12,16 @@ function registryWith(sockets = {}, reconnecting = {}) {
     };
 }
 
-// A socket whose presence probe resolves — i.e. a genuinely alive connection.
+// A live socket: Baileys' ws wrapper reports isOpen true.
 function aliveSocket() {
-    return { sendPresenceUpdate: async () => {} };
+    return { ws: { isOpen: true } };
 }
 
-// A socket whose presence write never settles — a half-open TCP.
-function halfOpenSocket() {
-    return { sendPresenceUpdate: () => new Promise(() => {}) };
+// A dead socket still sitting in the registry: Baileys' keepalive closed the ws
+// (isOpen false), but our close handler missed the event. This is the half-open
+// case the watchdog must catch.
+function deadSocket() {
+    return { ws: { isOpen: false } };
 }
 
 test('revives a closed bot that still holds auth creds', async () => {
@@ -57,7 +59,7 @@ test('only considers bots whose creds row still exists', async () => {
     assert.match(sql, /t\.is_active = TRUE/i);
 });
 
-test('a present socket that answers the probe is left alone and marked alive', async () => {
+test('a present, open socket is left alone and marked alive', async () => {
     const reconnected = [];
     const marked = [];
     const watchdog = createBotWatchdog({
@@ -73,46 +75,51 @@ test('a present socket that answers the probe is left alone and marked alive', a
     assert.deepEqual(reconnected, []);
     assert.deepEqual(result.revived, []);
     assert.deepEqual(result.alive, ['tenant-1:bot-a']);
-    assert.deepEqual(marked, ['tenant-1:bot-a'], 'a live probe refreshes last_seen');
+    assert.deepEqual(marked, ['tenant-1:bot-a'], 'a live socket refreshes last_seen (DB only, no WhatsApp traffic)');
 });
 
-test('a half-open socket (probe never settles) is reconnected', async () => {
+test('a present-but-closed socket (half-open Baileys already closed) is reconnected', async () => {
     const reconnected = [];
     const watchdog = createBotWatchdog({
         queryFn: async () => ({ rows: [{ tenant_id: 'tenant-1', bot_id: 'bot-a' }] }),
-        botRegistry: registryWith({ 'tenant-1:bot-a': halfOpenSocket() }),
+        botRegistry: registryWith({ 'tenant-1:bot-a': deadSocket() }),
         reconnectFn: async (botId, tenantId) => reconnected.push(`${tenantId}:${botId}`),
-        probeTimeoutMs: 20,
         logger: SILENT
     });
 
     const result = await watchdog.tick(0);
 
-    assert.deepEqual(reconnected, ['tenant-1:bot-a'], 'a frozen bot_status=open bot must still be caught');
+    assert.deepEqual(reconnected, ['tenant-1:bot-a'], 'a frozen bot_status=open bot with a dead ws must still be caught');
     assert.deepEqual(result.revived, ['tenant-1:bot-a']);
 });
 
-test('a present socket whose probe throws is reconnected', async () => {
-    const reconnected = [];
+test('detection sends nothing — a live socket is never asked to transmit', async () => {
+    let transmitted = false;
+    // A socket that reports open but throws if anything tries to send through it.
+    const silentSocket = {
+        ws: { isOpen: true },
+        sendPresenceUpdate: () => { transmitted = true; throw new Error('watchdog must not send'); },
+        sendMessage: () => { transmitted = true; throw new Error('watchdog must not send'); }
+    };
     const watchdog = createBotWatchdog({
         queryFn: async () => ({ rows: [{ tenant_id: 'tenant-1', bot_id: 'bot-a' }] }),
-        botRegistry: registryWith({ 'tenant-1:bot-a': { sendPresenceUpdate: async () => { throw new Error('socket closed'); } } }),
-        reconnectFn: async (botId, tenantId) => reconnected.push(`${tenantId}:${botId}`),
-        probeTimeoutMs: 1000,
+        botRegistry: registryWith({ 'tenant-1:bot-a': silentSocket }),
+        reconnectFn: async () => {},
+        markSuccessFn: async () => {},
         logger: SILENT
     });
 
     await watchdog.tick(0);
-    assert.deepEqual(reconnected, ['tenant-1:bot-a']);
+
+    assert.equal(transmitted, false, 'liveness is read passively from ws.isOpen; the OTP number stays silent');
 });
 
-test('a bot mid-reconnect is skipped without probing or reconnecting', async () => {
+test('a bot mid-reconnect is skipped without reconnecting', async () => {
     const reconnected = [];
-    let probed = false;
     const watchdog = createBotWatchdog({
         queryFn: async () => ({ rows: [{ tenant_id: 'tenant-1', bot_id: 'bot-a' }] }),
         botRegistry: registryWith(
-            { 'tenant-1:bot-a': { sendPresenceUpdate: async () => { probed = true; } } },
+            { 'tenant-1:bot-a': deadSocket() },
             { 'tenant-1:bot-a': true }
         ),
         reconnectFn: async (botId, tenantId) => reconnected.push(`${tenantId}:${botId}`),
@@ -121,8 +128,7 @@ test('a bot mid-reconnect is skipped without probing or reconnecting', async () 
 
     const result = await watchdog.tick(0);
 
-    assert.equal(probed, false, 'a settling socket must not be probed');
-    assert.deepEqual(reconnected, []);
+    assert.deepEqual(reconnected, [], 'a settling socket must not be torn down mid-handshake');
     assert.deepEqual(result.skipped, ['tenant-1:bot-a']);
 });
 
@@ -140,29 +146,28 @@ test('the revive query no longer excludes bots whose bot_status is open', async 
     assert.doesNotMatch(sql, /status <> 'open'/i, 'half-open bots freeze at open; excluding them reintroduces the bug');
 });
 
-test('a live probe clears backoff so a bot that briefly flapped is not held off', async () => {
-    let alive = false;
+test('a recovered-alive socket clears backoff so a later death retries at once', async () => {
+    let live = false;
     const attempts = [];
-    const socket = { sendPresenceUpdate: async () => { if (!alive) throw new Error('dead'); } };
+    const socket = { ws: { get isOpen() { return live; } } };
     const watchdog = createBotWatchdog({
         queryFn: async () => ({ rows: [{ tenant_id: 'tenant-1', bot_id: 'bot-a' }] }),
         botRegistry: registryWith({ 'tenant-1:bot-a': socket }),
         reconnectFn: async () => attempts.push(true),
         markSuccessFn: async () => {},
         baseBackoffMs: 60000,
-        probeTimeoutMs: 1000,
         logger: SILENT
     });
 
-    await watchdog.tick(0);        // probe throws -> reconnect, backoff armed
+    await watchdog.tick(0);        // dead -> reconnect, backoff armed
     assert.equal(attempts.length, 1);
 
-    alive = true;
-    await watchdog.tick(100);      // probe now succeeds -> backoff cleared
+    live = true;
+    await watchdog.tick(100);      // now open -> backoff cleared
     assert.equal(attempts.length, 1);
 
-    alive = false;
-    await watchdog.tick(200);      // dead again, but backoff was cleared -> retries at once
+    live = false;
+    await watchdog.tick(200);      // dead again, backoff cleared -> retries immediately
     assert.equal(attempts.length, 2);
 });
 

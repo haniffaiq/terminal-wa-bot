@@ -4,30 +4,31 @@ const botHealthService = require('./botHealthService');
 const DEFAULT_INTERVAL_MS = 60000;
 const DEFAULT_BASE_BACKOFF_MS = 60000;
 const DEFAULT_MAX_BACKOFF_MS = 900000;
-const DEFAULT_PROBE_TIMEOUT_MS = 5000;
 
 /**
  * Keeps bots connected by acting on TRUE liveness, not on the bot_status column.
  *
- * A WhatsApp socket can die half-open: the TCP connection is dead but no close
- * event ever fires, so bot_status stays frozen at 'open' and the per-socket
- * reconnect chain never runs. bot_health lies the other way — it flips healthy
- * idle bots to 'offline' 120s after connect. And ws.readyState cannot see
- * half-open at all (the local socket still reports OPEN with no FIN/RST).
+ * A WhatsApp socket can die half-open — TCP dead, no close event delivered — so
+ * bot_status stays frozen at 'open' and the per-socket reconnect chain never
+ * runs. The old watchdog queried `bot_status <> 'open'`, so the one bot that
+ * most needed reviving was the row it excluded. admin_bot1 sat dead ~28h: its
+ * close event was swallowed by operationBot's generation guard, leaving a dead
+ * socket in the registry.
  *
- * So this walks every creds-holding bot and probes it with a timed
- * sendPresenceUpdate — a real round-trip. Probe succeeds => alive, clear
- * backoff, refresh last_seen. Probe hangs or throws => half-open => reconnect
- * (connectBot tears down the stale socket first). Bots whose creds were purged
- * (logged out) never appear here; they need a QR rescan.
+ * Detection is PASSIVE and sends nothing. Baileys runs its own keepalive ping
+ * every ~30s (Socket/socket.js) and closes the websocket when the peer stops
+ * responding — that is the round-trip that detects half-open. We only READ the
+ * result: `sock.ws.isOpen` is true on a live socket and false once Baileys has
+ * closed a dead one. So a socket that is present but not open is a dead socket
+ * our close handler missed → reconnect. No presence, no outbound: the OTP number
+ * stays silent. Bots whose creds were purged (logged out) never appear here.
  */
 function createBotWatchdog({
     queryFn = query,
     botRegistry,
     reconnectFn,
     markSuccessFn = botHealthService.markSuccess,
-    probeBot = (sock) => sock.sendPresenceUpdate('available'),
-    probeTimeoutMs = Number(process.env.BOT_WATCHDOG_PROBE_TIMEOUT_MS || DEFAULT_PROBE_TIMEOUT_MS),
+    isSocketAlive = (sock) => sock?.ws?.isOpen === true,
     baseBackoffMs = Number(process.env.BOT_WATCHDOG_BASE_BACKOFF_MS || DEFAULT_BASE_BACKOFF_MS),
     maxBackoffMs = Number(process.env.BOT_WATCHDOG_MAX_BACKOFF_MS || DEFAULT_MAX_BACKOFF_MS),
     logger = console
@@ -60,25 +61,6 @@ function createBotWatchdog({
         return Math.min(baseBackoffMs * Math.pow(2, count), maxBackoffMs);
     }
 
-    // A write to a half-open TCP buffers and never rejects, so a bare probe
-    // would hang forever. The timeout is what turns "hanging write" into a
-    // "dead" verdict. Any probe failure maps to false; the tick never throws.
-    function probeWithTimeout(sock) {
-        let timer;
-        const probe = Promise.resolve()
-            .then(() => probeBot(sock))
-            .then(() => true)
-            .catch(() => false);
-        // Not unref'd: on a half-open probe the timeout is the ONLY thing that
-        // resolves the race, so it must keep the loop alive until it fires. It
-        // is always cleared below, so it holds the process for at most
-        // probeTimeoutMs per in-flight probe.
-        const timeout = new Promise((resolve) => {
-            timer = setTimeout(() => resolve(false), probeTimeoutMs);
-        });
-        return Promise.race([probe, timeout]).finally(() => clearTimeout(timer));
-    }
-
     function clearBackoff(key) {
         delete failures[key];
         delete nextAllowedAt[key];
@@ -109,24 +91,25 @@ function createBotWatchdog({
             const key = `${tenantId}:${botId}`;
 
             // Mid-reconnect: the socket is settling (e.g. the 515 restart
-            // handshake). Probing it would fail and cause thrash; leave it.
+            // handshake). Its ws may not be open yet; leave it alone.
             if (botRegistry.isReconnecting?.(tenantId, botId)) {
                 skipped.push(key);
                 continue;
             }
 
             const sock = botRegistry.getBotSocket(tenantId, botId);
-            if (sock) {
-                const isAlive = await probeWithTimeout(sock);
-                if (isAlive) {
-                    clearBackoff(key);
-                    await safeMarkSuccess(tenantId, botId);
-                    alive.push(key);
-                    continue;
-                }
-                // Half-open: fall through to reconnect (respecting backoff).
+            if (sock && isSocketAlive(sock)) {
+                // Live socket. Refresh last_seen so the dashboard's staleness
+                // sweep does not false-flip a healthy bot to offline. This is a
+                // DB write only — no WhatsApp traffic.
+                clearBackoff(key);
+                await safeMarkSuccess(tenantId, botId);
+                alive.push(key);
+                continue;
             }
 
+            // No socket, or a socket Baileys has already closed (half-open the
+            // close handler missed). Reconnect, respecting backoff.
             if (nextAllowedAt[key] && now < nextAllowedAt[key]) {
                 skipped.push(key);
                 continue;
@@ -162,10 +145,15 @@ function startBotWatchdog({
     if (intervalMs <= 0) return { stop() {} };
 
     const watchdog = createBotWatchdog(options);
+    // Passive ticks are fast (no probe waits), but guard reentrancy anyway so a
+    // slow DB lookup under load can't overlap two sweeps and corrupt backoff.
+    let running = false;
     const timer = setInterval(() => {
-        watchdog.tick().catch(err => {
-            console.error(`[BotWatchdog] Tick failed: ${err.message}`);
-        });
+        if (running) return;
+        running = true;
+        watchdog.tick()
+            .catch(err => console.error(`[BotWatchdog] Tick failed: ${err.message}`))
+            .finally(() => { running = false; });
     }, intervalMs);
 
     if (typeof timer.unref === 'function') timer.unref();
