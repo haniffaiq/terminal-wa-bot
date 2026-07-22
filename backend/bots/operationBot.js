@@ -671,6 +671,15 @@ function getBotSocket(tenantId, botId) {
     return operationBots[tenantId]?.[botId] || null;
 }
 
+// True while a connect is in flight for this bot (the reconnect mutex holds the
+// literal 'connecting' sentinel). The watchdog uses this to avoid probing a
+// socket that is still settling — e.g. mid 515-restart handshake — which would
+// fail the probe and cause reconnect thrash.
+function isBotReconnecting(tenantId, botId) {
+    if (!tenantId || !botId) return false;
+    return reconnectTimers[`${tenantId}:${botId}`] === 'connecting';
+}
+
 function getNextBotForIndividual(number, tenantId) {
     if (!tenantId || !operationBots[tenantId]) return null;
     const botIds = Object.keys(operationBots[tenantId]);
@@ -780,6 +789,7 @@ module.exports = {
     getActiveGroupBotIds,
     getActiveBotIdsForTenant,
     getBotSocket,
+    isReconnecting: isBotReconnecting,
     startOperationBotAPI,
     getBotStatusList,
     reconnectSingleBot,
